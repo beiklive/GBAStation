@@ -1,4 +1,5 @@
 #include "GridItem.hpp"
+#include "core/Translation.hpp"
 #include "core/Tools.hpp"
 
 #include <functional>
@@ -187,13 +188,13 @@ namespace beiklive
     void GridItem::setSubText(const std::string& text)
     {
         if (m_subLabel) m_subLabel->setText(
-            m_mode == GridItemMode::GAME_LIBRARY ? "上次游玩: " + text : "存档时间: " + text);
+            m_mode == GridItemMode::GAME_LIBRARY ? L("上次游玩: ") + text : L("存档时间: ") + text);
     }
 
     void GridItem::setPlayTime(const std::string& text)
     {
         if (!m_playLabel || m_mode == GridItemMode::SAVE_STATE) return;
-        std::string display = text.empty() ? "未游玩" : "已游玩 " + text;
+        std::string display = text.empty() ? L("未游玩") : L("已游玩 ") + text;
         m_playLabel->setText(display);
         m_playLabel->setVisibility(brls::Visibility::VISIBLE);
     }
@@ -314,12 +315,12 @@ namespace beiklive
         switch (mode) {
             case GridItemMode::GAME_LIBRARY:
                 return entry.lastPlayed.empty()
-                    ? "从未游玩"
-                    : "上次游玩: " + beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
+                    ? L("从未游玩")
+                    : L("上次游玩: ") + beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
             case GridItemMode::SAVE_STATE:
                 return entry.lastPlayed.empty()
                     ? ""
-                    : "存档时间: " + beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
+                    : L("存档时间: ") + beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
         }
         return "";
     }

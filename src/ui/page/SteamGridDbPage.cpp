@@ -1,4 +1,5 @@
 #include "ui/page/SteamGridDbPage.hpp"
+#include "core/Translation.hpp"
 
 #include "core/SteamGridDb.hpp"
 #include "core/ThreadPool.hpp"
@@ -101,14 +102,14 @@ namespace
                            brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_RIGHT, next, true, true,
                            brls::SOUND_NONE);
-            registerAction("选择", brls::BUTTON_A,
+            registerAction(L("选择"), brls::BUTTON_A,
                 [this](brls::View*) {
                     if (m_saving || m_closing) return true;
                     if (m_selected == 0) _save();
                     else _beginClose();
                     return true;
                 }, false, false, brls::SOUND_NONE);
-            registerAction("返回", brls::BUTTON_B,
+            registerAction(L("返回"), brls::BUTTON_B,
                 [this](brls::View*) {
                     if (!m_saving) _beginClose();
                     return true;
@@ -205,7 +206,7 @@ namespace
 
             const float menuX = x + w * 0.56f + (1.f - eased) * 100.f;
             const float menuY = y + h * 0.5f - 84.f;
-            static const char* labels[] = {"设为封面", "返回"};
+            static const std::string labels[] = {L("设为封面"), L("返回")};
             static const char32_t icons[] = {
                 beiklive::material::IMAGE, 0xE5C4};
             for (int i = 0; i < 2; ++i) {
@@ -239,7 +240,7 @@ namespace
                 nvgFontSize(vg, 24.f);
                 nvgFillColor(vg, nvgRGBA(245, 247, 252, 245));
                 nvgText(vg, menuX + 78.f, buttonY + 34.f,
-                        labels[i], nullptr);
+                        labels[i].c_str(), nullptr);
                 nvgRestore(vg);
             }
 
@@ -272,7 +273,7 @@ namespace
         bool m_saving = false;
         bool m_closing = false;
         bool m_popQueued = false;
-        std::string m_status = "选择图片操作";
+        std::string m_status = L("选择图片操作");
         std::chrono::steady_clock::time_point m_lastFrame;
 
         void _ensureFonts()
@@ -320,7 +321,7 @@ namespace
         {
             m_press = 1.f;
             m_saving = true;
-            m_status = "正在下载并压缩封面...";
+            m_status = L("正在下载并压缩封面...");
             auto alive = m_alive;
             const auto asset = m_asset;
             const auto entry = m_entry;
@@ -336,7 +337,7 @@ namespace
                         m_saving = false;
                         if (!ok) {
                             m_status = error.empty()
-                                ? "封面保存失败" : error;
+                                ? L("封面保存失败") : error;
                             return;
                         }
                         if (beiklive::GameDB) {
@@ -346,7 +347,7 @@ namespace
                             beiklive::GameDB->flush();
                         }
                         if (m_onCoverChanged) m_onCoverChanged(output);
-                        m_status = "封面已保存";
+                        m_status = L("封面已保存");
                         _beginClose();
                     });
                 });
@@ -383,8 +384,8 @@ namespace
                 nvgText(vg, cursor + 29.f, hintY, label, nullptr);
                 cursor -= 13.f;
             };
-            hint(brls::BUTTON_B, "返回");
-            hint(brls::BUTTON_A, "选择");
+            hint(brls::BUTTON_B, L("返回").c_str());
+            hint(brls::BUTTON_A, L("选择").c_str());
         }
     };
 
@@ -439,28 +440,28 @@ namespace
             registerAction("", brls::BUTTON_NAV_DOWN, down, true, true, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_LEFT, left, true, true, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_RIGHT, right, true, true, brls::SOUND_NONE);
-            registerAction("选择", brls::BUTTON_A,
+            registerAction(L("选择"), brls::BUTTON_A,
                 [this](brls::View*) { _activate(); return true; },
                 false, false, brls::SOUND_NONE);
-            registerAction("返回", brls::BUTTON_B,
+            registerAction(L("返回"), brls::BUTTON_B,
                 [this](brls::View*) { _back(); return true; },
                 false, false, brls::SOUND_NONE);
-            registerAction("上一类", brls::BUTTON_LB,
+            registerAction(L("上一类"), brls::BUTTON_LB,
                 [this](brls::View*) { _switchType(-1); return true; },
                 false, false, brls::SOUND_NONE);
-            registerAction("下一类", brls::BUTTON_RB,
+            registerAction(L("下一类"), brls::BUTTON_RB,
                 [this](brls::View*) { _switchType(1); return true; },
                 false, false, brls::SOUND_NONE);
-            registerAction("游戏名称搜索", brls::BUTTON_RT,
+            registerAction(L("游戏名称搜索"), brls::BUTTON_RT,
                 [this](brls::View*) { _searchCurrentGame(); return true; },
                 false, false, brls::SOUND_NONE);
-            registerAction("手动输入", brls::BUTTON_LT,
+            registerAction(L("手动输入"), brls::BUTTON_LT,
                 [this](brls::View*) { _manualSearch(); return true; },
                 false, false, brls::SOUND_NONE);
-            registerAction("清空搜索", brls::BUTTON_Y,
+            registerAction(L("清空搜索"), brls::BUTTON_Y,
                 [this](brls::View*) { _clearSearch(); return true; },
                 false, false, brls::SOUND_NONE);
-            registerAction("过滤", brls::BUTTON_X,
+            registerAction(L("过滤"), brls::BUTTON_X,
                 [this](brls::View*) { _toggleFilter(); return true; },
                 false, false, brls::SOUND_NONE);
             m_lastFrame = std::chrono::steady_clock::now();
@@ -558,7 +559,7 @@ namespace
         bool m_closing = false;
         bool m_popQueued = false;
         std::string m_queryLabel;
-        std::string m_status = "按 ZR 使用当前游戏名搜索，或按 ZL 手动输入";
+        std::string m_status = L("按 ZR 使用当前游戏名搜索，或按 ZL 手动输入");
         int m_defaultFont = -1;
         int m_materialFont = -1;
         int m_switchFont = -1;
@@ -646,7 +647,7 @@ namespace
             ime->openForText([this, alive = m_alive](std::string text) {
                 if (!alive->load() || text.empty()) return;
                 _beginSearch({text}, text);
-            }, "搜索 SteamGridDB", "输入游戏名称", 128, m_queryLabel,
+            }, L("搜索 SteamGridDB"), L("输入游戏名称"), 128, m_queryLabel,
                 brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
         }
 
@@ -656,7 +657,7 @@ namespace
             const std::uint64_t generation = ++m_generation;
             m_queryLabel = std::move(label);
             m_loadState = LoadState::Searching;
-            m_status = "正在搜索游戏并读取素材列表...";
+            m_status = L("正在搜索游戏并读取素材列表...");
             _resetGridState(true);
             m_rawGroups = {};
             m_filteredGroups = {};
@@ -696,7 +697,7 @@ namespace
                         }
                     }
                     m_loadState = LoadState::Ready;
-                    m_status = "搜索完成 · " + _resultSummary();
+                    m_status = L("搜索完成 · ") + _resultSummary();
                     brls::Logger::info("[SteamGridDB UI] {}", m_status);
                     _requestVisibleImages();
                 });
@@ -739,8 +740,8 @@ namespace
                         if (!alive->load() || generation != m_generation.load()) return;
                         m_pendingImages.erase(asset.url);
                         if (!loaded) {
-                            m_status = "图片加载失败 · " +
-                                (error.empty() ? std::string("请检查网络") : error);
+                            m_status = L("图片加载失败 · ") +
+                                (error.empty() ? std::string(L("请检查网络")) : error);
                             brls::Logger::warning(
                                 "[SteamGridDB UI] asset image failed: {} ({})",
                                 asset.url, error);
@@ -770,7 +771,7 @@ namespace
             m_queryLabel.clear();
             _resetGridState(true);
             m_loadState = LoadState::Idle;
-            m_status = "搜索已清空";
+            m_status = L("搜索已清空");
             brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
         }
 
@@ -894,7 +895,7 @@ namespace
                 } else if (m_selected >= 0 && m_selected < shown) {
                     const int index = m_selected;
                     if (items[static_cast<size_t>(index)].localPath.empty()) {
-                        m_status = "图片仍在加载，请稍候";
+                        m_status = L("图片仍在加载，请稍候");
                         _requestVisibleImages();
                         return;
                     }
@@ -905,7 +906,7 @@ namespace
                         [this, alive](const std::string& output) {
                             if (!alive->load()) return;
                             m_entry.logoPath = output;
-                            m_status = "封面已保存并压缩至最大 512 像素";
+                            m_status = L("封面已保存并压缩至最大 512 像素");
                             if (m_onCoverChanged) m_onCoverChanged(output);
                         }, m_overlayHost, this);
                 }
@@ -950,7 +951,7 @@ namespace
             nvgFontFaceId(vg, m_defaultFont);
             nvgFontSize(vg, 27.f);
             nvgFillColor(vg, nvgRGBA(245, 247, 252, 250));
-            nvgText(vg, x + 82.f, y + 49.f, "SteamGridDB 封面数据库", nullptr);
+            nvgText(vg, x + 82.f, y + 49.f, L("SteamGridDB 封面数据库").c_str(), nullptr);
 
             constexpr float spacing = 112.f;
             const float centerX = x + w - 300.f;
@@ -1093,13 +1094,13 @@ namespace
                     nvgFillColor(vg, nvgRGBA(240, 243, 248, 235));
                     nvgText(vg, itemX + cellW * 0.5f,
                             itemY + cellH * 0.64f,
-                            "显示更多", nullptr);
+                            L("显示更多").c_str(), nullptr);
                     nvgFontSize(vg, 14.f);
                     nvgFillColor(vg, nvgRGBA(190, 198, 212, 190));
                     const int remaining = static_cast<int>(items.size()) -
                         itemCount;
-                    const std::string moreLabel = "继续追加 " +
-                        std::to_string(std::min(10, remaining)) + " 张";
+                    const std::string moreLabel = L("继续追加 ") +
+                        std::to_string(std::min(10, remaining)) + L(" 张");
                     nvgText(vg, itemX + cellW * 0.5f,
                             itemY + cellH * 0.76f,
                             moreLabel.c_str(), nullptr);
@@ -1111,7 +1112,7 @@ namespace
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(192, 201, 216, 190));
             const std::string query = m_queryLabel.empty()
-                ? m_status : "搜索：" + m_queryLabel + "  ·  " + m_status;
+                ? m_status : L("搜索：") + m_queryLabel + "  ·  " + m_status;
             nvgText(vg, x + 40.f, statusY, query.c_str(), nullptr);
         }
 
@@ -1197,13 +1198,13 @@ namespace
         std::string _filterValue(int row) const
         {
             switch (row) {
-                case 0: return m_filters.width == 0 ? "不限" : std::to_string(m_filters.width);
-                case 1: return m_filters.height == 0 ? "不限" : std::to_string(m_filters.height);
-                case 2: return m_filters.style.empty() ? "不限" : m_filters.style;
-                case 3: return m_filters.mime.empty() ? "不限" : m_filters.mime;
-                case 4: return m_filters.language.empty() ? "不限" : m_filters.language;
-                case 5: return m_filters.allowHumor ? "允许" : "过滤";
-                default: return "不限";
+                case 0: return m_filters.width == 0 ? L("不限") : std::to_string(m_filters.width);
+                case 1: return m_filters.height == 0 ? L("不限") : std::to_string(m_filters.height);
+                case 2: return m_filters.style.empty() ? L("不限") : m_filters.style;
+                case 3: return m_filters.mime.empty() ? L("不限") : m_filters.mime;
+                case 4: return m_filters.language.empty() ? L("不限") : m_filters.language;
+                case 5: return m_filters.allowHumor ? L("允许") : L("过滤");
+                default: return L("不限");
             }
         }
 
@@ -1230,13 +1231,13 @@ namespace
             nvgFontSize(vg, 27.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(248, 249, 252, 248));
-            nvgText(vg, panelX + 32.f, panelY + 43.f, "素材过滤", nullptr);
+            nvgText(vg, panelX + 32.f, panelY + 43.f, L("素材过滤").c_str(), nullptr);
             nvgFontSize(vg, 14.f);
             nvgFillColor(vg, nvgRGBA(190, 199, 214, 190));
             nvgText(vg, panelX + 32.f, panelY + 72.f,
-                    "NSFW 成人内容始终过滤，不会显示", nullptr);
-            static const char* labels[] = {
-                "宽度", "高度", "风格", "格式", "语言", "幽默内容"};
+                    L("NSFW 成人内容始终过滤，不会显示").c_str(), nullptr);
+        static const std::string labels[] = {
+            L("宽度"), L("高度"), L("风格"), L("格式"), L("语言"), L("幽默内容")};
             for (int i = 0; i < 6; ++i) {
                 const float rowY = panelY + 98.f + i * 58.f;
                 const bool focused = i == m_filterRow;
@@ -1251,7 +1252,7 @@ namespace
                 nvgFontSize(vg, 19.f);
                 nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, nvgRGBA(232, 236, 244, 235));
-                nvgText(vg, panelX + 44.f, rowY + 24.f, labels[i], nullptr);
+                nvgText(vg, panelX + 44.f, rowY + 24.f, labels[i].c_str(), nullptr);
                 nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, nvgRGBA(105, 198, 255, 245));
                 const std::string value = "‹  " + _filterValue(i) + "  ›";
@@ -1296,16 +1297,16 @@ namespace
             float cursor = x + w - 28.f;
             const float hintY = y + h - 28.f;
             if (m_mode == Mode::Filter) {
-                _drawHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
-                _drawHint(vg, brls::BUTTON_A, "确认", cursor, hintY, alpha);
+                _drawHint(vg, brls::BUTTON_B, L("返回").c_str(), cursor, hintY, alpha);
+                _drawHint(vg, brls::BUTTON_A, L("确认").c_str(), cursor, hintY, alpha);
                 return;
             }
-            _drawHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
-            _drawHint(vg, brls::BUTTON_A, "选择", cursor, hintY, alpha);
-            _drawHint(vg, brls::BUTTON_X, "过滤", cursor, hintY, alpha);
-            _drawHint(vg, brls::BUTTON_Y, "清空", cursor, hintY, alpha);
-            _drawHint(vg, brls::BUTTON_LT, "手动输入", cursor, hintY, alpha);
-            _drawHint(vg, brls::BUTTON_RT, "游戏名搜索", cursor, hintY, alpha);
+            _drawHint(vg, brls::BUTTON_B, L("返回").c_str(), cursor, hintY, alpha);
+            _drawHint(vg, brls::BUTTON_A, L("选择").c_str(), cursor, hintY, alpha);
+            _drawHint(vg, brls::BUTTON_X, L("过滤").c_str(), cursor, hintY, alpha);
+            _drawHint(vg, brls::BUTTON_Y, L("清空").c_str(), cursor, hintY, alpha);
+            _drawHint(vg, brls::BUTTON_LT, L("手动输入").c_str(), cursor, hintY, alpha);
+            _drawHint(vg, brls::BUTTON_RT, L("游戏名搜索").c_str(), cursor, hintY, alpha);
         }
     };
 }

@@ -1,4 +1,5 @@
 #include "RecyclingGrid.hpp"
+#include "core/Translation.hpp"
 #include "core/common.h"
 #include "core/ThreadPool.hpp"
 #include "ui/utils/GradientFocus.hpp"
@@ -174,7 +175,7 @@ void GameGridView::setPlatformCarousel(std::vector<std::string> labels,
                                        int selected, int direction)
 {
     if (labels.empty())
-        labels.push_back("所有");
+        labels.push_back(L("所有"));
     selected = std::max(0, std::min(selected, static_cast<int>(labels.size()) - 1));
 
     const bool selectionChanged = labels != m_platformLabels || selected != m_platformIndex;
@@ -1548,7 +1549,7 @@ void GameGridView::draw(NVGcontext* vg, float x, float y, float w, float h,
             nvgFillColor(vg, nvgRGBA(230, 232, 238, 210));
             nvgText(vg, x + paneW * 0.5f + wholePageOffsetX,
                     contentY + contentH * 0.45f,
-                    "当前分类暂无游戏", nullptr);
+                    L("当前分类暂无游戏").c_str(), nullptr);
         }
     } else {
         const float itemW = _getItemWidth();
@@ -2088,7 +2089,7 @@ void GameGridView::_drawLaunchOverlay(NVGcontext* vg, float x, float y,
     nvgRestore(vg);
 
     const int dotCount = static_cast<int>(m_launchAnimationTime * 5.f) % 4;
-    std::string launching = "启动中" + std::string(static_cast<size_t>(dotCount), '.');
+    std::string launching = L("启动中") + std::string(static_cast<size_t>(dotCount), '.');
     nvgFontSize(vg, 18.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
     nvgFillColor(vg, nvgRGBA(215, 221, 232, 225));
@@ -2150,7 +2151,7 @@ void GameGridView::_drawToolbar(NVGcontext* vg, float x, float y, float w)
     nvgFontSize(vg, 27.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
     nvgFillColor(vg, nvgRGBA(245, 247, 252, 255));
-    nvgText(vg, x + 24.f, y + 27.f, "游戏库", nullptr);
+    nvgText(vg, x + 24.f, y + 27.f, L("游戏库").c_str(), nullptr);
 
     nvgFontFaceId(vg, m_fontId);
     nvgFontSize(vg, 14.f);
@@ -2233,7 +2234,7 @@ void GameGridView::_drawToolbar(NVGcontext* vg, float x, float y, float w)
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
     nvgFillColor(vg, nvgRGBA(255, 255, 255, 220));
     nvgText(vg, x + w - 128.f, y + 35.f,
-            m_viewMode == ViewMode::GRID ? "切换为列表" : "切换为网格", nullptr);
+            m_viewMode == ViewMode::GRID ? L("切换为列表").c_str() : L("切换为网格").c_str(), nullptr);
 
     const float dividerX = x + 18.f;
     const float dividerY = y + _getContentTop() - 1.f;
@@ -2328,19 +2329,19 @@ void GameGridView::_drawFooter(NVGcontext* vg, float x, float y, float w, float 
     };
 
     if (m_multiSelectMode) {
-        drawRightAlignedHint(brls::BUTTON_A, "勾选/取消勾选");
-        drawRightAlignedHint(brls::BUTTON_B, "退出多选");
-        drawRightAlignedHint(brls::BUTTON_X, "批量操作");
+        drawRightAlignedHint(brls::BUTTON_A, L("勾选/取消勾选").c_str());
+        drawRightAlignedHint(brls::BUTTON_B, L("退出多选").c_str());
+        drawRightAlignedHint(brls::BUTTON_X, L("批量操作").c_str());
         drawRightAlignedHint(brls::BUTTON_START,
-            isAllSelectedForDelete(m_items.size()) ? "取消全选" : "全选");
+            isAllSelectedForDelete(m_items.size()) ? L("取消全选") : L("全选"));
         return;
     }
 
-    drawRightAlignedHint(brls::BUTTON_A, "选择");
-    drawRightAlignedHint(brls::BUTTON_B, "返回");
-    drawRightAlignedHint(brls::BUTTON_X, "多选");
-    drawRightAlignedHint(brls::BUTTON_RT, "搜索");
-    drawRightAlignedHint(brls::BUTTON_LT, "排序");
+    drawRightAlignedHint(brls::BUTTON_A, L("选择").c_str());
+    drawRightAlignedHint(brls::BUTTON_B, L("返回").c_str());
+    drawRightAlignedHint(brls::BUTTON_X, L("多选").c_str());
+    drawRightAlignedHint(brls::BUTTON_RT, L("搜索").c_str());
+    drawRightAlignedHint(brls::BUTTON_LT, L("排序").c_str());
 }
 
 void GameGridView::_drawDetailsPanel(NVGcontext* vg, float x, float y,
@@ -2410,7 +2411,7 @@ void GameGridView::_drawDetailsPanel(NVGcontext* vg, float x, float y,
     nvgFontSize(vg, 16.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
     nvgFillColor(vg, nvgRGBA(255, 255, 255, 180));
-    nvgText(vg, x + pad, dividerY + 24.f, "封面预览", nullptr);
+    nvgText(vg, x + pad, dividerY + 24.f, L("封面预览").c_str(), nullptr);
     _drawImage(vg, item, x + pad, dividerY + 43.f,
                w - pad * 2.f, y + h - 18.f - (dividerY + 43.f));
     nvgRestore(vg);

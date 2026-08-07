@@ -1,4 +1,5 @@
 #include "SwitchLayout.hpp"
+#include "core/Translation.hpp"
 
 #include "core/ThreadPool.hpp"
 #include "core/Tools.hpp"
@@ -140,12 +141,12 @@ namespace beiklive
                 ? "light/"
                 : "dark/");
         m_functions = {
-            {"游戏库", BK_RES(pathPrefix + "GameList_64.png"), 0},
-            {"文件列表", BK_RES(pathPrefix + "wenjianjia_64.png"), 0},
-            {"数据管理", BK_RES(pathPrefix + "jifen_64.png"), 0},
-            {"设置", BK_RES(pathPrefix + "shezhi_64.png"), 0},
-            {"关于", BK_RES(pathPrefix + "bangzhu_64.png"), 0},
-            {"退出", BK_RES(pathPrefix + "tuichu_64.png"), 0},
+            {L("游戏库"), BK_RES(pathPrefix + "GameList_64.png"), 0},
+            {L("文件列表"), BK_RES(pathPrefix + "wenjianjia_64.png"), 0},
+            {L("数据管理"), BK_RES(pathPrefix + "jifen_64.png"), 0},
+            {L("设置"), BK_RES(pathPrefix + "shezhi_64.png"), 0},
+            {L("关于"), BK_RES(pathPrefix + "bangzhu_64.png"), 0},
+            {L("退出"), BK_RES(pathPrefix + "tuichu_64.png"), 0},
         };
         m_functionFocus.assign(m_functions.size(), 0.f);
         m_slotFocus.assign(HOME_CARD_SLOTS, 0.f);
@@ -1148,10 +1149,10 @@ namespace beiklive
             beiklive::tools::platformBadgeName(game.entry.platform);
         const std::string playTimeText = game.entry.playTime > 0
             ? beiklive::tools::formatPlayTime(game.entry.playTime)
-            : "未游玩";
+            : L("未游玩");
         const std::string lastPlayed = game.entry.lastPlayed.empty()
-            ? "上次游玩：从未"
-            : "上次游玩：" +
+            ? L("上次游玩：从未")
+            : L("上次游玩：") +
                 beiklive::tools::formatTimestampForDisplay(game.entry.lastPlayed);
         const float firstLineProgress = selected
             ? smoothStep(clamp01(focus / 0.72f))
@@ -1368,7 +1369,7 @@ namespace beiklive
         const float eased = easeOutCubic(m_pageEntrance);
         const float cy = y + h - 35.f;
         const std::string label =
-            m_focusRow == FocusRow::GAMES ? "选择" : "打开";
+            m_focusRow == FocusRow::GAMES ? L("选择") : L("打开");
         auto drawHint = [&](brls::ControllerButton button,
                             const std::string& text,
                             float& cursor) {
@@ -1393,7 +1394,7 @@ namespace beiklive
         };
         float hintCursor = x + w - 30.f;
         drawHint(brls::BUTTON_A, label, hintCursor);
-        drawHint(brls::BUTTON_START, "设置主页", hintCursor);
+        drawHint(brls::BUTTON_START, L("设置主页"), hintCursor);
 
         const char32_t networkCodepoint = m_networkConnected
             ? beiklive::material::WIFI

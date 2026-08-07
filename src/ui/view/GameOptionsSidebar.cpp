@@ -1,4 +1,5 @@
 #include "GameOptionsSidebar.hpp"
+#include "core/Translation.hpp"
 #include "core/Tools.hpp"
 #include "ui/utils/GradientFocus.hpp"
 #include "ui/utils/MaterialIcons.hpp"
@@ -558,7 +559,7 @@ namespace beiklive
             launchMorph > 0.5f ? 376.f : 294.f, 66.f);
         if (!iconPreview)
             nvgText(vg, titleX, titleY,
-                    m_entry.title.empty() ? "未知游戏" : m_entry.title.c_str(), nullptr);
+                    m_entry.title.empty() ? L("未知游戏").c_str() : m_entry.title.c_str(), nullptr);
         nvgRestore(vg);
 
         const std::string meta = beiklive::tools::platformBadgeName(m_entry.platform) +
@@ -577,7 +578,7 @@ namespace beiklive
             nvgFontSize(vg, 18.f);
             nvgFillColor(vg, nvgRGBA(215, 221, 232, launchAlpha));
             nvgText(vg, infoX, targetCardY + targetCardH - 92.f,
-                    "启动中...", nullptr);
+                    L("启动中...").c_str(), nullptr);
         }
         const bool launchPanelReady = m_launchClosing &&
             m_openProgress <= 0.001f;
@@ -775,8 +776,8 @@ namespace beiklive
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgText(vg, hx + 22.f, hintY, label.c_str(), nullptr);
         };
-        drawHint(brls::BUTTON_A, "选择", x + w - 214.f);
-        drawHint(brls::BUTTON_B, "返回", x + w - 104.f);
+        drawHint(brls::BUTTON_A, L("选择"), x + w - 214.f);
+        drawHint(brls::BUTTON_B, L("返回"), x + w - 104.f);
 
         if (m_launchClosing && m_launchFadeToBlack &&
             m_nanoLaunchFinishTime > 1.f) {
@@ -847,7 +848,7 @@ namespace beiklive
         m_panel->addView(divider);
 
         auto* sectionLabel = new brls::Label();
-        sectionLabel->setText(entry.path.empty() ? "批量操作" : "游戏操作");
+        sectionLabel->setText(entry.path.empty() ? L("批量操作") : L("游戏操作"));
         sectionLabel->setFontSize(17.f);
         sectionLabel->setTextColor(nvgRGBA(205, 211, 224, 220));
         sectionLabel->setFocusable(false);
@@ -865,7 +866,7 @@ namespace beiklive
         {
             // 无按钮时显示提示
             auto* emptyLabel = new brls::Label();
-            emptyLabel->setText("无可用操作");
+            emptyLabel->setText(L("无可用操作"));
             emptyLabel->setFontSize(18.f);
             emptyLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
             emptyLabel->setFocusable(false);
@@ -902,7 +903,7 @@ namespace beiklive
                 });
 
                 // B 键：关闭面板
-                btn->registerAction("关闭", brls::BUTTON_B, closeAction);
+                btn->registerAction(L("关闭"), brls::BUTTON_B, closeAction);
 
                 // 禁用左右导航，防止焦点飞出
                 btn->setCustomNavigationRoute(brls::FocusDirection::LEFT,  btn);
@@ -974,7 +975,7 @@ namespace beiklive
             m_previewCard->addView(m_iconImage);
 
             m_titleLabel = new brls::Label();
-            m_titleLabel->setText(entry.title.empty() ? "未知游戏" : entry.title);
+            m_titleLabel->setText(entry.title.empty() ? L("未知游戏") : entry.title);
             m_titleLabel->setFontSize(22.f);
             m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
             m_titleLabel->setFocusable(false);

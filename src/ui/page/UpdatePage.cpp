@@ -1,4 +1,5 @@
 #include "UpdatePage.hpp"
+#include "core/Translation.hpp"
 
 #include "core/Tools.hpp"
 #include "ui/utils/MaterialIcons.hpp"
@@ -55,14 +56,14 @@ public:
         this->setHeight(310.f);
         this->setFocusable(false);
         m_lastFrameTime = std::chrono::steady_clock::now();
-        setState(UpdateVisualState::Connecting, "正在连接服务器...");
+        setState(UpdateVisualState::Connecting, L("正在连接服务器...").c_str());
     }
 
     void setProgress(float pct, std::string speed, std::string size, std::string eta) {
         m_targetProgress = std::clamp(pct / 100.f, 0.f, 1.f);
         m_speed = std::move(speed);
         m_size = std::move(size);
-        m_eta = eta.empty() ? "计算剩余时间" : std::move(eta);
+        m_eta = eta.empty() ? L("计算剩余时间") : std::move(eta);
         this->invalidate();
     }
 
@@ -106,8 +107,8 @@ public:
         m_displayProgress = 0.f;
         m_speed = "0 B/s";
         m_size = "0 B / 0 B";
-        m_eta = "计算剩余时间";
-        setState(UpdateVisualState::Downloading, "正在下载更新包...");
+        m_eta = L("计算剩余时间");
+        setState(UpdateVisualState::Downloading, L("正在下载更新包...").c_str());
     }
 
     void draw(NVGcontext* vg, float x, float y, float w, float h,
@@ -152,7 +153,7 @@ public:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
         nvgFontSize(vg, 25.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, textX, y + 37.f, "模拟器更新", nullptr);
+        nvgText(vg, textX, y + 37.f, L("模拟器更新").c_str(), nullptr);
         nvgFontSize(vg, 18.f);
         nvgFillColor(vg, nvgRGBA(m_accentR, m_accentG, m_accentB, 235));
         nvgText(vg, textX, y + 78.f, m_status.c_str(), nullptr);
@@ -195,14 +196,14 @@ public:
             }
         }
 
-        _drawMetric(vg, x + pad, y + 228.f, 0xE640, "下载速度", m_speed);
+        _drawMetric(vg, x + pad, y + 228.f, 0xE640, L("下载速度").c_str(), m_speed);
         nvgBeginPath(vg);
         nvgMoveTo(vg, x + w * 0.5f, y + 216.f);
         nvgLineTo(vg, x + w * 0.5f, y + 273.f);
         nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 24));
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
-        _drawMetric(vg, x + w * 0.5f + 24.f, y + 228.f, 0xE8B5, "剩余时间", m_eta);
+        _drawMetric(vg, x + w * 0.5f + 24.f, y + 228.f, 0xE8B5, L("剩余时间").c_str(), m_eta);
     }
 
     void frame(brls::FrameContext* ctx) override {
@@ -222,10 +223,10 @@ public:
 
 private:
     UpdateVisualState m_state = UpdateVisualState::Connecting;
-    std::string m_status = "正在连接服务器...";
+    std::string m_status = L("正在连接服务器...");
     std::string m_speed = "0 B/s";
     std::string m_size = "0 B / 0 B";
-    std::string m_eta = "计算剩余时间";
+    std::string m_eta = L("计算剩余时间");
     char32_t m_icon = 0xE2C4;
     unsigned char m_accentR = 79;
     unsigned char m_accentG = 193;
@@ -305,11 +306,11 @@ static std::string formatETA(int seconds) {
         return "";
 
     if (seconds < 60)
-        return "剩余 " + std::to_string(seconds) + " 秒";
+        return L("剩余 ") + std::to_string(seconds) + L(" 秒");
 
     int m = seconds / 60;
     int s = seconds % 60;
-    return "剩余 " + std::to_string(m) + " 分 " + std::to_string(s) + " 秒";
+    return L("剩余 ") + std::to_string(m) + L(" 分 ") + std::to_string(s) + L(" 秒");
 }
 
 brls::Box* UpdatePage::buildDialogContent(UpdatePage* self) {
@@ -338,7 +339,7 @@ UpdatePage::UpdatePage()
     this->getAppletFrame()->setHeight(310.f);
     _resetActionButtons();
 
-    this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+    this->registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
         if (m_canClose.load())
             _closeDialog();
         return true;
@@ -364,7 +365,7 @@ void UpdatePage::_showCloseButton() {
     m_canClose.store(true);
     this->clearButtons();
     this->getAppletFrame()->setHeight(382.f);
-    this->addButton("关闭", []() {});
+    this->addButton(L("关闭"), []() {});
     brls::Application::giveFocus(button1);
 }
 
@@ -413,11 +414,11 @@ void UpdatePage::startDownload() {
                 extractionStateShown = true;
                 _updateProgress(
                     100.f,
-                    "下载完成",
+                    L("下载完成"),
                     formatSize(total) + " / " + formatSize(total),
-                    "正在处理压缩包");
+                    L("正在处理压缩包"));
                 brls::sync([this]() {
-                    _setVisualState("正在解压更新包...",
+                    _setVisualState(L("正在解压更新包..."),
                         static_cast<int>(UpdateVisualState::Extracting));
                 });
             }
@@ -464,7 +465,7 @@ void UpdatePage::startDownload() {
 
         brls::sync([this, ok]() {
             if (!ok) {
-                _setVisualState("下载失败，请重试",
+                _setVisualState(L("下载失败，请重试"),
                     static_cast<int>(UpdateVisualState::Error));
                 _showCloseButton();
 
@@ -472,11 +473,11 @@ void UpdatePage::startDownload() {
             }
 
 #ifdef __SWITCH__
-            _setVisualState("下载完成，开始安装",
+            _setVisualState(L("下载完成，开始安装"),
                 static_cast<int>(UpdateVisualState::Installing));
             startInstall();
 #else
-            _setVisualState("下载完成，请手动替换程序文件",
+            _setVisualState(L("下载完成，请手动替换程序文件"),
                 static_cast<int>(UpdateVisualState::Manual));
             _showCloseButton();
 
@@ -487,7 +488,7 @@ void UpdatePage::startDownload() {
 
 void UpdatePage::startInstall() {
     brls::sync([this]() {
-        _setVisualState("正在安装更新...",
+        _setVisualState(L("正在安装更新..."),
             static_cast<int>(UpdateVisualState::Installing));
     });
 
@@ -500,31 +501,31 @@ void UpdatePage::startInstall() {
                 
 #ifdef __SWITCH__
                 if (AppUpdater::instance().finishInstall()) {
-                    _setVisualState("安装完成，请重启模拟器",
+                    _setVisualState(L("安装完成，请重启模拟器"),
                         static_cast<int>(UpdateVisualState::Success));
                     // envSetNextLoad("sdmc:/switch/GBAStation.nro", "sdmc:/switch/GBAStation.nro");
                     m_canClose.store(false);
                     this->clearButtons();
                     this->getAppletFrame()->setHeight(382.f);
-                    this->addButton("重启模拟器", [this]() {
+                    this->addButton(L("重启模拟器"), [this]() {
                         brls::Application::quit();
                     });
                     brls::Application::giveFocus(button1);
                 } else {
-                    _setVisualState("更新文件覆盖失败，已尝试恢复旧文件",
+                    _setVisualState(L("更新文件覆盖失败，已尝试恢复旧文件"),
                         static_cast<int>(UpdateVisualState::Error));
                     _showCloseButton();
                 }
 #else
-                    brls::Application::notify("请手动重启");
+                    brls::Application::notify(L("请手动重启"));
 #endif
 
             } else {
 #ifdef __SWITCH__
-                _setVisualState("安装失败",
+                _setVisualState(L("安装失败"),
                     static_cast<int>(UpdateVisualState::Error));
 #else
-                _setVisualState("当前平台不支持自动安装，请手动替换程序文件",
+                _setVisualState(L("当前平台不支持自动安装，请手动替换程序文件"),
                     static_cast<int>(UpdateVisualState::Manual));
 #endif
                 _showCloseButton();

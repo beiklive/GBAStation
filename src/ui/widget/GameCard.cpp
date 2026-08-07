@@ -1,4 +1,5 @@
 #include "GameCard.hpp"
+#include "core/Translation.hpp"
 #include "core/Tools.hpp"
 #include <cmath>
 #include "borealis/core/cache_helper.hpp"
@@ -57,12 +58,12 @@ namespace beiklive
             m_titleLabel->setVisibility(brls::Visibility::INVISIBLE);
         }
 
-        std::string playStr = "未游玩";
+        std::string playStr = L("未游玩");
         if (!m_isEmpty && m_gameEntry.playTime > 0)
         {
             int h = m_gameEntry.playTime / 3600;
             int min = (m_gameEntry.playTime % 3600) / 60;
-            playStr = "游玩时间: " + std::to_string(h) + "时" + std::to_string(min) + "分";
+            playStr = L("游玩时间: ") + std::to_string(h) + "时" + std::to_string(min) + "分";
         }
         if (m_playTimeLabel)
         {
@@ -71,8 +72,8 @@ namespace beiklive
         }
 
         std::string timeStr = m_gameEntry.lastPlayed.empty()
-            ? "上次打开: 从未"
-            : "上次打开: " + beiklive::tools::formatTimestampForDisplay(m_gameEntry.lastPlayed);
+            ? L("上次打开: 从未")
+            : L("上次打开: ") + beiklive::tools::formatTimestampForDisplay(m_gameEntry.lastPlayed);
         if (m_lastPlayedLabel)
         {
             m_lastPlayedLabel->setText(m_isEmpty ? " " : timeStr);
@@ -135,7 +136,7 @@ namespace beiklive
             if (action->getButton() == brls::BUTTON_RT)
             {
                 bool fav = m_gameEntry.favourite;
-                action->setHintText(fav ? "取消收藏" : "收藏");
+                action->setHintText(fav ? L("取消收藏") : L("收藏"));
             }
         }
     }
@@ -242,14 +243,14 @@ namespace beiklive
             m_playTimeLabel->setMarginTop(15.f);
             m_playTimeLabel->setMarginLeft(20.f);
 
-            std::string playStr = "未游玩";
+            std::string playStr = L("未游玩");
         if (!m_isEmpty)
         {
             if (m_gameEntry.playTime > 0)
             {
                 int h = m_gameEntry.playTime / 3600;
                 int min = (m_gameEntry.playTime % 3600) / 60;
-                playStr = "游玩时间: " + std::to_string(h) + "时" + std::to_string(min) + "分";
+                playStr = L("游玩时间: ") + std::to_string(h) + "时" + std::to_string(min) + "分";
             }
         }
         m_playTimeLabel->setText(m_isEmpty ? " " : playStr);
@@ -268,18 +269,18 @@ namespace beiklive
             m_lastPlayedLabel->setMarginLeft(20.f);
             m_lastPlayedLabel->setMarginTop(10.f);
             std::string timeStr = m_gameEntry.lastPlayed.empty()
-                ? "上次打开: 从未"
-                : "上次打开: " + beiklive::tools::formatTimestampForDisplay(m_gameEntry.lastPlayed);
+                ? L("上次打开: 从未")
+                : L("上次打开: ") + beiklive::tools::formatTimestampForDisplay(m_gameEntry.lastPlayed);
         m_lastPlayedLabel->setText(m_isEmpty ? " " : timeStr);
         this->addView(m_lastPlayedLabel);
         
         this->registerAction(
-            "打开",
+            L("打开"),
             brls::BUTTON_A,
             [this](brls::View *)
             {
                 if (m_isEmpty) return true;
-                brls::Application::notify("正在启动 " + m_gameEntry.title + "...");
+                brls::Application::notify(L("正在启动 ") + m_gameEntry.title + "...");
                 triggerClickBounce();
                 return true;
             },

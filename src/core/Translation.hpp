@@ -42,5 +42,5 @@ extern TranslationManager* Translation;
 } // namespace beiklive
 
 /// 翻译宏：传入中文原文，返回译文（英文环境）或原文（中文环境）。
-/// 返回 const char* 便于直接传给 nvgText / std::string 构造。
-#define L(zh) beiklive::Translation ? beiklive::Translation->Tr(zh).c_str() : (zh)
+/// 返回 std::string，便于字符串拼接；传给 const char* 参数处需 .c_str()。
+#define L(zh) (beiklive::Translation ? beiklive::Translation->Tr(zh) : std::string(zh))

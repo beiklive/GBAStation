@@ -1,4 +1,5 @@
 #include "ui/page/AboutPage.hpp"
+#include "core/Translation.hpp"
 #include "ui/page/UpdatePage.hpp"
 #include "ui/widget/UpdateDialog.hpp"
 #include "ui/widget/DetailCell.hpp"
@@ -174,13 +175,13 @@ static bool parseResourceManifest(const std::string& text,
                                   std::string& error) {
     const json root = json::parse(text, nullptr, false);
     if (root.is_discarded() || !root.is_object()) {
-        error = "资源清单 JSON 格式无效";
+        error = L("资源清单 JSON 格式无效");
         return false;
     }
 
     const auto listIt = root.find("list");
     if (listIt == root.end() || !listIt->is_array()) {
-        error = "资源清单缺少 list 数组";
+        error = L("资源清单缺少 list 数组");
         return false;
     }
 
@@ -191,7 +192,7 @@ static bool parseResourceManifest(const std::string& text,
             continue;
 
         OnlineResourceGroup group;
-        group.header = jsonString(groupValue, "header", "未分类资源");
+        group.header = jsonString(groupValue, "header", L("未分类资源").c_str());
         const auto itemsIt = groupValue.find("items");
         if (itemsIt == groupValue.end() || !itemsIt->is_array())
             continue;
@@ -208,7 +209,7 @@ static bool parseResourceManifest(const std::string& text,
             item.type = trimText(jsonString(itemValue, "type"));
             item.url = trimText(jsonString(itemValue, "url"));
             item.path = trimText(jsonString(itemValue, "path"));
-            item.dialog = jsonString(itemValue, "dialog", "是否下载此资源？");
+            item.dialog = jsonString(itemValue, "dialog", L("是否下载此资源？").c_str());
             item.version = trimText(jsonString(itemValue, "version"));
 
             std::transform(item.type.begin(), item.type.end(), item.type.begin(),
@@ -228,7 +229,7 @@ static bool parseResourceManifest(const std::string& text,
     }
 
     if (parsedManifest.groups.empty()) {
-        error = "资源清单中没有可用项目";
+        error = L("资源清单中没有可用项目");
         return false;
     }
 
@@ -247,7 +248,7 @@ static std::string readTextFile(const std::string& path, const std::string& fall
 
 static void showMessageDialog(const std::string& message) {
     auto* dlg = new brls::Dialog(message);
-    dlg->addButton("确定", []() {});
+    dlg->addButton(L("确定"), []() {});
     dlg->open();
 }
 
@@ -533,7 +534,7 @@ static bool installDownloadedResource(const OnlineResourceItem& item,
     std::error_code ec;
     std::filesystem::create_directories(targetDirectory, ec);
     if (ec) {
-        resultText = "创建目标目录失败：\n" + targetDirectory.string();
+        resultText = L("创建目标目录失败：\n") + targetDirectory.string();
         return false;
     }
 
@@ -541,19 +542,19 @@ static bool installDownloadedResource(const OnlineResourceItem& item,
         int extractedCount = 0;
         if (!extractZipToDirectory(downloadedPath, targetDirectory, cancelFlag,
                                    extractedCount, progressCallback)) {
-            resultText = "解压失败，请检查压缩包内容和目标目录";
+            resultText = L("解压失败，请检查压缩包内容和目标目录");
             return false;
         }
         bool installed3dsStub = false;
         if (!extractOptionalZipFileToDir(downloadedPath.string(), "sdmc:/GBAStation/core",
                                          "GBAStation3DSStub.nro", cancelFlag,
                                          installed3dsStub)) {
-            resultText = "3DS 运行核心安装失败，请检查压缩包内容和目标目录";
+            resultText = L("3DS 运行核心安装失败，请检查压缩包内容和目标目录");
             return false;
         }
-        resultText = "安装完成（解压 " + std::to_string(extractedCount) + " 个文件）";
+        resultText = L("安装完成（解压 ") + std::to_string(extractedCount) + L(" 个文件）");
         if (installed3dsStub)
-            resultText += "\n3DS 运行核心已安装";
+            resultText += L("\n3DS 运行核心已安装");
         return true;
     }
 
@@ -571,11 +572,11 @@ static bool installDownloadedResource(const OnlineResourceItem& item,
         }
     }
     if (ec) {
-        resultText = "移动文件失败：\n" + targetPath.string();
+        resultText = L("移动文件失败：\n") + targetPath.string();
         return false;
     }
 
-    resultText = "下载完成：\n" + targetPath.string();
+    resultText = L("下载完成：\n") + targetPath.string();
     return true;
 }
 
@@ -629,12 +630,12 @@ static bool isChangelogVersion(const std::string& text) {
 }
 
 static bool isChangelogSection(const std::string& text) {
-    static constexpr const char* headings[] = {
-        "声明", "新变化", "新功能", "修复", "bug修复", "Bug修复",
-        "BUG修复", "bug修复和优化", "Bug修复和优化", "优化"
+    static const std::string headings[] = {
+        L("声明"), L("新变化"), L("新功能"), L("修复"), L("bug修复"), L("Bug修复"),
+        L("BUG修复"), L("bug修复和优化"), L("Bug修复和优化"), L("优化")
     };
     return std::any_of(std::begin(headings), std::end(headings),
-        [&text](const char* heading) {
+        [&text](const std::string& heading) {
             return text == heading || text == std::string(heading) + "："
                 || text == std::string(heading) + ":";
         });
@@ -669,7 +670,7 @@ static std::vector<ChangelogVersion> parseChangelog(const std::string& content) 
             continue;
         }
         if (versions.empty())
-            versions.push_back({"更新日志", {}});
+            versions.push_back({L("更新日志"), {}});
 
         int spaces = 0;
         for (const char c : rawLine) {
@@ -688,7 +689,7 @@ static std::vector<ChangelogVersion> parseChangelog(const std::string& content) 
         versions.back().lines.push_back({text, kind, std::clamp(spaces / 4, 0, 2)});
     }
     if (versions.empty())
-        versions.push_back({"更新日志", {{"暂无更新日志", ChangelogLineKind::TEXT, 0}}});
+        versions.push_back({L("更新日志"), {{L("暂无更新日志"), ChangelogLineKind::TEXT, 0}}});
     return versions;
 }
 
@@ -749,9 +750,9 @@ public:
         this->registerAction("", brls::BUTTON_DOWN, next, true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_NAV_UP, scrollUp, true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_NAV_DOWN, scrollDown, true, true, brls::SOUND_NONE);
-        this->registerAction("上翻", brls::BUTTON_LB, scrollUp, true, false, brls::SOUND_NONE);
-        this->registerAction("下翻", brls::BUTTON_RB, scrollDown, true, false, brls::SOUND_NONE);
-        this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+        this->registerAction(L("上翻"), brls::BUTTON_LB, scrollUp, true, false, brls::SOUND_NONE);
+        this->registerAction(L("下翻"), brls::BUTTON_RB, scrollDown, true, false, brls::SOUND_NONE);
+        this->registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
             _beginClose();
             return true;
         }, false, false, brls::SOUND_NONE);
@@ -885,10 +886,10 @@ private:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFontSize(vg, 27.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 36.f, y + 43.f, "更新日志", nullptr);
+        nvgText(vg, x + 36.f, y + 43.f, L("更新日志").c_str(), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
-        const std::string summary = std::to_string(m_versions.size()) + " 个版本记录";
+        const std::string summary = std::to_string(m_versions.size()) + L(" 个版本记录");
         nvgText(vg, x + 36.f, y + 72.f, summary.c_str(), nullptr);
         nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
         nvgFontSize(vg, 17.f);
@@ -1061,9 +1062,9 @@ private:
                      float alpha) {
         const float hintY = y + h - 27.f + (1.f - detailBack(m_pageEntrance)) * 46.f;
         float cursor = x + w - 32.f;
-        _drawHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
-        _drawHint(vg, brls::BUTTON_RB, "下翻", cursor, hintY, alpha);
-        _drawHint(vg, brls::BUTTON_LB, "上翻", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_B, L("返回").c_str(), cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_RB, L("下翻").c_str(), cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_LB, L("上翻").c_str(), cursor, hintY, alpha);
     }
 
     void _selectVersion(int direction) {
@@ -1172,13 +1173,13 @@ public:
         this->registerAction("", brls::BUTTON_NAV_RIGHT, moveRight, true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_NAV_UP, moveUp, true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_NAV_DOWN, moveDown, true, true, brls::SOUND_NONE);
-        this->registerAction("上一类", brls::BUTTON_LB, moveLeft, true, false, brls::SOUND_NONE);
-        this->registerAction("下一类", brls::BUTTON_RB, moveRight, true, false, brls::SOUND_NONE);
-        this->registerAction("下载", brls::BUTTON_A, [this](brls::View*) -> bool {
+        this->registerAction(L("上一类"), brls::BUTTON_LB, moveLeft, true, false, brls::SOUND_NONE);
+        this->registerAction(L("下一类"), brls::BUTTON_RB, moveRight, true, false, brls::SOUND_NONE);
+        this->registerAction(L("下载"), brls::BUTTON_A, [this](brls::View*) -> bool {
             _activateFocused();
             return true;
         }, false, false, brls::SOUND_NONE);
-        this->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+        this->registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
             _beginClose();
             return true;
         }, false, false, brls::SOUND_NONE);
@@ -1450,9 +1451,9 @@ private:
         const auto item = m_manifest.groups[layout.groupIndex].items[layout.itemIndex];
         brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
 
-        auto* dialog = new brls::Dialog(item.dialog.empty() ? "是否下载此资源？" : item.dialog);
-        dialog->addButton("取消", []() {});
-        dialog->addButton("确认", [this, item, layout]() {
+        auto* dialog = new brls::Dialog(item.dialog.empty() ? L("是否下载此资源？") : item.dialog);
+        dialog->addButton(L("取消"), []() {});
+        dialog->addButton(L("确认"), [this, item, layout]() {
             startResourceDownload(item, [this, layout]() {
                 if (layout.groupIndex < m_manifest.groups.size()
                     && layout.itemIndex < m_manifest.groups[layout.groupIndex].items.size()) {
@@ -1511,8 +1512,8 @@ private:
 
         nvgFontSize(vg, 14.f);
         nvgFillColor(vg, nvgRGBA(205, 212, 223, focused ? 220 : 175));
-        const std::string metadata = "版本 " + item.version + "  ·  "
-            + (item.type == "zip" ? "压缩资源" : "单文件资源");
+        const std::string metadata = L("版本 ") + item.version + "  ·  "
+            + (item.type == "zip" ? L("压缩资源") : L("单文件资源"));
         nvgText(vg, x + 96.f, y + 54.f, metadata.c_str(), nullptr);
 
         nvgFontSize(vg, 13.f);
@@ -1542,9 +1543,9 @@ private:
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, item.needsUpdate
             ? nvgRGBA(255, 205, 120, 245) : nvgRGBA(135, 235, 175, 235));
-        const char* status = item.needsUpdate ? "可更新" : "已安装";
+        const std::string status = item.needsUpdate ? L("可更新") : L("已安装");
         nvgText(vg, statusX + statusW * 0.5f, y + h * 0.5f,
-                status, nullptr);
+                status.c_str(), nullptr);
     }
 
     size_t _currentGroupIndex() const {
@@ -1562,7 +1563,7 @@ private:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFontSize(vg, 27.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 36.f, y + 43.f, "在线资源", nullptr);
+        nvgText(vg, x + 36.f, y + 43.f, L("在线资源").c_str(), nullptr);
 
         size_t itemCount = 0;
         size_t pendingCount = 0;
@@ -1574,8 +1575,8 @@ private:
         }
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
-        const std::string summary = std::to_string(itemCount) + " 项资源  ·  "
-            + std::to_string(pendingCount) + " 项可更新";
+        const std::string summary = std::to_string(itemCount) + L(" 项资源  ·  ")
+            + std::to_string(pendingCount) + L(" 项可更新");
         nvgText(vg, x + 36.f, y + 72.f, summary.c_str(), nullptr);
 
         if (!m_manifest.groups.empty()) {
@@ -1697,10 +1698,10 @@ private:
         const float hintY = y + h - 27.f
             + (1.f - detailBack(m_pageEntrance)) * 46.f;
         float cursor = x + w - 32.f;
-        _drawResourceHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
-        _drawResourceHint(vg, brls::BUTTON_A, "下载", cursor, hintY, alpha);
-        _drawResourceHint(vg, brls::BUTTON_RB, "下一类", cursor, hintY, alpha);
-        _drawResourceHint(vg, brls::BUTTON_LB, "上一类", cursor, hintY, alpha);
+        _drawResourceHint(vg, brls::BUTTON_B, L("返回").c_str(), cursor, hintY, alpha);
+        _drawResourceHint(vg, brls::BUTTON_A, L("下载").c_str(), cursor, hintY, alpha);
+        _drawResourceHint(vg, brls::BUTTON_RB, L("下一类").c_str(), cursor, hintY, alpha);
+        _drawResourceHint(vg, brls::BUTTON_LB, L("上一类").c_str(), cursor, hintY, alpha);
     }
 
     void _beginClose() {
@@ -1714,7 +1715,7 @@ private:
 class ResourceProgressCanvas final : public brls::View {
 public:
     explicit ResourceProgressCanvas(std::string resourceName)
-        : m_title("正在更新 " + std::move(resourceName)) {
+        : m_title(L("正在更新 ") + std::move(resourceName)) {
         this->setWidth(620.f);
         this->setHeight(250.f);
         this->setFocusable(false);
@@ -1723,7 +1724,7 @@ public:
 
     void setProgress(std::string stage, std::string detail, float progress) {
         m_stage = std::move(stage);
-        m_detail = detail.empty() ? "准备中" : std::move(detail);
+        m_detail = detail.empty() ? L("准备中") : std::move(detail);
         m_targetProgress = std::clamp(progress, 0.f, 1.f);
         _updateStageStyle();
         this->invalidate();
@@ -1828,7 +1829,7 @@ public:
         nvgFontSize(vg, 13.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(175, 180, 192, 165));
-        nvgText(vg, x + sidePadding, y + 220.f, "在线资源", nullptr);
+        nvgText(vg, x + sidePadding, y + 220.f, L("在线资源").c_str(), nullptr);
     }
 
     void frame(brls::FrameContext* ctx) override {
@@ -1848,8 +1849,8 @@ public:
 
 private:
     std::string m_title;
-    std::string m_stage = "正在连接服务器...";
-    std::string m_detail = "准备中";
+    std::string m_stage = L("正在连接服务器...");
+    std::string m_detail = L("准备中");
     char32_t m_icon = 0xE2C4;
     unsigned char m_accentR = 79;
     unsigned char m_accentG = 193;
@@ -1862,17 +1863,17 @@ private:
     std::chrono::steady_clock::time_point m_lastFrameTime;
 
     void _updateStageStyle() {
-        if (m_stage.find("解压") != std::string::npos) {
+        if (m_stage.find(L("解压")) != std::string::npos) {
             m_icon = 0xE149;
             m_accentR = 255;
             m_accentG = 184;
             m_accentB = 77;
-        } else if (m_stage.find("安装") != std::string::npos) {
+        } else if (m_stage.find(L("安装")) != std::string::npos) {
             m_icon = material::INSTALL_APP;
             m_accentR = 111;
             m_accentG = 207;
             m_accentB = 151;
-        } else if (m_stage.find("版本") != std::string::npos) {
+        } else if (m_stage.find(L("版本")) != std::string::npos) {
             m_icon = material::DESCRIPTION;
             m_accentR = 111;
             m_accentG = 207;
@@ -1954,7 +1955,7 @@ static void openOnlineResourceActivity(OnlineResourceManifest manifest,
 }
 
 static void checkOnlineResources(beiklive::Box* previousPage) {
-    auto* progressDialog = new brls::Dialog("正在检测在线资源...\n\n请稍候");
+    auto* progressDialog = new brls::Dialog(L("正在检测在线资源...\n\n请稍候"));
     progressDialog->setFocusable(true);
     HIDE_BRLS_HIGHLIGHT(progressDialog);
     progressDialog->open();
@@ -1966,7 +1967,7 @@ static void checkOnlineResources(beiklive::Box* previousPage) {
         if (!downloadOk) {
             brls::sync([progressDialog]() {
                 progressDialog->close([]() {});
-                showMessageDialog("资源清单下载失败，请检查网络或资源地址");
+                showMessageDialog(L("资源清单下载失败，请检查网络或资源地址"));
             });
             return;
         }
@@ -2004,7 +2005,7 @@ static void startResourceDownload(const OnlineResourceItem& item,
         if (ec) {
             brls::sync([progressDialog]() {
                 progressDialog->close([]() {});
-                showMessageDialog("创建下载缓存目录失败");
+                showMessageDialog(L("创建下载缓存目录失败"));
             });
             return;
         }
@@ -2031,7 +2032,7 @@ static void startResourceDownload(const OnlineResourceItem& item,
             if (total > 0)
                 detail += " / " + formatTransferSize(total);
             brls::sync([progressDialog, detail = std::move(detail), progress]() {
-                progressDialog->setProgress("正在下载...", detail, progress);
+                progressDialog->setProgress(L("正在下载..."), detail, progress);
             });
         };
 
@@ -2040,18 +2041,18 @@ static void startResourceDownload(const OnlineResourceItem& item,
             std::filesystem::remove(downloadPath, ec);
             brls::sync([progressDialog]() {
                 progressDialog->close([]() {});
-                showMessageDialog("下载失败，请稍后重试");
+                showMessageDialog(L("下载失败，请稍后重试"));
             });
             return;
         }
 
         if (item.type == "zip") {
             brls::sync([progressDialog]() {
-                progressDialog->setProgress("正在解压...", "正在读取压缩包", 0.f);
+                progressDialog->setProgress(L("正在解压..."), L("正在读取压缩包"), 0.f);
             });
         } else {
             brls::sync([progressDialog, item]() {
-                progressDialog->setProgress("正在安装文件...", downloadFileName(item.url), 0.f);
+                progressDialog->setProgress(L("正在安装文件..."), downloadFileName(item.url), 0.f);
             });
         }
 
@@ -2070,7 +2071,7 @@ static void startResourceDownload(const OnlineResourceItem& item,
             const std::string detail = std::to_string(current) + " / "
                 + std::to_string(total) + "  " + zipBaseName(entryName);
             brls::sync([progressDialog, detail, progress]() {
-                progressDialog->setProgress("正在解压...", detail, progress);
+                progressDialog->setProgress(L("正在解压..."), detail, progress);
             });
         };
 
@@ -2092,7 +2093,7 @@ static void startResourceDownload(const OnlineResourceItem& item,
         }
 
         brls::sync([progressDialog]() {
-            progressDialog->setProgress("正在保存版本信息...", "即将完成", 1.f);
+            progressDialog->setProgress(L("正在保存版本信息..."), L("即将完成"), 1.f);
         });
         const bool versionSaved = writeResourceVersion(item.name, item.version);
         brls::sync([progressDialog, resultText, versionSaved, onSuccess]() {
@@ -2100,10 +2101,10 @@ static void startResourceDownload(const OnlineResourceItem& item,
             if (versionSaved) {
                 if (onSuccess)
                     onSuccess();
-                showMessageDialog("更新完成\n\n" + resultText);
+                showMessageDialog(L("更新完成\n\n") + resultText);
             } else {
-                showMessageDialog("资源已安装\n\n" + resultText
-                    + "\n但版本记录写入失败");
+                showMessageDialog(L("资源已安装\n\n") + resultText
+                    + L("\n但版本记录写入失败"));
             }
         });
     });
@@ -2160,7 +2161,7 @@ public:
         this->registerAction("", brls::BUTTON_NAV_RIGHT, moveRight, true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_NAV_UP, moveUp, true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_NAV_DOWN, moveDown, true, true, brls::SOUND_NONE);
-        this->registerAction("打开", brls::BUTTON_A, [this](brls::View*) -> bool {
+        this->registerAction(L("打开"), brls::BUTTON_A, [this](brls::View*) -> bool {
             _activateFocused();
             return true;
         }, false, false, brls::SOUND_NONE);
@@ -2191,8 +2192,8 @@ public:
         m_changelogRect = {m_checkRect.x + square + gap, topY, square, topH};
 
         _drawVersionCard(vg, topX, topY, versionW, topH);
-        _drawSquareButton(vg, m_checkRect, material::UPDATE, "检测更新", m_focusedIndex == 0);
-        _drawSquareButton(vg, m_changelogRect, material::DESCRIPTION, "更新日志", m_focusedIndex == 1);
+        _drawSquareButton(vg, m_checkRect, material::UPDATE, L("检测更新").c_str(), m_focusedIndex == 0);
+        _drawSquareButton(vg, m_changelogRect, material::DESCRIPTION, L("更新日志").c_str(), m_focusedIndex == 1);
 
         const float dividerY = topY + topH + 30.f;
         nvgBeginPath(vg);
@@ -2203,7 +2204,7 @@ public:
         nvgStroke(vg);
 
         m_resourceRect = {topX, dividerY + 26.f, contentW, 72.f};
-        _drawWideButton(vg, m_resourceRect, material::SEARCH, "在线资源检测", m_focusedIndex == 2);
+        _drawWideButton(vg, m_resourceRect, material::SEARCH, L("在线资源检测").c_str(), m_focusedIndex == 2);
     }
 
     void frame(brls::FrameContext* ctx) override {
@@ -2273,10 +2274,10 @@ private:
 
         nvgFontSize(vg, 22.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 28.f, y + 30.f, "当前版本信息", nullptr);
+        nvgText(vg, x + 28.f, y + 30.f, L("当前版本信息").c_str(), nullptr);
 
-        _drawInfoRow(vg, x + 28.f, y + 66.f, "版本号", m_version);
-        _drawInfoRow(vg, x + 28.f, y + 92.f, "更新源", m_updateSource);
+        _drawInfoRow(vg, x + 28.f, y + 66.f, L("版本号").c_str(), m_version);
+        _drawInfoRow(vg, x + 28.f, y + 92.f, L("更新源").c_str(), m_updateSource);
     }
 
     void _drawInfoRow(NVGcontext* vg, float x, float y, const char* label, const std::string& value) {
@@ -2457,12 +2458,12 @@ public:
                              true, true, brls::SOUND_NONE);
         this->registerAction("", brls::BUTTON_NAV_DOWN, moveDown,
                              true, true, brls::SOUND_NONE);
-        this->registerAction("打开", brls::BUTTON_A,
+        this->registerAction(L("打开"), brls::BUTTON_A,
             [this](brls::View*) -> bool {
                 _activateFocused();
                 return true;
             }, false, false, brls::SOUND_NONE);
-        this->registerAction("返回", brls::BUTTON_B,
+        this->registerAction(L("返回"), brls::BUTTON_B,
             [this](brls::View*) -> bool {
                 _beginClose();
                 return true;
@@ -2718,8 +2719,8 @@ private:
         const std::string version = "v" + m_version;
         nvgText(vg, x + 36.f, headerY + 52.f, version.c_str(), nullptr);
 
-        constexpr const char* labels[] = {
-            "项目信息", "更新与资源", "支持作者"
+        static const std::string labels[] = {
+            L("项目信息"), L("更新与资源"), L("支持作者")
         };
         constexpr float tabW = 154.f;
         constexpr float gap = 12.f;
@@ -2755,7 +2756,7 @@ private:
                 ? nvgRGBA(255, 255, 255, 250)
                 : nvgRGBA(210, 216, 226, 175));
             nvgText(vg, tx + tabW * 0.5f, headerY + 34.f,
-                    labels[index], nullptr);
+                    labels[index].c_str(), nullptr);
         }
 
         nvgBeginPath(vg);
@@ -2856,7 +2857,7 @@ private:
         nvgFontSize(vg, 16.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 190));
         nvgText(vg, author.x + author.w * 0.5f,
-                author.y + 207.f, "项目作者与维护者", nullptr);
+                author.y + 207.f, L("项目作者与维护者").c_str(), nullptr);
 
         const Rect github{author.x + 24.f, author.y + 250.f,
                           author.w - 48.f, 62.f};
@@ -2887,7 +2888,7 @@ private:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
         nvgFontSize(vg, 25.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, px, project.y + 27.f, "关于本项目", nullptr);
+        nvgText(vg, px, project.y + 27.f, L("关于本项目").c_str(), nullptr);
         nvgFontSize(vg, 17.f);
         nvgFillColor(vg, nvgRGBA(220, 225, 234, 210));
         nvgTextBox(vg, px, project.y + 68.f, project.w - 60.f,
@@ -2923,15 +2924,15 @@ private:
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
 
-        constexpr const char* features[] = {
-            "游戏库、封面与游玩记录",
-            "目录扫描与 RetroArch 导入",
-            "即时、自动存档与倒带",
-            "按机型独立输入映射",
-            "金手指与多核心切换",
-            "着色器、遮罩与画面模式",
-            "远程管理与资源检测",
-            "原生 NDS、3DS、PICO-8、MD 与外置 Arcade/DC 运行时",
+        static const std::string features[] = {
+            L("游戏库、封面与游玩记录"),
+            L("目录扫描与 RetroArch 导入"),
+            L("即时、自动存档与倒带"),
+            L("按机型独立输入映射"),
+            L("金手指与多核心切换"),
+            L("着色器、遮罩与画面模式"),
+            L("远程管理与资源检测"),
+            L("原生 NDS、3DS、PICO-8、MD 与外置 Arcade/DC 运行时"),
         };
         for (int index = 0; index < 8; ++index) {
             const int column = index % 2;
@@ -2947,7 +2948,7 @@ private:
             nvgFontFaceId(vg, m_defaultFont);
             nvgFontSize(vg, 16.f);
             nvgFillColor(vg, nvgRGBA(235, 238, 244, 225));
-            nvgText(vg, fx + 34.f, fy, features[index], nullptr);
+            nvgText(vg, fx + 34.f, fy, features[index].c_str(), nullptr);
         }
     }
 
@@ -2961,7 +2962,7 @@ private:
         nvgFontSize(vg, 20.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 190));
         nvgText(vg, version.x + 28.f, version.y + 30.f,
-                "当前版本", nullptr);
+                L("当前版本").c_str(), nullptr);
         nvgFontSize(vg, 46.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
         const std::string versionText = "v" + m_version;
@@ -2970,7 +2971,7 @@ private:
         nvgFontSize(vg, 16.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 185));
         nvgText(vg, version.x + 28.f, version.y + 145.f,
-                "更新源", nullptr);
+                L("更新源").c_str(), nullptr);
         nvgFontSize(vg, 19.f);
         nvgFillColor(vg, nvgRGBA(245, 248, 252, 235));
         nvgTextBox(vg, version.x + 28.f, version.y + 174.f,
@@ -2985,8 +2986,7 @@ private:
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 195));
         nvgTextBox(vg, version.x + 28.f, version.y + 270.f,
                    version.w - 56.f,
-                   "程序更新与资源更新相互独立。在线资源可单独检查并安装，不会覆盖用户配置。",
-                   nullptr);
+                   L("程序更新与资源更新相互独立。在线资源可单独检查并安装，不会覆盖用户配置。").c_str(), nullptr);
 
         const float actionsX = x + leftW + gap;
         const float actionsW = w - leftW - gap;
@@ -2995,13 +2995,13 @@ private:
         constexpr char32_t icons[] = {
             material::UPDATE, material::DESCRIPTION, material::SEARCH
         };
-        constexpr const char* titles[] = {
-            "检测程序更新", "查看更新日志", "在线资源检测"
+        static const std::string titles[] = {
+            L("检测程序更新"), L("查看更新日志"), L("在线资源检测")
         };
-        constexpr const char* descriptions[] = {
-            "检查新版本并进入下载安装流程",
-            "浏览当前版本包含的功能与修复",
-            "检测 BIOS、数据库和扩展资源"
+        static const std::string descriptions[] = {
+            L("检查新版本并进入下载安装流程"),
+            L("浏览当前版本包含的功能与修复"),
+            L("检测 BIOS、数据库和扩展资源")
         };
         for (int index = 0; index < 3; ++index) {
             const Rect item{actionsX,
@@ -3028,12 +3028,12 @@ private:
                 ? nvgRGBA(255, 255, 255, 255)
                 : GET_THEME_COLOR("brls/text"));
             nvgText(vg, item.x + 108.f, item.y + item.h * 0.42f,
-                    titles[index], nullptr);
+                    titles[index].c_str(), nullptr);
             nvgFontSize(vg, 15.f);
             nvgFillColor(vg, nvgRGBA(210, 216, 226,
                 focused ? 225 : 175));
             nvgText(vg, item.x + 108.f, item.y + item.h * 0.68f,
-                    descriptions[index], nullptr);
+                    descriptions[index].c_str(), nullptr);
         }
     }
 
@@ -3052,17 +3052,16 @@ private:
         nvgFontSize(vg, 24.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
         nvgText(vg, message.x + message.w * 0.5f,
-                message.y + 142.f, "感谢你的支持", nullptr);
+                message.y + 142.f, L("感谢你的支持").c_str(), nullptr);
         nvgFontSize(vg, 16.f);
         nvgFillColor(vg, nvgRGBA(215, 220, 230, 195));
         nvgTextBox(vg, message.x + 34.f, message.y + 190.f,
                    message.w - 68.f,
-                   "反馈、测试与分享同样是对项目的重要帮助。也许下一次更新的灵感，就来自你的建议。",
-                   nullptr);
+                   L("反馈、测试与分享同样是对项目的重要帮助。也许下一次更新的灵感，就来自你的建议。").c_str(), nullptr);
         nvgFontSize(vg, 18.f);
         nvgFillColor(vg, nvgRGBA(245, 248, 252, 235));
         nvgText(vg, message.x + message.w * 0.5f,
-                message.y + 300.f, "交流与反馈", nullptr);
+                message.y + 300.f, L("交流与反馈").c_str(), nullptr);
         _drawImageFit(vg, m_qqImage,
             {message.x + 24.f, message.y + 330.f,
              message.w - 48.f, std::min(150.f, h - 350.f)}, 6.f);
@@ -3071,11 +3070,11 @@ private:
         nvgFontSize(vg, 24.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
         nvgText(vg, payment.x + 30.f, payment.y + 25.f,
-                "请作者喝杯咖啡", nullptr);
+                L("请作者喝杯咖啡").c_str(), nullptr);
         nvgFontSize(vg, 16.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 190));
         nvgText(vg, payment.x + 30.f, payment.y + 60.f,
-                "所有支持都会用于项目维护与功能开发", nullptr);
+                L("所有支持都会用于项目维护与功能开发").c_str(), nullptr);
         _drawImageFit(vg, m_payImage,
             {payment.x + 28.f, payment.y + 96.f,
              payment.w - 56.f, payment.h - 122.f}, 7.f);
@@ -3107,11 +3106,11 @@ private:
         const float alpha = aboutSmooth(m_pageEntrance);
         const float hintY = y + h - 27.f;
         float cursor = x + w - 32.f;
-        _drawHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_B, L("返回").c_str(), cursor, hintY, alpha);
         if (m_tab == 1)
-            _drawHint(vg, brls::BUTTON_A, "打开", cursor, hintY, alpha);
-        _drawHint(vg, brls::BUTTON_RB, "下一页", cursor, hintY, alpha);
-        _drawHint(vg, brls::BUTTON_LB, "上一页", cursor, hintY, alpha);
+            _drawHint(vg, brls::BUTTON_A, L("打开").c_str(), cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_RB, L("下一页").c_str(), cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_LB, L("上一页").c_str(), cursor, hintY, alpha);
     }
 };
 
@@ -3121,15 +3120,15 @@ AboutPage::AboutPage() {
         this->showHeader(false);
         const std::string localVersion = APP_VERSION;
         const std::string changelogText = readTextFile(
-            BK_RES("changelog"), "暂无更新日志");
+            BK_RES("changelog"), L("暂无更新日志").c_str());
         m_aboutCanvas = new AboutMainCanvas(
             localVersion,
             "download.nswiki.cn",
             [this]() { _checkUpdate(); },
             [localVersion, changelogText]() {
                 openChangelogApplet(
-                    "当前版本更新内容  " + localVersion,
-                    changelogText.empty() ? "暂无更新日志" : changelogText);
+                    L("当前版本更新内容  ") + localVersion,
+                    changelogText.empty() ? L("暂无更新日志") : changelogText);
             },
             [this]() { checkOnlineResources(this); },
             [this]() { beiklive::popActivity(this); });
@@ -3224,7 +3223,7 @@ brls::View* AboutPage::_buildInfoTab() {
 
     // 项目说明
     auto* sectionHeader = new brls::Header();
-    sectionHeader->setTitle("关于本项目");
+    sectionHeader->setTitle(L("关于本项目"));
     sectionHeader->setMarginTop(30.f);
     sectionHeader->setMarginBottom(15.f);
     box->addView(sectionHeader);
@@ -3242,18 +3241,18 @@ brls::View* AboutPage::_buildInfoTab() {
 
     std::vector<std::string> descLines = {
         "GBAStation 是一个基于 borealis UI 的跨平台模拟器前端，整合 libretro 核心，并原生集成 melonDS 与 Genesis Plus GX。",
-        "当前支持 GB、GBC、GBA、FC、SFC、NDS、3DS、PICO-8、MD、Arcade 与 DC（NDS/3DS/DC 性能仍在优化中）。",
+        L("当前支持 GB、GBC、GBA、FC、SFC、NDS、3DS、PICO-8、MD、Arcade 与 DC（NDS/3DS/DC 性能仍在优化中）。"),
         "内置核心包含 mGBA、GameBattle、Nestopia、FCEUmm、Snes9x 2005、Snes9x、melonDS、Azahar 与 Genesis Plus GX；Arcade 与 DC 使用独立外置 NRO 核心。",
         "",
-        "目前已实现功能：",
-        "  •  游戏库功能、游戏封面、游玩时长、游戏次数",
-        "  •  支持目录扫描、RetroArch 游戏库导入、Web 局域网管理游戏库与封面自定义",
-        "  •  支持即时存档 / 读档、自动存档 / 自动存读档",
-        "  •  支持金手指（不支持raw格式）",
-        "  •  按机型独立按键映射（含 3DS 双摇杆与 ZL / ZR）、A / B 连发",
-        "  •  快进、倒带",
-        "  •  遮罩、RetroArch GLSL 着色器与参数调整",
-        "  •  多种画面模式"
+        L("目前已实现功能："),
+        L("  •  游戏库功能、游戏封面、游玩时长、游戏次数"),
+        L("  •  支持目录扫描、RetroArch 游戏库导入、Web 局域网管理游戏库与封面自定义"),
+        L("  •  支持即时存档 / 读档、自动存档 / 自动存读档"),
+        L("  •  支持金手指（不支持raw格式）"),
+        L("  •  按机型独立按键映射（含 3DS 双摇杆与 ZL / ZR）、A / B 连发"),
+        L("  •  快进、倒带"),
+        L("  •  遮罩、RetroArch GLSL 着色器与参数调整"),
+        L("  •  多种画面模式")
     };
 
     for (const auto& line : descLines) {
@@ -3282,7 +3281,7 @@ brls::View* AboutPage::_buildInfoTab() {
 
 brls::View* AboutPage::_buildUpdateTab() {
     std::string localVersion = APP_VERSION;
-    std::string changelogText = readTextFile(BK_RES("changelog"), "暂无更新日志");
+    std::string changelogText = readTextFile(BK_RES("changelog"), L("暂无更新日志").c_str());
 
     return new UpdateTabCanvas(
         localVersion,
@@ -3292,8 +3291,8 @@ brls::View* AboutPage::_buildUpdateTab() {
         },
         [localVersion, changelogText]() {
             openChangelogApplet(
-                "当前版本更新内容  " + localVersion,
-                changelogText.empty() ? "暂无更新日志" : changelogText);
+                L("当前版本更新内容  ") + localVersion,
+                changelogText.empty() ? L("暂无更新日志") : changelogText);
         },
         [this]() {
             checkOnlineResources(this);
@@ -3302,7 +3301,7 @@ brls::View* AboutPage::_buildUpdateTab() {
 
 void AboutPage::_checkUpdate() {
     // 显示检测中弹窗
-    auto* dlg = new brls::Dialog("正在检测更新...\n\n请稍候");
+    auto* dlg = new brls::Dialog(L("正在检测更新...\n\n请稍候"));
     dlg->setFocusable(true);
     HIDE_BRLS_HIGHLIGHT(dlg);
     dlg->open();
@@ -3318,10 +3317,10 @@ void AboutPage::_checkUpdate() {
             auto& info = AppUpdater::instance().info();
             if (info.hasUpdate) {
                 auto* confirmDlg = new beiklive::UpdateDialog(
-                    "版本更新  " + info.version,
+                    L("版本更新  ") + info.version,
                     info.changelog
                 );
-                confirmDlg->addButton("更新", []() {
+                confirmDlg->addButton(L("更新"), []() {
                     brls::sync([]() {
                         auto* dialog = new UpdatePage();
                         dialog->open();
@@ -3330,12 +3329,12 @@ void AboutPage::_checkUpdate() {
                         });
                     });
                 });
-                confirmDlg->addButton("取消", []() {});
+                confirmDlg->addButton(L("取消"), []() {});
                 confirmDlg->open();
             } else if (!info.version.empty()) {
                 auto* latestDlg = new brls::Dialog(
-                    "当前已是最新版本，是否再次更新？");
-                latestDlg->addButton("再次更新", []() {
+                    L("当前已是最新版本，是否再次更新？"));
+                latestDlg->addButton(L("再次更新"), []() {
                     brls::sync([]() {
                         auto* dialog = new UpdatePage();
                         dialog->open();
@@ -3344,11 +3343,11 @@ void AboutPage::_checkUpdate() {
                         });
                     });
                 });
-                latestDlg->addButton("取消", []() {});
+                latestDlg->addButton(L("取消"), []() {});
                 latestDlg->open();
             } else {
-                auto* okDlg = new brls::Dialog("更新检测失败，请检查网络后重试");
-                okDlg->addButton("确定", []() {});
+                auto* okDlg = new brls::Dialog(L("更新检测失败，请检查网络后重试"));
+                okDlg->addButton(L("确定"), []() {});
                 okDlg->open();
             }
         });
@@ -3358,7 +3357,7 @@ void AboutPage::_checkUpdate() {
 void AboutPage::_updateCheatDatabase() {
     auto* cancelFlag = new std::atomic<bool>(false);
 
-    auto* prog = new beiklive::ProgressDialog("正在更新金手指数据库...",
+    auto* prog = new beiklive::ProgressDialog(L("正在更新金手指数据库..."),
         [cancelFlag]() { cancelFlag->store(true); });
     auto* frame = new brls::AppletFrame(prog);
     HIDE_BRLS_BAR(frame);
@@ -3375,7 +3374,7 @@ void AboutPage::_updateCheatDatabase() {
         std::string zipPath = dbDir + beiklive::path::SPLIT_CHAR + "cheat_db.zip";
 
         // ── 下载 ──
-        brls::sync([prog]() { prog->setStatus("正在下载..."); });
+        brls::sync([prog]() { prog->setStatus(L("正在下载...")); });
 
         bool downloadOk = false;
         {
@@ -3423,7 +3422,7 @@ void AboutPage::_updateCheatDatabase() {
         if (!downloadOk) {
             brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
-                prog->showResult("下载失败，请稍后重试或者去网盘手动下载");
+                prog->showResult(L("下载失败，请稍后重试或者去网盘手动下载"));
             });
             return;
         }
@@ -3432,7 +3431,7 @@ void AboutPage::_updateCheatDatabase() {
         int extractCount = 0;
         std::string nestedZipPath;
         {
-            brls::sync([prog]() { prog->setStatus("正在解压..."); });
+            brls::sync([prog]() { prog->setStatus(L("正在解压...")); });
 
             mz_zip_archive zip;
             memset(&zip, 0, sizeof(zip));
@@ -3459,7 +3458,7 @@ void AboutPage::_updateCheatDatabase() {
 
         // 解压嵌套的 RetroArch.zip
         if (!nestedZipPath.empty() && !cancelFlag->load()) {
-            brls::sync([prog]() { prog->setStatus("正在解压 RetroArch.zip..."); });
+            brls::sync([prog]() { prog->setStatus(L("正在解压 RetroArch.zip...")); });
 
             std::string retroArchDir = beiklive::path::cheatPath() + "/RetroArch";
             std::filesystem::create_directories(retroArchDir, ec);
@@ -3488,10 +3487,10 @@ void AboutPage::_updateCheatDatabase() {
 
         brls::sync([prog, cancelFlag, extractCount]() {
             delete cancelFlag;
-            prog->setText("更新完成");
-            std::string msg = "数据库已更新（解压 " + std::to_string(extractCount) + " 个文件）";
+            prog->setText(L("更新完成"));
+            std::string msg = L("数据库已更新（解压 ") + std::to_string(extractCount) + L(" 个文件）");
             if (extractCount > 0)
-                msg = "数据库已更新（解压 " + std::to_string(extractCount) + " 个文件），\n金手指文件已就绪";
+                msg = L("数据库已更新（解压 ") + std::to_string(extractCount) + L(" 个文件），\n金手指文件已就绪");
             prog->showResult(msg);
         });
     });
@@ -3509,7 +3508,7 @@ void AboutPage::_downloadNdsFirmware() {
     const auto ndsDir = std::filesystem::path(beiklive::path::biosPath()) / "nds";
     std::filesystem::create_directories(ndsDir, ec);
     if (ec) {
-        showMessageDialog("创建 NDS 固件目录失败：\n" + ndsDir.string());
+        showMessageDialog(L("创建 NDS 固件目录失败：\n") + ndsDir.string());
         return;
     }
 
@@ -3522,12 +3521,12 @@ void AboutPage::_downloadNdsFirmware() {
     }
 
     if (allExists) {
-        showMessageDialog("NDS 固件文件已存在，无需下载");
+        showMessageDialog(L("NDS 固件文件已存在，无需下载"));
         return;
     }
 
     auto* cancelFlag = new std::atomic<bool>(false);
-    auto* prog = new beiklive::ProgressDialog("正在下载 NDS 固件...",
+    auto* prog = new beiklive::ProgressDialog(L("正在下载 NDS 固件..."),
         [cancelFlag]() { cancelFlag->store(true); });
     auto* frame = new brls::AppletFrame(prog);
     HIDE_BRLS_BAR(frame);
@@ -3541,27 +3540,27 @@ void AboutPage::_downloadNdsFirmware() {
         if (ec) {
             brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
-                prog->showResult("创建缓存目录失败");
+                prog->showResult(L("创建缓存目录失败"));
             });
             return;
         }
 
         const auto zipPath = cacheDir / "nds_firmware.zip";
 
-        brls::sync([prog]() { prog->setStatus("正在下载..."); });
+        brls::sync([prog]() { prog->setStatus(L("正在下载...")); });
         if (!downloadFileToPath(kUrl, zipPath.string(), cancelFlag)) {
             if (cancelFlag->load()) {
                 brls::sync([prog, cancelFlag]() { delete cancelFlag; prog->close(); });
             } else {
                 brls::sync([prog, cancelFlag]() {
                     delete cancelFlag;
-                    prog->showResult("下载失败，请稍后重试或者去网盘手动下载");
+                    prog->showResult(L("下载失败，请稍后重试或者去网盘手动下载"));
                 });
             }
             return;
         }
 
-        brls::sync([prog]() { prog->setStatus("正在解压..."); });
+        brls::sync([prog]() { prog->setStatus(L("正在解压...")); });
         std::vector<std::string> expectedFiles(firmwareFiles.begin(), firmwareFiles.end());
         int extractCount = 0;
         bool extractOk = extractZipFilesToDir(zipPath.string(), ndsDir.string(), expectedFiles,
@@ -3575,11 +3574,11 @@ void AboutPage::_downloadNdsFirmware() {
 
         brls::sync([prog, cancelFlag, extractOk, extractCount]() {
             delete cancelFlag;
-            prog->setText(extractOk ? "下载完成" : "解压失败");
+            prog->setText(extractOk ? L("下载完成") : L("解压失败"));
             if (extractOk) {
-                prog->showResult("NDS 固件已就绪（解压 " + std::to_string(extractCount) + " 个文件）");
+                prog->showResult(L("NDS 固件已就绪（解压 ") + std::to_string(extractCount) + L(" 个文件）"));
             } else {
-                prog->showResult("解压失败，压缩包中缺少必要的 NDS 固件文件");
+                prog->showResult(L("解压失败，压缩包中缺少必要的 NDS 固件文件"));
             }
         });
     });
@@ -3593,18 +3592,18 @@ void AboutPage::_downloadNdsCheatDatabase() {
     const auto cheatDir = std::filesystem::path(beiklive::path::cheatPath());
     std::filesystem::create_directories(cheatDir, ec);
     if (ec) {
-        showMessageDialog("创建金手指目录失败：\n" + cheatDir.string());
+        showMessageDialog(L("创建金手指目录失败：\n") + cheatDir.string());
         return;
     }
 
     const auto cheatPath = cheatDir / kCheatFile;
     if (std::filesystem::exists(cheatPath)) {
-        showMessageDialog("NDS 金手指文件已存在，无需下载");
+        showMessageDialog(L("NDS 金手指文件已存在，无需下载"));
         return;
     }
 
     auto* cancelFlag = new std::atomic<bool>(false);
-    auto* prog = new beiklive::ProgressDialog("正在下载 NDS 金手指...",
+    auto* prog = new beiklive::ProgressDialog(L("正在下载 NDS 金手指..."),
         [cancelFlag]() { cancelFlag->store(true); });
     auto* frame = new brls::AppletFrame(prog);
     HIDE_BRLS_BAR(frame);
@@ -3618,14 +3617,14 @@ void AboutPage::_downloadNdsCheatDatabase() {
         if (ec) {
             brls::sync([prog, cancelFlag]() {
                 delete cancelFlag;
-                prog->showResult("创建缓存目录失败");
+                prog->showResult(L("创建缓存目录失败"));
             });
             return;
         }
 
         const auto zipPath = cacheDir / "usrcheat.zip";
 
-        brls::sync([prog]() { prog->setStatus("正在下载..."); });
+        brls::sync([prog]() { prog->setStatus(L("正在下载...")); });
 
         if (!downloadFileToPath(kUrl, zipPath.string(), cancelFlag)) {
             if (cancelFlag->load()) {
@@ -3633,13 +3632,13 @@ void AboutPage::_downloadNdsCheatDatabase() {
             } else {
                 brls::sync([prog, cancelFlag]() {
                     delete cancelFlag;
-                    prog->showResult("下载失败，请稍后重试或者去网盘手动下载");
+                    prog->showResult(L("下载失败，请稍后重试或者去网盘手动下载"));
                 });
             }
             return;
         }
 
-        brls::sync([prog]() { prog->setStatus("正在解压..."); });
+        brls::sync([prog]() { prog->setStatus(L("正在解压...")); });
         int extractCount = 0;
         bool extractOk = extractZipFilesToDir(zipPath.string(), cheatDir.string(), {kCheatFile},
                                               cancelFlag, extractCount);
@@ -3652,10 +3651,10 @@ void AboutPage::_downloadNdsCheatDatabase() {
 
         brls::sync([prog, cancelFlag, extractOk]() {
             delete cancelFlag;
-            prog->setText(extractOk ? "下载完成" : "解压失败");
+            prog->setText(extractOk ? L("下载完成") : L("解压失败"));
             prog->showResult(extractOk
-                ? "NDS 金手指文件已就绪"
-                : "解压失败，压缩包中缺少 usrcheat.dat");
+                ? L("NDS 金手指文件已就绪")
+                : L("解压失败，压缩包中缺少 usrcheat.dat"));
         });
     });
 }
@@ -3676,7 +3675,7 @@ brls::View* AboutPage::_buildSupportTab() {
     box->setFocusable(false);
 
     auto* label1 = new brls::Label();
-    label1->setText("喜欢这个项目的话，不妨请作者喝杯咖啡吧");
+    label1->setText(L("喜欢这个项目的话，不妨请作者喝杯咖啡吧"));
     label1->setFontSize(20.f);
     label1->setTextColor(GET_THEME_COLOR("brls/text"));
     label1->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -3685,7 +3684,7 @@ brls::View* AboutPage::_buildSupportTab() {
     box->addView(label1);
 
     auto* label2 = new brls::Label();
-    label2->setText("也许下一次更新的灵感，就来自这杯咖啡里的能量");
+    label2->setText(L("也许下一次更新的灵感，就来自这杯咖啡里的能量"));
     label2->setFontSize(14.f);
     label2->setTextColor(nvgRGBA(200, 200, 200, 200));
     label2->setHorizontalAlign(brls::HorizontalAlign::CENTER);

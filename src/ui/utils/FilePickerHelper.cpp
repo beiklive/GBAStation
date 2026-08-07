@@ -1,4 +1,5 @@
 #include "FilePickerHelper.hpp"
+#include "core/Translation.hpp"
 #include "core/Tools.hpp"
 #include "core/common.h"
 #include "ui/page/FileListPage.hpp"
@@ -62,7 +63,7 @@ namespace beiklive
             {
                 std::error_code ec;
                 if (!fs::exists(item.fullPath, ec) || !fs::is_regular_file(item.fullPath, ec)) {
-                    brls::Application::notify("文件不存在");
+                    brls::Application::notify(L("文件不存在"));
                     return;
                 }
                 onSelected(item.fullPath);
@@ -75,7 +76,7 @@ namespace beiklive
         auto* container = new brls::Box(brls::Axis::COLUMN);
         container->setGrow(1.0f);
         container->addView(flPage);
-        container->registerAction("关闭"_i18n, brls::BUTTON_START,
+        container->registerAction(L("关闭"), brls::BUTTON_START,
                                   [flPage](brls::View*) { flPage->requestClose(); return true; });
 
         auto* frame = new brls::AppletFrame(container);

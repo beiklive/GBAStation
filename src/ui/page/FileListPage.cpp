@@ -1,4 +1,5 @@
 #include "FileListPage.hpp"
+#include "core/Translation.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 #include <algorithm>
 #include <sstream>
@@ -141,7 +142,7 @@ namespace beiklive
         this->showFooter(false);
 
         // B = 返回上一级
-        this->registerAction("返回", brls::BUTTON_B,
+        this->registerAction(L("返回"), brls::BUTTON_B,
             [this](brls::View*) {
                 if (fileListView->hasActiveFilter()) {
                     fileListView->removeFilter();
@@ -158,7 +159,7 @@ namespace beiklive
             false, false, brls::SOUND_BACK);
 
         // X = 设置映射名
-        this->registerAction("设置映射名", brls::BUTTON_X,
+        this->registerAction(L("设置映射名"), brls::BUTTON_X,
             [this](brls::View*) {
                 if (m_focusedFullPath.empty()) return true;
                 auto* ime = brls::Application::getPlatform()->getImeManager();
@@ -179,13 +180,13 @@ namespace beiklive
                             }
                         }
                     },
-                    "设置映射名称", "", 128, curName,
+                    L("设置映射名称"), "", 128, curName,
                     brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
                 return true;
             });
 
         // RB = 切换详情面板
-        this->registerAction("面板", brls::BUTTON_RB, [this](brls::View*) -> bool {
+        this->registerAction(L("面板"), brls::BUTTON_RB, [this](brls::View*) -> bool {
             _cancelThumbnail();
             m_panelVisible = !m_panelVisible;
             if (m_panelVisible) {
@@ -206,7 +207,7 @@ namespace beiklive
         });
 
         // ZR = 搜索
-        this->registerAction("搜索", brls::BUTTON_RT, [this](brls::View*) -> bool {
+        this->registerAction(L("搜索"), brls::BUTTON_RT, [this](brls::View*) -> bool {
             auto* ime = brls::Application::getPlatform()->getImeManager();
             if (!ime) return true;
 
@@ -220,13 +221,13 @@ namespace beiklive
                         fileListView->applyFilter(keyword);
                         if (fileListView->itemCount() == 0) {
                             fileListView->removeFilter();
-                            auto* dlg = new brls::Dialog("未搜索到匹配项");
-                            dlg->addButton("确定", []() {});
+                            auto* dlg = new brls::Dialog(L("未搜索到匹配项"));
+                            dlg->addButton(L("确定"), []() {});
                             dlg->open();
                         }
                     });
                 },
-                "搜索文件", "", 64, "",
+                L("搜索文件"), "", 64, "",
                 brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
             return true;
         });
@@ -384,12 +385,12 @@ namespace beiklive
     std::string FileListPage::_platformName(int platform)
     {
         auto name = beiklive::tools::platformName(platform);
-        return name.empty() ? "未知" : name;
+        return name.empty() ? L("未知") : name;
     }
 
     std::string FileListPage::_formatPlayTime(int seconds)
     {
-        if (seconds <= 0) return "未游玩";
+        if (seconds <= 0) return L("未游玩");
         return beiklive::tools::formatPlayTime(seconds);
     }
 
@@ -457,23 +458,23 @@ namespace beiklive
 
         std::string ext = beiklive::tools::getFileExtension(data.fullPath);
         _addBadge(ext, nvgRGBA(79, 193, 255, 200), nvgRGBA(255,255,255,255));
-        _addHighlightRow(std::string("游戏时长 ") + _formatPlayTime(entry.playTime),
+        _addHighlightRow(std::string(L("游戏时长 ")) + _formatPlayTime(entry.playTime),
             entry.playTime > 0 ? nvgRGBA(121, 201, 249, 255) : GET_THEME_COLOR("brls/text_disabled"));
 
-        _addInfoRow("容量", data.fileSize, nvgRGB(173, 168, 255));
+        _addInfoRow(L("容量"), data.fileSize, nvgRGB(173, 168, 255));
 
         std::string lastPlayed = entry.lastPlayed.empty()
-            ? "从未游玩"
+            ? L("从未游玩")
             : beiklive::tools::formatTimestampForDisplay(entry.lastPlayed);
-        _addInfoRow("最后游玩", lastPlayed, nvgRGB(144, 164, 174));
-        _addInfoRow("打开次数", std::to_string(entry.playCount), nvgRGB(129, 199, 132));
-        _addInfoRow("路径", data.fullPath, nvgRGB(255, 183, 77));
+        _addInfoRow(L("最后游玩"), lastPlayed, nvgRGB(144, 164, 174));
+        _addInfoRow(L("打开次数"), std::to_string(entry.playCount), nvgRGB(129, 199, 132));
+        _addInfoRow(L("路径"), data.fullPath, nvgRGB(255, 183, 77));
     }
 
     void FileListPage::_showGameNoDBDetail(const beiklive::DirListData& data)
     {
         m_detailTitle->setText(data.fileName);
-        m_detailSubtitle->setText("未录入数据库");
+        m_detailSubtitle->setText(L("未录入数据库"));
 
         m_detailImage->setVisibility(brls::Visibility::VISIBLE);
         m_detailImage->setImageFromFile(data.iconPath.empty()
@@ -485,10 +486,10 @@ namespace beiklive
 
         std::string ext = beiklive::tools::getFileExtension(data.fullPath);
         _addBadge(ext, nvgRGBA(79, 193, 255, 200), nvgRGBA(255,255,255,255));
-        _addInfoRow("容量", data.fileSize, nvgRGB(255, 183, 77));
+        _addInfoRow(L("容量"), data.fileSize, nvgRGB(255, 183, 77));
 
-        _addInfoRow("文件名", beiklive::tools::getFileNameWithoutExtension(data.fullPath), nvgRGB(255, 183, 77));
-        _addInfoRow("路径", data.fullPath, nvgRGB(129, 199, 132));
+        _addInfoRow(L("文件名"), beiklive::tools::getFileNameWithoutExtension(data.fullPath), nvgRGB(255, 183, 77));
+        _addInfoRow(L("路径"), data.fullPath, nvgRGB(129, 199, 132));
     }
 
     void FileListPage::_showImageDetail(const beiklive::DirListData& data)
@@ -501,19 +502,19 @@ namespace beiklive
 
         std::string ext = beiklive::tools::getFileExtension(data.fullPath);
         _addBadge(ext, nvgRGBA(0, 168, 107, 200), nvgRGBA(255,255,255,255));
-        _addInfoRow("容量", data.fileSize, nvgRGB(255, 183, 77));
-        _addInfoRow("路径", data.fullPath, nvgRGB(144, 164, 174));
+        _addInfoRow(L("容量"), data.fileSize, nvgRGB(255, 183, 77));
+        _addInfoRow(L("路径"), data.fullPath, nvgRGB(144, 164, 174));
     }
 
     void FileListPage::_showFolderDetail(const beiklive::DirListData& data)
     {
         m_detailTitle->setText(data.fileName);
-        m_detailSubtitle->setText("文件夹");
+        m_detailSubtitle->setText(L("文件夹"));
 
         m_detailImage->setVisibility(brls::Visibility::VISIBLE);
         m_detailImage->setImageFromFile(beiklive::tools::getIconPath(data.itemType));
 
-        _addHighlightRow("文件夹", nvgRGBA(121, 201, 249, 255));
+        _addHighlightRow(L("文件夹"), nvgRGBA(121, 201, 249, 255));
     }
 
     void FileListPage::_showFileDetail(const beiklive::DirListData& data)
@@ -527,8 +528,8 @@ namespace beiklive
         std::string ext = beiklive::tools::getFileExtension(data.fullPath);
         if (!ext.empty())
             _addBadge(ext, nvgRGBA(128,128,128,200), nvgRGBA(255,255,255,255));
-        _addInfoRow("容量", data.fileSize, nvgRGB(255, 183, 77));
-        _addInfoRow("路径", data.fullPath, nvgRGB(144, 164, 174));
+        _addInfoRow(L("容量"), data.fileSize, nvgRGB(255, 183, 77));
+        _addInfoRow(L("路径"), data.fullPath, nvgRGB(144, 164, 174));
     }
 
     void FileListPage::_requestThumbnail(const std::string& path)
@@ -647,8 +648,8 @@ namespace beiklive
                 std::string upIcon = beiklive::tools::getIconPathWithPrefix(
                     beiklive::enums::FileType::NONE, iconPrefix);
                 dirData.push_back({"..", path, upIcon,
-                    beiklive::enums::FileType::NONE, "返回上一级", 0});
-                items.push_back({"..", "返回上一级", upIcon, path});
+                    beiklive::enums::FileType::NONE, L("返回上一级"), 0});
+                items.push_back({"..", L("返回上一级"), upIcon, path});
             }
 
             std::error_code ec;
@@ -695,7 +696,7 @@ namespace beiklive
                     auto fileType = beiklive::tools::getFileType(raw.fullPath);
                     std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
                     dirData.push_back({raw.name, raw.fullPath, ip, fileType, "", 0});
-                    items.push_back({raw.name, "文件夹", ip, raw.fullPath});
+                    items.push_back({raw.name, L("文件夹"), ip, raw.fullPath});
                 }
 
                 for (const auto& raw : files) {
@@ -788,11 +789,11 @@ namespace beiklive
         nvgFontSize(vg, 27.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 36.f, y + 42.f, "文件浏览", nullptr);
+        nvgText(vg, x + 36.f, y + 42.f, L("文件浏览").c_str(), nullptr);
 
         nvgFontSize(vg, 16.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 190));
-        const std::string pathText = m_currentPath.empty() ? "驱动器" : m_currentPath;
+        const std::string pathText = m_currentPath.empty() ? L("驱动器") : m_currentPath;
         nvgSave(vg);
         nvgIntersectScissor(vg, x + 190.f, y + 22.f,
                            std::max(20.f, w - 370.f), 46.f);
@@ -852,15 +853,15 @@ namespace beiklive
         const bool atRoot = m_isAtDriveList || m_currentPath.empty()
             || fs::path(m_currentPath).parent_path().string() == m_currentPath;
         drawHint(brls::BUTTON_B,
-                 fileListView->hasActiveFilter() ? "关闭搜索"
-                     : (atRoot ? "返回" : "上一级"),
+                 fileListView->hasActiveFilter() ? L("关闭搜索").c_str()
+                     : (atRoot ? L("返回").c_str() : L("上一级").c_str()),
                  cursor, hintY);
-        drawHint(brls::BUTTON_A, "打开/选择", cursor, hintY);
+        drawHint(brls::BUTTON_A, L("打开/选择").c_str(), cursor, hintY);
         if (m_dirSelectionMode)
-            drawHint(brls::BUTTON_Y, "选择目录", cursor, hintY);
-        drawHint(brls::BUTTON_X, "映射名称", cursor, hintY);
-        drawHint(brls::BUTTON_RT, "搜索", cursor, hintY);
-        drawHint(brls::BUTTON_RB, m_panelVisible ? "隐藏详情" : "显示详情",
+            drawHint(brls::BUTTON_Y, L("选择目录").c_str(), cursor, hintY);
+        drawHint(brls::BUTTON_X, L("映射名称").c_str(), cursor, hintY);
+        drawHint(brls::BUTTON_RT, L("搜索").c_str(), cursor, hintY);
+        drawHint(brls::BUTTON_RB, m_panelVisible ? L("隐藏详情").c_str() : L("显示详情").c_str(),
                  cursor, hintY);
         nvgRestore(vg);
     }
@@ -893,7 +894,7 @@ namespace beiklive
             for (const auto& drive : drives) {
                 dirData.push_back({drive, drive, driveIcon,
                     beiklive::enums::FileType::DRIVE, "", 0});
-                items.push_back({drive, "本地磁盘", driveIcon, drive});
+                items.push_back({drive, L("本地磁盘"), driveIcon, drive});
             }
 
             ASYNC_RELEASE

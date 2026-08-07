@@ -1,4 +1,5 @@
 #include "ui/view/NanoSearchOverlay.hpp"
+#include "core/Translation.hpp"
 
 #include "ui/utils/GradientFocus.hpp"
 #include "ui/utils/MaterialIcons.hpp"
@@ -73,10 +74,10 @@ NanoSearchOverlay::NanoSearchOverlay()
     registerAction("", brls::BUTTON_NAV_DOWN, down, true, false, brls::SOUND_NONE);
     registerAction("", brls::BUTTON_NAV_LEFT, consume, true, false, brls::SOUND_NONE);
     registerAction("", brls::BUTTON_NAV_RIGHT, consume, true, false, brls::SOUND_NONE);
-    registerAction("选择", brls::BUTTON_A,
+    registerAction(L("选择"), brls::BUTTON_A,
         [this](brls::View*) { _activate(); return true; },
         false, false, brls::SOUND_NONE);
-    registerAction("返回", brls::BUTTON_B,
+    registerAction(L("返回"), brls::BUTTON_B,
         [this](brls::View*) { close(); return true; },
         false, false, brls::SOUND_NONE);
 }
@@ -154,7 +155,7 @@ void NanoSearchOverlay::_activate()
             if (!m_open) return;
             m_text = std::move(value);
             invalidate();
-        }, "搜索游戏", "输入标题或文件名", 128, m_text,
+        }, L("搜索游戏"), L("输入标题或文件名"), 128, m_text,
             brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
     } else {
         if (m_selected == 2) m_text.clear();
@@ -208,13 +209,13 @@ void NanoSearchOverlay::draw(NVGcontext* vg, float x, float y, float w, float h,
     nvgFontFaceId(vg, m_defaultFont);
     nvgFontSize(vg, 28.f);
     nvgFillColor(vg, nvgRGBA(246, 248, 252, 248));
-    nvgText(vg, panelX + 84.f, panelY + 49.f, "搜索游戏库", nullptr);
+    nvgText(vg, panelX + 84.f, panelY + 49.f, L("搜索游戏库").c_str(), nullptr);
     nvgFontSize(vg, 15.f);
     nvgFillColor(vg, nvgRGBA(192, 201, 215, 190));
     nvgText(vg, panelX + 35.f, panelY + 82.f,
-            "支持游戏标题和 ROM 文件名模糊匹配", nullptr);
+            L("支持游戏标题和 ROM 文件名模糊匹配").c_str(), nullptr);
 
-    static const char* labels[] = {"输入关键词", "应用搜索", "清除搜索"};
+    static const std::string labels[] = {L("输入关键词"), L("应用搜索"), L("清除搜索")};
     static const char32_t icons[] = {0xE8B6, 0xE876, 0xE14C};
     for (int i = 0; i < 3; ++i) {
         const float rowY = panelY + 116.f + i * 82.f;
@@ -243,12 +244,12 @@ void NanoSearchOverlay::draw(NVGcontext* vg, float x, float y, float w, float h,
         nvgFontFaceId(vg, m_defaultFont);
         nvgFontSize(vg, 22.f);
         nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
-        nvgText(vg, panelX + 101.f, rowY + 32.f, labels[i], nullptr);
+        nvgText(vg, panelX + 101.f, rowY + 32.f, labels[i].c_str(), nullptr);
         if (i == 0) {
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
             nvgFontSize(vg, 18.f);
             nvgFillColor(vg, nvgRGBA(205, 214, 228, 220));
-            const std::string value = m_text.empty() ? "未输入  ›" : m_text + "  ›";
+            const std::string value = m_text.empty() ? L("未输入  ›") : m_text + "  ›";
             nvgSave(vg);
             nvgIntersectScissor(vg, panelX + 320.f, rowY,
                                 panelW - 375.f, 64.f);
@@ -259,8 +260,8 @@ void NanoSearchOverlay::draw(NVGcontext* vg, float x, float y, float w, float h,
         nvgRestore(vg);
     }
     float cursor = panelX + panelW - 30.f;
-    _drawHint(vg, brls::BUTTON_B, "返回", cursor, panelY + panelH - 25.f, alpha);
-    _drawHint(vg, brls::BUTTON_A, "选择", cursor, panelY + panelH - 25.f, alpha);
+    _drawHint(vg, brls::BUTTON_B, L("返回").c_str(), cursor, panelY + panelH - 25.f, alpha);
+    _drawHint(vg, brls::BUTTON_A, L("选择").c_str(), cursor, panelY + panelH - 25.f, alpha);
 }
 
 void NanoSearchOverlay::_drawHint(NVGcontext* vg, brls::ControllerButton button,

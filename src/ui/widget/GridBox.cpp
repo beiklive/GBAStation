@@ -1,4 +1,5 @@
 #include "GridBox.hpp"
+#include "core/Translation.hpp"
 
 #include <algorithm>
 
@@ -19,7 +20,7 @@ namespace beiklive
         this->setJustifyContent(brls::JustifyContent::CENTER);
 
         this->registerAction(
-            "确认",
+            L("确认"),
             brls::BUTTON_A,
             [this](brls::View*) -> bool
             {
@@ -32,7 +33,7 @@ namespace beiklive
             brls::SOUND_CLICK);
 
         this->registerAction(
-            "删除",
+            L("删除"),
             brls::BUTTON_X,
             [this](brls::View*) -> bool
             {
@@ -45,7 +46,7 @@ namespace beiklive
             brls::SOUND_CLICK);
 
         this->registerAction(
-            "操作",
+            L("操作"),
             brls::BUTTON_Y,
             [this](brls::View*) -> bool
             {

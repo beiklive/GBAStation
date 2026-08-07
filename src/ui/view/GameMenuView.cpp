@@ -1,4 +1,5 @@
 #include "GameMenuView.hpp"
+#include "core/Translation.hpp"
 #include "core/Tools.hpp"
 #include "core/cheat/CheatSystem.hpp"
 #include "emulator/mgba_native/MgbaCheatSystem.hpp"
@@ -52,9 +53,9 @@ namespace beiklive
 
         struct NesButtonBindInfo
         {
-            const char* label;
-            const char* suffix;
-            const char* fallback;
+            std::string label;
+            std::string suffix;
+            std::string fallback;
         };
 
         void setDefaultIfMissing(const std::string& key, const std::string& value)
@@ -83,18 +84,18 @@ namespace beiklive
             setDefaultIfMissing("nes.p2.handle.menu", "PAD_RB");
         }
 
-        constexpr NesButtonBindInfo kNesButtonBinds[] = {
-            {"上", "up", "PAD_UP|PAD_LEFTSTICKUP"},
-            {"下", "down", "PAD_DOWN|PAD_LEFTSTICKDOWN"},
-            {"左", "left", "PAD_LEFT|PAD_LEFTSTICKLEFT"},
-            {"右", "right", "PAD_RIGHT|PAD_LEFTSTICKRIGHT"},
+        static const NesButtonBindInfo kNesButtonBinds[] = {
+            {L("上"), "up", "PAD_UP|PAD_LEFTSTICKUP"},
+            {L("下"), "down", "PAD_DOWN|PAD_LEFTSTICKDOWN"},
+            {L("左"), "left", "PAD_LEFT|PAD_LEFTSTICKLEFT"},
+            {L("右"), "right", "PAD_RIGHT|PAD_LEFTSTICKRIGHT"},
             {"A", "a", "PAD_A"},
             {"B", "b", "PAD_B"},
-            {"start键", "start", "PAD_START"},
-            {"select键", "select", "PAD_BACK"},
-            {"模拟器菜单", "menu", "PAD_LB"},
-            {"快进", "fastforward", "none"},
-            {"倒带", "rewind", "none"},
+            {L("start键"), "start", "PAD_START"},
+            {L("select键"), "select", "PAD_BACK"},
+            {L("模拟器菜单"), "menu", "PAD_LB"},
+            {L("快进"), "fastforward", "none"},
+            {L("倒带"), "rewind", "none"},
         };
 
         struct MenuCapturePadKey
@@ -148,7 +149,7 @@ namespace beiklive
                 card->setWidth(540.f);
 
                 auto* title = new brls::Label();
-                title->setText("按键监听");
+                title->setText(L("按键监听"));
                 title->setFontSize(26.f);
                 title->setTextColor(GET_THEME_COLOR("brls/text"));
                 title->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -157,7 +158,7 @@ namespace beiklive
                 card->addView(title);
 
                 m_promptLabel = new brls::Label();
-                m_promptLabel->setText("松开所有按键以开始捕获");
+                m_promptLabel->setText(L("松开所有按键以开始捕获"));
                 m_promptLabel->setFontSize(17.f);
                 m_promptLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
                 m_promptLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -188,7 +189,7 @@ namespace beiklive
                 card->addView(barRow);
 
                 m_countdownLabel = new brls::Label();
-                m_countdownLabel->setText("最多 2 个按键");
+                m_countdownLabel->setText(L("最多 2 个按键"));
                 m_countdownLabel->setFontSize(14.f);
                 m_countdownLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
                 m_countdownLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -224,11 +225,11 @@ namespace beiklive
                     {
                         checkAllReleased();
                         m_startTime = std::chrono::steady_clock::now();
-                        m_promptLabel->setText("松开所有已按下的按键...");
+                        m_promptLabel->setText(L("松开所有已按下的按键..."));
                     }
                     else
                     {
-                        m_promptLabel->setText("按下要绑定的按键...");
+                        m_promptLabel->setText(L("按下要绑定的按键..."));
                         pollSticks();
                         const auto now = std::chrono::steady_clock::now();
                         const float elapsed = std::chrono::duration<float>(now - m_startTime).count();
@@ -240,7 +241,7 @@ namespace beiklive
                         else
                         {
                             std::ostringstream oss;
-                            oss << std::fixed << std::setprecision(2) << remaining << " 秒后确认";
+                            oss << std::fixed << std::setprecision(2) << remaining << L(" 秒后确认");
                             m_countdownLabel->setText(oss.str());
                             m_progressBar->setWidth(240.f * (remaining / m_countdownSeconds));
                         }
@@ -438,12 +439,12 @@ namespace beiklive
 
         // BK_RES("img/ui/menu/" + iconPath)
         // 标题
-        this->getHeader()->setTitle("游戏菜单");
+        this->getHeader()->setTitle(L("游戏菜单"));
         // ── 创建 6 个菜单按钮 ──────────────────────────────────────────────
         this->showBackground(false);
         // 1. 返回游戏（无面板）
         m_panel->addTab(
-            "返回游戏",
+            L("返回游戏"),
             BK_RES("img/ui/menu/back.png"),
             [this]()
             {
@@ -451,7 +452,7 @@ namespace beiklive
                     m_onResume();
             });
 
-        m_panel->registerAction("返回", brls::BUTTON_B, [this](brls::View *) -> bool
+        m_panel->registerAction(L("返回"), brls::BUTTON_B, [this](brls::View *) -> bool
                                 {
             brls::sync([this]() {
                 _clearGridItemsFocus();
@@ -461,7 +462,7 @@ namespace beiklive
         // 2. 保存状态（绑定保存状态面板）
         m_savePanel = _createSaveStatePanel();
         m_panel->addTab(
-            "保存状态",
+            L("保存状态"),
             BK_RES("img/ui/menu/save.png"),
             nullptr,
             nullptr,
@@ -473,7 +474,7 @@ namespace beiklive
         // 3. 读取状态（绑定读取状态面板）
         m_loadPanel = _createLoadStatePanel();
         m_panel->addTab(
-            "读取状态",
+            L("读取状态"),
             BK_RES("img/ui/menu/load.png"),
             nullptr,
             nullptr,
@@ -485,7 +486,7 @@ namespace beiklive
         // 4. 金手指设置
         auto *cheatPanel = _createCheatPanel();
         m_panel->addTab(
-            "金手指设置",
+            L("金手指设置"),
             BK_RES("img/ui/menu/cheat.png"),
             nullptr, nullptr, nullptr,
             cheatPanel);
@@ -493,7 +494,7 @@ namespace beiklive
         // 5. 画面设置
         auto *displayPanel = _createDisplayPanel();
         m_panel->addTab(
-            "画面设置",
+            L("画面设置"),
             BK_RES("img/ui/menu/display.png"),
             nullptr, nullptr, nullptr,
             displayPanel);
@@ -504,7 +505,7 @@ namespace beiklive
             {
                 auto* diskPanel = _createDiskControlPanel();
                 m_panel->addTab(
-                    "磁盘",
+                    L("磁盘"),
                     BK_RES("img/ui/menu/load.png"),
                     nullptr, nullptr, nullptr,
                     diskPanel);
@@ -512,7 +513,7 @@ namespace beiklive
 
             auto* controllerPanel = _createControllerPanel();
             m_panel->addTab(
-                "手柄",
+                L("手柄"),
                 BK_RES("img/ui/setting/control.png"),
                 nullptr, nullptr, nullptr,
                 controllerPanel);
@@ -523,7 +524,7 @@ namespace beiklive
 
         // TODO 添加重置游戏（重启游戏）功能
         m_panel->addTab(
-            "重置游戏",
+            L("重置游戏"),
             BK_RES("img/ui/menu/reset.png"),
             [this]()
             {
@@ -533,7 +534,7 @@ namespace beiklive
 
         // 6. 退出游戏（无面板）
         m_panel->addTab(
-            "退出游戏",
+            L("退出游戏"),
             BK_RES("img/ui/menu/exit.png"),
             [this]()
             {
@@ -565,7 +566,7 @@ namespace beiklive
         HIDE_BRLS_HIGHLIGHT(wrapper);
 
         auto *titleLabel = new brls::Label();
-        titleLabel->setText("保存状态");
+        titleLabel->setText(L("保存状态"));
         titleLabel->setFontSize(18.f);
         titleLabel->setMarginBottom(8.f);
         titleLabel->setMarginTop(8.f);
@@ -610,15 +611,15 @@ namespace beiklive
             grid->setItemIndex(slot);
         };
 
-        grid->registerAction("删除该档位", brls::BUTTON_X, [this, grid](brls::View *view) -> bool
+        grid->registerAction(L("删除该档位"), brls::BUTTON_X, [this, grid](brls::View *view) -> bool
         {
             int slot = grid->getItemIndex();
             if (slot < 0 || slot >= static_cast<int>(m_loadItems.size()))
                 return true;
             
-            auto* dialog = new brls::Dialog("确定要删除档位" + _slotName(slot) + "?");
-            dialog->addButton("取消", []() {});
-            dialog->addButton("确认", [this, slot]() {
+            auto* dialog = new brls::Dialog(L("确定要删除档位") + _slotName(slot) + "?");
+            dialog->addButton(L("取消"), []() {});
+            dialog->addButton(L("确认"), [this, slot]() {
                 if (m_deleteStateCallback)
                     m_deleteStateCallback(slot);
             });
@@ -643,7 +644,7 @@ namespace beiklive
         HIDE_BRLS_HIGHLIGHT(wrapper);
 
         auto *titleLabel = new brls::Label();
-        titleLabel->setText("读取状态");
+        titleLabel->setText(L("读取状态"));
         titleLabel->setFontSize(18.f);
         titleLabel->setMarginBottom(8.f);
         titleLabel->setMarginTop(8.f);
@@ -688,15 +689,15 @@ namespace beiklive
             grid->setItemIndex(slot);
         };
 
-        grid->registerAction("删除该档位", brls::BUTTON_X, [this, grid](brls::View *view) -> bool
+        grid->registerAction(L("删除该档位"), brls::BUTTON_X, [this, grid](brls::View *view) -> bool
         {
             int slot = grid->getItemIndex();
             if (slot < 0 || slot >= static_cast<int>(m_saveItems.size()))
                 return true;
             
-            auto* dialog = new brls::Dialog("确定要删除档位" + _slotName(slot) + "?");
-            dialog->addButton("取消", []() {});
-            dialog->addButton("确认", [this, slot]() {
+            auto* dialog = new brls::Dialog(L("确定要删除档位") + _slotName(slot) + "?");
+            dialog->addButton(L("取消"), []() {});
+            dialog->addButton(L("确认"), [this, slot]() {
                 if (m_deleteStateCallback)
                     m_deleteStateCallback(slot);
             });
@@ -764,7 +765,7 @@ namespace beiklive
                     item->setTitle(_slotName(slot));
                     if (info.exists)
                     {
-                        item->setSubText(info.timeStr.empty() ? "时间未知" : info.timeStr);
+                        item->setSubText(info.timeStr.empty() ? L("时间未知") : info.timeStr);
                         if (!info.thumbPath.empty())
                         {
                             item->setImagePath(info.thumbPath);
@@ -798,7 +799,7 @@ namespace beiklive
             item->setDataLoaded();
             item->setTitle(_slotName(slot));
             if (info.exists) {
-                item->setSubText(info.timeStr.empty() ? "时间未知" : info.timeStr);
+                item->setSubText(info.timeStr.empty() ? L("时间未知") : info.timeStr);
                 if (!info.thumbPath.empty())
                     item->setImagePath(info.thumbPath);
             } else {
@@ -832,10 +833,10 @@ namespace beiklive
         auto* scroll = beiklive::ui::makeScrollTab();
         auto* box = beiklive::ui::makeContentBox();
 
-        box->addView(beiklive::ui::makeHeader("FDS 磁盘"));
+        box->addView(beiklive::ui::makeHeader(L("FDS 磁盘")));
 
         m_diskStatusLabel = new brls::Label();
-        m_diskStatusLabel->setText("正在读取磁盘状态...");
+        m_diskStatusLabel->setText(L("正在读取磁盘状态..."));
         m_diskStatusLabel->setFontSize(14.f);
         m_diskStatusLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
         m_diskStatusLabel->setMarginLeft(20.f);
@@ -844,15 +845,15 @@ namespace beiklive
         box->addView(m_diskStatusLabel);
 
         m_diskSelectCell = new beiklive::DetailCell();
-        m_diskSelectCell->setLeftText("选择磁盘面");
-        m_diskSelectCell->setRightText("不可用");
+        m_diskSelectCell->setLeftText(L("选择磁盘面"));
+        m_diskSelectCell->setRightText(L("不可用"));
         m_diskSelectCell->registerClickAction([this](brls::View*) -> bool {
             if (!m_diskStateCallback || !m_diskIndexCallback)
                 return true;
             auto state = m_diskStateCallback();
             if (!state.supported || state.numImages == 0)
             {
-                brls::Application::notify("当前核心未提供磁盘控制");
+                brls::Application::notify(L("当前核心未提供磁盘控制"));
                 return true;
             }
 
@@ -862,12 +863,12 @@ namespace beiklive
             {
                 std::string label = i < state.labels.size() ? state.labels[i] : "";
                 if (label.empty())
-                    label = "磁盘面 " + std::to_string(i + 1);
+                    label = L("磁盘面 ") + std::to_string(i + 1);
                 options.push_back(std::to_string(i + 1) + ". " + label);
             }
             int selected = state.currentIndex < state.numImages ? static_cast<int>(state.currentIndex) : 0;
             auto* dropdown = new brls::Dropdown(
-                "选择磁盘面",
+                L("选择磁盘面"),
                 options,
                 [this](int idx) {
                     if (idx < 0)
@@ -875,7 +876,7 @@ namespace beiklive
                     if (m_diskIndexCallback)
                         m_diskIndexCallback(static_cast<unsigned>(idx));
                     if (m_diskSelectCell)
-                        m_diskSelectCell->setRightText("切换中...");
+                        m_diskSelectCell->setRightText(L("切换中..."));
                 },
                 selected,
                 [this](int) { _refreshDiskControlPanel(); });
@@ -885,8 +886,8 @@ namespace beiklive
         box->addView(m_diskSelectCell);
 
         auto* ejectCell = new beiklive::DetailCell();
-        ejectCell->setLeftText("弹出磁盘");
-        ejectCell->setRightText("执行");
+        ejectCell->setLeftText(L("弹出磁盘"));
+        ejectCell->setRightText(L("执行"));
         ejectCell->registerClickAction([this](brls::View*) -> bool {
             if (m_diskEjectCallback)
                 m_diskEjectCallback(true);
@@ -895,8 +896,8 @@ namespace beiklive
         box->addView(ejectCell);
 
         auto* insertCell = new beiklive::DetailCell();
-        insertCell->setLeftText("插入磁盘");
-        insertCell->setRightText("执行");
+        insertCell->setLeftText(L("插入磁盘"));
+        insertCell->setRightText(L("执行"));
         insertCell->registerClickAction([this](brls::View*) -> bool {
             if (m_diskEjectCallback)
                 m_diskEjectCallback(false);
@@ -905,8 +906,8 @@ namespace beiklive
         box->addView(insertCell);
 
         auto* prevCell = new beiklive::DetailCell();
-        prevCell->setLeftText("上一面");
-        prevCell->setRightText("切换");
+        prevCell->setLeftText(L("上一面"));
+        prevCell->setRightText(L("切换"));
         prevCell->registerClickAction([this](brls::View*) -> bool {
             if (!m_diskStateCallback || !m_diskIndexCallback)
                 return true;
@@ -921,8 +922,8 @@ namespace beiklive
         box->addView(prevCell);
 
         auto* nextCell = new beiklive::DetailCell();
-        nextCell->setLeftText("下一面");
-        nextCell->setRightText("切换");
+        nextCell->setLeftText(L("下一面"));
+        nextCell->setRightText(L("切换"));
         nextCell->registerClickAction([this](brls::View*) -> bool {
             if (!m_diskStateCallback || !m_diskIndexCallback)
                 return true;
@@ -935,7 +936,7 @@ namespace beiklive
             return true;
         });
         box->addView(nextCell);
-        box->addView(beiklive::ui::makeHint("换盘时会自动弹出当前磁盘、切换盘面并重新插入"));
+        box->addView(beiklive::ui::makeHint(L("换盘时会自动弹出当前磁盘、切换盘面并重新插入")));
 
         scroll->setContentView(box);
         auto* container = new brls::Box(brls::Axis::COLUMN);
@@ -952,30 +953,30 @@ namespace beiklive
             return;
         if (!m_diskStateCallback)
         {
-            m_diskStatusLabel->setText("当前游戏没有可用的磁盘控制接口");
-            m_diskSelectCell->setRightText("不可用");
+            m_diskStatusLabel->setText(L("当前游戏没有可用的磁盘控制接口"));
+            m_diskSelectCell->setRightText(L("不可用"));
             return;
         }
 
         auto state = m_diskStateCallback();
         if (!state.supported || state.numImages == 0)
         {
-            m_diskStatusLabel->setText("当前核心尚未提供磁盘控制接口");
-            m_diskSelectCell->setRightText("不可用");
+            m_diskStatusLabel->setText(L("当前核心尚未提供磁盘控制接口"));
+            m_diskSelectCell->setRightText(L("不可用"));
             return;
         }
 
-        std::string current = "未插入";
+        std::string current = L("未插入");
         if (state.currentIndex < state.numImages)
         {
             current = state.currentIndex < state.labels.size() ? state.labels[state.currentIndex] : "";
             if (current.empty())
-                current = "磁盘面 " + std::to_string(state.currentIndex + 1);
+                current = L("磁盘面 ") + std::to_string(state.currentIndex + 1);
         }
 
         m_diskStatusLabel->setText(
-            "状态: " + std::string(state.ejected ? "已弹出" : "已插入") +
-            "    当前: " + std::to_string(std::min(state.currentIndex + 1, state.numImages)) +
+            L("状态: ") + std::string(state.ejected ? L("已弹出") : L("已插入")) +
+            L("    当前: ") + std::to_string(std::min(state.currentIndex + 1, state.numImages)) +
             " / " + std::to_string(state.numImages));
         m_diskSelectCell->setRightText(current);
     }
@@ -988,7 +989,7 @@ namespace beiklive
         std::vector<std::string> options;
         options.reserve(static_cast<size_t>(count));
         for (int i = 0; i < count; ++i)
-            options.push_back("手柄 " + std::to_string(i));
+            options.push_back(L("手柄 ") + std::to_string(i));
         return options;
     }
 
@@ -999,25 +1000,25 @@ namespace beiklive
         auto* scroll = beiklive::ui::makeScrollTab();
         auto* box = beiklive::ui::makeContentBox();
 
-        box->addView(beiklive::ui::makeHeader("FC 双手柄"));
+        box->addView(beiklive::ui::makeHeader(L("FC 双手柄")));
         auto* enabledCell = new brls::BooleanCell();
-        enabledCell->init("开启双打",
+        enabledCell->init(L("开启双打"),
                           GameInputManager::instance().isNesDualPlayerEnabled(),
                           [](bool v) {
                               GameInputManager::instance().setNesDualPlayerEnabled(v);
                           });
         box->addView(enabledCell);
-        box->addView(beiklive::ui::makeHint("开启双打后按键映射会变为下方的 P1/P2 设置，此设置不会保存，每次打开游戏都要设置一次"));
+        box->addView(beiklive::ui::makeHint(L("开启双打后按键映射会变为下方的 P1/P2 设置，此设置不会保存，每次打开游戏都要设置一次")));
 
         auto* testBtn = new beiklive::DetailCell();
-        testBtn->setLeftText("测试手柄序号");
-        testBtn->setRightText("开始");
+        testBtn->setLeftText(L("测试手柄序号"));
+        testBtn->setRightText(L("开始"));
         testBtn->registerClickAction([this](brls::View*) -> bool {
             _notifyPressedController();
             return true;
         });
         box->addView(testBtn);
-        box->addView(beiklive::ui::makeHint("多手柄按下时会提示手柄序号，用于下方的手柄分配"));
+        box->addView(beiklive::ui::makeHint(L("多手柄按下时会提示手柄序号，用于下方的手柄分配")));
 
         auto* playersRow = new brls::Box(brls::Axis::ROW);
         playersRow->setWidthPercentage(100.f);
@@ -1063,7 +1064,7 @@ namespace beiklive
         box->addView(title);
 
         auto* selector = new beiklive::DetailCell();
-        selector->setLeftText(playerName + " 手柄");
+        selector->setLeftText(playerName + L(" 手柄"));
         auto refreshSelectorText = [this, selector, prefix, defaultController]() {
             auto options = _controllerOptions();
             int selected = GET_SETTING_KEY_INT((prefix + "controller").c_str(), defaultController);
@@ -1078,7 +1079,7 @@ namespace beiklive
             if (selected < 0 || selected >= static_cast<int>(options.size()))
                 selected = 0;
             auto* dropdown = new brls::Dropdown(
-                playerName + " 手柄",
+                playerName + L(" 手柄"),
                 options,
                 [selector, prefix, options](int idx) {
                     if (idx < 0 || idx >= static_cast<int>(options.size()))
@@ -1108,7 +1109,7 @@ namespace beiklive
                 _openNesKeyCapture(cell, cfgKey);
                 return true;
             });
-            cell->registerAction("清除绑定", brls::BUTTON_X,
+            cell->registerAction(L("清除绑定"), brls::BUTTON_X,
                 [cell, cfgKey](brls::View*) -> bool {
                     SET_SETTING_KEY_STR(cfgKey.c_str(), "none");
                     cell->setRightText("none");
@@ -1175,11 +1176,11 @@ namespace beiklive
         {
             if (input.getControllerButtonMask(i) != 0)
             {
-                brls::Application::notify("触发此按钮的是手柄  " + std::to_string(i));
+                brls::Application::notify(L("触发此按钮的是手柄  ") + std::to_string(i));
                 return;
             }
         }
-        brls::Application::notify("未检测到手柄按键");
+        brls::Application::notify(L("未检测到手柄按键"));
     }
 
     // ============================================================
@@ -1230,7 +1231,7 @@ namespace beiklive
         filenameBox->setAlignItems(brls::AlignItems::CENTER);
 
         auto *titleLabel = new brls::Label();
-        titleLabel->setText("当前金手指文件");
+        titleLabel->setText(L("当前金手指文件"));
         titleLabel->setFontSize(13.f);
         titleLabel->setWidth(240.f);
         titleLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
@@ -1272,7 +1273,7 @@ namespace beiklive
         filenameBox->setAlignItems(brls::AlignItems::CENTER);
 
         auto *titleLabel = new brls::Label();
-        titleLabel->setText("已启用金手指");
+        titleLabel->setText(L("已启用金手指"));
         titleLabel->setFontSize(13.f);
         titleLabel->setWidth(110.f);
         titleLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
@@ -1285,7 +1286,7 @@ namespace beiklive
         filenameBox->addView(titleLabel);
 
         m_cheatCountLabel = new brls::Label();
-        m_cheatCountLabel->setText("0 | 0 项");
+        m_cheatCountLabel->setText(L("0 | 0 项"));
         m_cheatCountLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
         m_cheatCountLabel->setWidth(110.f);
         m_cheatCountLabel->setHeight(20.f);
@@ -1314,7 +1315,7 @@ namespace beiklive
         selectChtBtn->setHeight(50.f);
         selectChtBtn->setMarginLeft(5.f);
         selectChtBtn->setMarginTop(10.f);
-        selectChtBtn->setText("切换金手指");
+        selectChtBtn->setText(L("切换金手指"));
         selectChtBtn->setIcon(BK_RES("img/ui/light/wenjian.png"));
         selectChtBtn->setMarginRight(4.f);
         selectChtBtn->registerClickAction([this](brls::View *) -> bool
@@ -1347,13 +1348,13 @@ namespace beiklive
         addCheatBtn->setHeight(50.f);
         addCheatBtn->setMarginLeft(10.f);
         addCheatBtn->setMarginTop(10.f);
-        addCheatBtn->setText("新增金手指");
+        addCheatBtn->setText(L("新增金手指"));
         addCheatBtn->setIcon(BK_RES("img/ui/menu/cheat.png"));
         addCheatBtn->setMarginRight(4.f);
         addCheatBtn->registerClickAction([this](brls::View *) -> bool {
             if (m_cheatFileReadOnly)
             {
-                brls::Application::notify("usrcheat.dat 为只读数据库，请切换到 .cht 后编辑");
+                brls::Application::notify(L("usrcheat.dat 为只读数据库，请切换到 .cht 后编辑"));
                 return true;
             }
             auto* ime = brls::Application::getImeManager();
@@ -1389,7 +1390,7 @@ namespace beiklive
                                 _notifyCheatsChanged();
                                 _rebuildCheatItems();
                             },
-                            "金手指代码",
+                            L("金手指代码"),
                             "",
                             256,
                             "",
@@ -1397,7 +1398,7 @@ namespace beiklive
                     };
                     promptCode();
                 },
-                "金手指名称",
+                L("金手指名称"),
                 "",
                 128,
                 "",
@@ -1486,7 +1487,7 @@ namespace beiklive
         if (m_cheats.empty())
         {
             auto *label = new brls::Label();
-            label->setText("该金手指文件无有效条目");
+            label->setText(L("该金手指文件无有效条目"));
             label->setFontSize(14.f);
             label->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
             label->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -1516,7 +1517,7 @@ namespace beiklive
 
                 DISABLE_LR_NAVIGATION(sw);
                 
-                sw->registerAction("返回", brls::BUTTON_B, [this](brls::View *) -> bool{
+                sw->registerAction(L("返回"), brls::BUTTON_B, [this](brls::View *) -> bool{
                     brls::Application::giveFocus(selectChtBtn);
                     return true;
                 });
@@ -1547,7 +1548,7 @@ namespace beiklive
 
                 if (showMgbaCodeType)
                 {
-                    sw->registerAction("码型", brls::BUTTON_LB, [this, idx, sw](brls::View *) -> bool {
+                    sw->registerAction(L("码型"), brls::BUTTON_LB, [this, idx, sw](brls::View *) -> bool {
                         if (idx >= (int)m_cheats.size())
                             return true;
                         std::string current = beiklive::mgba_native::cheats::NormalizeCodeType(m_cheats[idx].codeType);
@@ -1559,16 +1560,16 @@ namespace beiklive
                                            idx, m_cheats[idx].codeType, m_cheats[idx].code);
                         _saveEditableCheats();
                         _notifyCheatsChanged();
-                        brls::Application::notify("码型: " + m_cheats[idx].codeType);
+                        brls::Application::notify(L("码型: ") + m_cheats[idx].codeType);
                         return true;
                     });
                 }
 
                 // BUTTON_X: 修改金手指代码
-                sw->registerAction("修改代码", brls::BUTTON_X, [this, idx](brls::View *) -> bool {
+                sw->registerAction(L("修改代码"), brls::BUTTON_X, [this, idx](brls::View *) -> bool {
                     if (m_cheatFileReadOnly)
                     {
-                        brls::Application::notify("usrcheat.dat 为只读数据库");
+                        brls::Application::notify(L("usrcheat.dat 为只读数据库"));
                         return true;
                     }
                     if (idx >= (int)m_cheats.size()) return true;
@@ -1595,7 +1596,7 @@ namespace beiklive
                                 _notifyCheatsChanged();
                                 _rebuildCheatItems();
                             },
-                            "修改金手指代码",
+                            L("修改金手指代码"),
                             "",
                             256,
                             m_cheats[idx].code,
@@ -1606,10 +1607,10 @@ namespace beiklive
                 });
 
                 // BUTTON_Y: 修改金手指名称
-                sw->registerAction("修改名称", brls::BUTTON_Y, [this, idx](brls::View *) -> bool {
+                sw->registerAction(L("修改名称"), brls::BUTTON_Y, [this, idx](brls::View *) -> bool {
                     if (m_cheatFileReadOnly)
                     {
-                        brls::Application::notify("usrcheat.dat 为只读数据库");
+                        brls::Application::notify(L("usrcheat.dat 为只读数据库"));
                         return true;
                     }
                     if (idx >= (int)m_cheats.size()) return true;
@@ -1624,7 +1625,7 @@ namespace beiklive
                             _notifyCheatsChanged();
                             _rebuildCheatItems();
                         },
-                        "修改金手指名称",
+                        L("修改金手指名称"),
                         "",
                         128,
                         m_cheats[idx].desc,
@@ -1633,15 +1634,15 @@ namespace beiklive
                 });
 
                 // BUTTON_RT: 删除金手指
-                sw->registerAction("删除", brls::BUTTON_RT, [this, idx](brls::View *) -> bool {
+                sw->registerAction(L("删除"), brls::BUTTON_RT, [this, idx](brls::View *) -> bool {
                     if (m_cheatFileReadOnly)
                     {
-                        brls::Application::notify("usrcheat.dat 为只读数据库");
+                        brls::Application::notify(L("usrcheat.dat 为只读数据库"));
                         return true;
                     }
                     if (idx >= (int)m_cheats.size()) return true;
-                    auto* dlg = new brls::Dialog("是否删除 \"" + m_cheats[idx].desc + "\" ?");
-                    dlg->addButton("确认删除", [this, idx]() {
+                    auto* dlg = new brls::Dialog(L("是否删除 \"") + m_cheats[idx].desc + L("\" ?"));
+                    dlg->addButton(L("确认删除"), [this, idx]() {
                         if (idx >= (int)m_cheats.size()) return;
                         if (m_cheatToggleCallback)
                             m_cheatToggleCallback(idx, false);
@@ -1650,7 +1651,7 @@ namespace beiklive
                         _notifyCheatsChanged();
                         _rebuildCheatItems();
                     });
-                    dlg->addButton("取消", [](){});
+                    dlg->addButton(L("取消"), [](){});
                     dlg->open();
                     return true;
                 });
@@ -1676,7 +1677,7 @@ namespace beiklive
             if (c.enabled)
                 ++enabled;
         }
-        m_cheatCountLabel->setText(std::to_string(enabled) + " | " + std::to_string(total) + " 项");
+        m_cheatCountLabel->setText(std::to_string(enabled) + " | " + std::to_string(total) + L(" 项"));
     }
 
     // ============================================================
@@ -1701,17 +1702,17 @@ namespace beiklive
         {
             // ── 快进速度快速调整 ──
             auto *ffHdr = new brls::Header();
-            ffHdr->setTitle("快进速度");
+            ffHdr->setTitle(L("快进速度"));
             box->addView(ffHdr);
 
-            std::vector<std::string> ffLabels = {"0.1倍", "0.5倍", "1倍", "1.25倍", "1.5倍", "1.75倍", "2倍", "3倍", "4倍", "5倍", "6倍", "7倍", "8倍", "9倍", "10倍"};
+            std::vector<std::string> ffLabels = {L("0.1倍"), L("0.5倍"), L("1倍"), L("1.25倍"), L("1.5倍"), L("1.75倍"), L("2倍"), L("3倍"), L("4倍"), L("5倍"), L("6倍"), L("7倍"), L("8倍"), L("9倍"), L("10倍")};
             static const float ffVals[] = {0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f};
             float curFF = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 2.0f);
             int ffIdx = 6;
             for (int i = 0; i < 15; ++i)
                 if (ffVals[i] == curFF) { ffIdx = i; break; }
             auto *ffCell = new beiklive::SelectorButton();
-            ffCell->setText("快进倍率");
+            ffCell->setText(L("快进倍率"));
             ffCell->setOptions(ffLabels, ffIdx);
             ffCell->setOnSelect(
                 [](int i) {
@@ -1719,11 +1720,11 @@ namespace beiklive
                     if (i >= 0 && i < 15) SET_SETTING_KEY_FLOAT("fastforward.multiplier", vals[i]);
                 });
             box->addView(ffCell);
-            box->addView(makeHint("小于1倍时可在快进触发时实现慢动作效果"));
+            box->addView(makeHint(L("小于1倍时可在快进触发时实现慢动作效果")));
 
             if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA)) {
                 auto *solarHdr = new brls::Header();
-                solarHdr->setTitle("阳光强度");
+                solarHdr->setTitle(L("阳光强度"));
                 box->addView(solarHdr);
 
                 std::vector<std::string> solarLabels = {
@@ -1736,7 +1737,7 @@ namespace beiklive
                 }
                 curSolar = std::clamp(curSolar, 0, 10);
                 auto *solarCell = new beiklive::SelectorButton();
-                solarCell->setText("太阳传感器等级");
+                solarCell->setText(L("太阳传感器等级"));
                 solarCell->setOptions(solarLabels, curSolar);
                 solarCell->setOnSelect(
                     [](int idx) {
@@ -1746,7 +1747,7 @@ namespace beiklive
                         }
                     });
                 box->addView(solarCell);
-                box->addView(makeHint("太阳传感器等级，默认设置为5"));
+                box->addView(makeHint(L("太阳传感器等级，默认设置为5")));
             }
 
             m_coreDisplaySettingsBox = new brls::Box(brls::Axis::COLUMN);
@@ -1757,7 +1758,7 @@ namespace beiklive
 
             {
                 auto *hdr1 = new brls::Header();
-                hdr1->setTitle("画面设置");
+                hdr1->setTitle(L("画面设置"));
                 box->addView(hdr1);
 
                 // ScreenMode 枚举值到 UI 索引映射: 0(Fit)→0, 1(Fill)→1, 2(IntegerScale)→4, 3(FreeScale)→5, 4(4:3)→3
@@ -1768,7 +1769,7 @@ namespace beiklive
                 auto *modeCell = new beiklive::SelectorButton();
                 IntegerCell = new beiklive::SelectorButton();
                 customCell = new brls::DetailCell();
-                std::vector<std::string> modes = {"(保持比例)Fit", "(填充)Fill", "(原始)Original", "4:3", "(整数倍)Integer", "(自定义)Custom"};
+                std::vector<std::string> modes = {L("(保持比例)Fit"), L("(填充)Fill"), L("(原始)Original"), "4:3", L("(整数倍)Integer"), L("(自定义)Custom")};
                 std::vector<std::string> modeIds = {"fit", "fill", "original", "four_three", "integer", "custom"};
 
                 IntegerCell->setFocusable(idx == 4);
@@ -1776,7 +1777,7 @@ namespace beiklive
                 customCell->setFocusable(idx == 5);
                 customCell->setAlpha(idx == 5 ? 1.0f : 0.3f);
 
-                modeCell->setText("画面模式");
+                modeCell->setText(L("画面模式"));
                 modeCell->setOptions(modes, idx);
                 modeCell->setOnSelect(
                     [this, modeIds, IntegerCell, customCell](int selected)
@@ -1798,7 +1799,7 @@ namespace beiklive
 
             {
                 // ── 整数倍缩放 ──
-                std::vector<std::string> intScaleLabels = {"自动(auto)", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8"};
+                std::vector<std::string> intScaleLabels = {L("自动(auto)"), "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8"};
                 static const int intScaleVals[] = {0, 1, 2, 3, 4, 5, 6, 7, 8};
                 int curIntScale = static_cast<int>(m_gameEntry.integerAspectRatio);
                 int intScaleIdx = 0;
@@ -1808,7 +1809,7 @@ namespace beiklive
                         intScaleIdx = i;
                         break;
                     }
-                IntegerCell->setText("整数倍缩放倍率");
+                IntegerCell->setText(L("整数倍缩放倍率"));
                 IntegerCell->setOptions(intScaleLabels, intScaleIdx);
                 IntegerCell->setOnSelect(
                     [this](int idx)
@@ -1822,28 +1823,28 @@ namespace beiklive
                         }
                     });
                 box->addView(IntegerCell);
-                box->addView(makeHint("仅在画面模式为整数倍时可用，选择auto则自动匹配最大整数倍"));
+                box->addView(makeHint(L("仅在画面模式为整数倍时可用，选择auto则自动匹配最大整数倍")));
 
                 // ── 自定义设置入口 ──
-                customCell->setText("自定义设置");
+                customCell->setText(L("自定义设置"));
                 customCell->setDetailText("\uE14A");
                 customCell->registerClickAction([this](brls::View *) -> bool
                                                 {
                     _openCustomScaleSettings();
                     return true; });
                 box->addView(customCell);
-                box->addView(makeHint("仅在画面模式为自定义时可用，调整位置偏移和缩放比例"));
+                box->addView(makeHint(L("仅在画面模式为自定义时可用，调整位置偏移和缩放比例")));
             }
         }
 
         {
             auto *hdr1 = new brls::Header();
-            hdr1->setTitle("个性化设置");
+            hdr1->setTitle(L("个性化设置"));
             box->addView(hdr1);
         }
 
         auto *overlayCell = new brls::DetailCell();
-        overlayCell->setText("遮罩设置");
+        overlayCell->setText(L("遮罩设置"));
         overlayCell->setDetailText("\uE14A");
         overlayCell->registerClickAction([this](brls::View *) -> bool
                                          {
@@ -1852,7 +1853,7 @@ namespace beiklive
         box->addView(overlayCell);
 
         auto *shaderCell = new brls::DetailCell();
-        shaderCell->setText("着色器设置");
+        shaderCell->setText(L("着色器设置"));
         shaderCell->setDetailText("\uE14A");
         shaderCell->registerClickAction([this](brls::View *) -> bool
                                         {
@@ -1907,7 +1908,7 @@ namespace beiklive
                 _dismissSidePanel(3); return true; };
 
             auto *hdr = new brls::Header();
-            hdr->setTitle("着色器设置");
+            hdr->setTitle(L("着色器设置"));
             panel->addView(hdr);
 
             bool shaderOn = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_DISPLAY_SHADER_ENABLED, 0) && m_gameEntry.shaderEnabled;
@@ -1916,7 +1917,7 @@ namespace beiklive
             DISABLE_LR_NAVIGATION(toggleCell);
             (toggleCell)->setCustomNavigationRoute(brls::FocusDirection::UP, toggleCell);
 
-            toggleCell->init("启用着色器", shaderOn,
+            toggleCell->init(L("启用着色器"), shaderOn,
                              [this](bool v)
                              {
                                  m_gameEntry.shaderEnabled = v;
@@ -1924,11 +1925,11 @@ namespace beiklive
                                      m_shaderToggleCallback(v);
                                  _rebuildShaderParamUI();
                              });
-            toggleCell->registerAction("关闭", brls::BUTTON_B, closeAct);
+            toggleCell->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             panel->addView(toggleCell);
 
             auto *hdr2 = new brls::Header();
-            hdr2->setTitle("选择着色器文件");
+            hdr2->setTitle(L("选择着色器文件"));
             panel->addView(hdr2);
 
             shaderPathcell = new brls::DetailCell();
@@ -1936,8 +1937,8 @@ namespace beiklive
 
             shaderPathcell->setText("");
             std::string curShader = m_gameEntry.shaderPath;
-            shaderPathcell->setDetailText(curShader.empty() ? "未设置" : beiklive::tools::getFileName(curShader));
-            shaderPathcell->registerAction("选择", brls::BUTTON_A,
+            shaderPathcell->setDetailText(curShader.empty() ? L("未设置") : beiklive::tools::getFileName(curShader));
+            shaderPathcell->registerAction(L("选择"), brls::BUTTON_A,
                                      [this](brls::View *) -> bool
                                      {
                                          std::filesystem::path curShaderPath(m_gameEntry.shaderPath);
@@ -1957,7 +1958,7 @@ namespace beiklive
                         _rebuildShaderParamUI(); }, dir, filename);
                                          return true;
                                      });
-            shaderPathcell->registerAction("关闭", brls::BUTTON_B, closeAct);
+            shaderPathcell->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             panel->addView(shaderPathcell);
 
             auto *div = new brls::Rectangle(nvgRGBA(255, 255, 255, 40));
@@ -1968,7 +1969,7 @@ namespace beiklive
             panel->addView(div);
 
             auto *paramHdr = new brls::Header();
-            paramHdr->setTitle("着色器参数");
+            paramHdr->setTitle(L("着色器参数"));
             panel->addView(paramHdr);
             paramHdr->setMarginBottom(12.f);
 
@@ -1988,7 +1989,7 @@ namespace beiklive
             auto *hintsBar = new beiklive::HintsBar();
             panel->addView(hintsBar);
 
-            m_ShaderSidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
+            m_ShaderSidePanel->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             row->addView(panel);
             m_ShaderSidePanel->addView(row);
             this->addView(m_ShaderSidePanel);
@@ -2023,11 +2024,11 @@ namespace beiklive
             { _dismissSidePanel(2); return true; };
 
             auto *hdr = new brls::Header();
-            hdr->setTitle("遮罩设置");
+            hdr->setTitle(L("遮罩设置"));
             panel->addView(hdr);
 
             auto *toggleCell = new brls::BooleanCell();
-            toggleCell->init("启用遮罩", m_gameEntry.overlayEnabled,
+            toggleCell->init(L("启用遮罩"), m_gameEntry.overlayEnabled,
                              [this](bool v)
                              {
                                  m_gameEntry.overlayEnabled = v;
@@ -2037,11 +2038,11 @@ namespace beiklive
             DISABLE_LR_NAVIGATION(toggleCell);
             (toggleCell)->setCustomNavigationRoute(brls::FocusDirection::UP, toggleCell);
 
-            toggleCell->registerAction("关闭", brls::BUTTON_B, closeAct);
+            toggleCell->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             panel->addView(toggleCell);
 
             auto *hdr2 = new brls::Header();
-            hdr2->setTitle("选择遮罩图片");
+            hdr2->setTitle(L("选择遮罩图片"));
             panel->addView(hdr2);
 
             auto *pathCell = new brls::DetailCell();
@@ -2049,9 +2050,9 @@ namespace beiklive
             (pathCell)->setCustomNavigationRoute(brls::FocusDirection::DOWN, pathCell);
 
             pathCell->setText("");
-            pathCell->setDetailText(m_gameEntry.overlayPath.empty() ? "未设置"
+            pathCell->setDetailText(m_gameEntry.overlayPath.empty() ? L("未设置")
                                                                     : beiklive::tools::getFileName(m_gameEntry.overlayPath));
-            pathCell->registerAction("选择", brls::BUTTON_A,
+            pathCell->registerAction(L("选择"), brls::BUTTON_A,
                                      [pathCell, this](brls::View *) -> bool
                                      {
                                          std::filesystem::path curOverlayPath(m_gameEntry.overlayPath);
@@ -2064,7 +2065,7 @@ namespace beiklive
                         if (m_overlayPathCallback) m_overlayPathCallback(path); }, dir, filename);
                                          return true;
                                      });
-            pathCell->registerAction("关闭", brls::BUTTON_B, closeAct);
+            pathCell->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             panel->addView(pathCell);
 
             panel->addView(new brls::Padding());
@@ -2073,7 +2074,7 @@ namespace beiklive
             auto *hintsBar = new beiklive::HintsBar();
             panel->addView(hintsBar);
 
-            m_OverlaySidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
+            m_OverlaySidePanel->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             row->addView(panel);
             m_OverlaySidePanel->addView(row);
             this->addView(m_OverlaySidePanel);
@@ -2109,7 +2110,7 @@ namespace beiklive
             { _dismissSidePanel(1); return true; };
 
             auto *hdr = new brls::Header();
-            hdr->setTitle("自定义画面设置");
+            hdr->setTitle(L("自定义画面设置"));
             panel->addView(hdr);
 
             // 从 entry 读取当前值
@@ -2118,7 +2119,7 @@ namespace beiklive
             float initScale = m_gameEntry.customScale > 0.f ? m_gameEntry.customScale : 1.f;
 
             auto *hdrX = new brls::Header();
-            hdrX->setTitle("X轴偏移");
+            hdrX->setTitle(L("X轴偏移"));
             panel->addView(hdrX);
             auto *xBtn = new beiklive::NumberButton();
             DISABLE_LR_NAVIGATION(xBtn);
@@ -2133,11 +2134,11 @@ namespace beiklive
             m_gameEntry.customOffsetX = (float)v;
             if (m_customScaleCallback) m_customScaleCallback(m_gameEntry.customOffsetX, m_gameEntry.customOffsetY, m_gameEntry.customScale);
             if (m_displayModeCallback) m_displayModeCallback("custom"); });
-            xBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
+            xBtn->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             panel->addView(xBtn);
 
             auto *hdrY = new brls::Header();
-            hdrY->setTitle("Y轴偏移");
+            hdrY->setTitle(L("Y轴偏移"));
             panel->addView(hdrY);
             auto *yBtn = new beiklive::NumberButton();
             DISABLE_LR_NAVIGATION(yBtn);
@@ -2150,11 +2151,11 @@ namespace beiklive
             m_gameEntry.customOffsetY = (float)v;
             if (m_customScaleCallback) m_customScaleCallback(m_gameEntry.customOffsetX, m_gameEntry.customOffsetY, m_gameEntry.customScale);
             if (m_displayModeCallback) m_displayModeCallback("custom"); });
-            yBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
+            yBtn->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             panel->addView(yBtn);
 
             auto *hdrS = new brls::Header();
-            hdrS->setTitle("缩放比例");
+            hdrS->setTitle(L("缩放比例"));
             panel->addView(hdrS);
             auto *sBtn = new beiklive::NumberButton();
             DISABLE_LR_NAVIGATION(sBtn);
@@ -2167,13 +2168,13 @@ namespace beiklive
             m_gameEntry.customScale = (float)v;
             if (m_customScaleCallback) m_customScaleCallback(m_gameEntry.customOffsetX, m_gameEntry.customOffsetY, m_gameEntry.customScale);
             if (m_displayModeCallback) m_displayModeCallback("custom"); });
-            sBtn->registerAction("关闭", brls::BUTTON_B, closeAct);
+            sBtn->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             panel->addView(sBtn);
 
             // 重置按钮
             auto *resetBtn = new beiklive::ButtonBox();
             DISABLE_LR_NAVIGATION(resetBtn);
-            resetBtn->setText("复原");
+            resetBtn->setText(L("复原"));
             resetBtn->setIcon(BK_RES("img/ui/menu/reset.png"));
             resetBtn->registerClickAction([xBtn, yBtn, sBtn, initX, initY, initScale, this](brls::View *) -> bool
                                           {
@@ -2192,14 +2193,14 @@ namespace beiklive
             resetBtn->setIcon(BK_RES("img/ui/menu/save.png"));
             DISABLE_LR_NAVIGATION(saveBtn);
             (saveBtn)->setCustomNavigationRoute(brls::FocusDirection::DOWN, saveBtn);
-            saveBtn->setText("保存");
+            saveBtn->setText(L("保存"));
             saveBtn->registerClickAction([closeAct](brls::View *) -> bool
                                          {
             closeAct(nullptr);
             return true; });
             panel->addView(saveBtn);
 
-            m_CustomSidePanel->registerAction("关闭", brls::BUTTON_B, closeAct);
+            m_CustomSidePanel->registerAction(L("关闭"), brls::BUTTON_B, closeAct);
             row->addView(panel);
             m_CustomSidePanel->addView(row);
             this->addView(m_CustomSidePanel);
@@ -2208,7 +2209,7 @@ namespace beiklive
         // ── 同步设置到其他游戏 ──
         {
             auto *syncHdr = new brls::Header();
-            syncHdr->setTitle("同步设置到其他游戏");
+            syncHdr->setTitle(L("同步设置到其他游戏"));
             box->addView(syncHdr);
 
             auto makeSyncBtn = [&](const std::string& text, std::function<void()> action) {
@@ -2221,24 +2222,24 @@ namespace beiklive
                 box->addView(btn);
             };
 
-            makeSyncBtn("同步画面设置", [this]() {
-                auto *dlg = new brls::Dialog("同步画面设置\n\n将当前游戏的画面模式、整数倍缩放、自定义偏移和缩放值同步到同平台所有游戏，确认继续？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("确认", [this]() { _syncDisplaySettings(); });
+            makeSyncBtn(L("同步画面设置"), [this]() {
+                auto *dlg = new brls::Dialog(L("同步画面设置\n\n将当前游戏的画面模式、整数倍缩放、自定义偏移和缩放值同步到同平台所有游戏，确认继续？"));
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("确认"), [this]() { _syncDisplaySettings(); });
                 dlg->open();
             });
 
-            makeSyncBtn("同步遮罩路径", [this]() {
-                auto *dlg = new brls::Dialog("同步遮罩开关、路径\n\n将当前游戏的遮罩路径同步到同平台所有游戏，同时更新全局默认遮罩路径，确认继续？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("确认", [this]() { _syncOverlayPath(); });
+            makeSyncBtn(L("同步遮罩路径"), [this]() {
+                auto *dlg = new brls::Dialog(L("同步遮罩开关、路径\n\n将当前游戏的遮罩路径同步到同平台所有游戏，同时更新全局默认遮罩路径，确认继续？"));
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("确认"), [this]() { _syncOverlayPath(); });
                 dlg->open();
             });
 
-            makeSyncBtn("同步着色器路径和参数", [this]() {
-                auto *dlg = new brls::Dialog("同步着色器开关、路径和参数\n\n将当前游戏的着色器路径和参数同步到同平台所有游戏，同时更新全局默认着色器路径，确认继续？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("确认", [this]() { _syncShaderPath(); });
+            makeSyncBtn(L("同步着色器路径和参数"), [this]() {
+                auto *dlg = new brls::Dialog(L("同步着色器开关、路径和参数\n\n将当前游戏的着色器路径和参数同步到同平台所有游戏，同时更新全局默认着色器路径，确认继续？"));
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("确认"), [this]() { _syncShaderPath(); });
                 dlg->open();
             });
 
@@ -2392,7 +2393,7 @@ namespace beiklive
             auto *btn = new beiklive::NumberButton();
             DISABLE_LR_NAVIGATION(btn);
 
-            btn->registerAction("返回", brls::BUTTON_B, [this](brls::View *) {
+            btn->registerAction(L("返回"), brls::BUTTON_B, [this](brls::View *) {
                 brls::Application::giveFocus(shaderPathcell);
                 return true;
             });
@@ -2450,8 +2451,8 @@ namespace beiklive
         }
         beiklive::GameDB->flush();
 
-        auto *dlg = new brls::Dialog("同步完成\n\n已同步画面设置到 " + std::to_string(count) + " 个游戏");
-        dlg->addButton("确定", []() {});
+        auto *dlg = new brls::Dialog(L("同步完成\n\n已同步画面设置到 ") + std::to_string(count) + L(" 个游戏"));
+        dlg->addButton(L("确定"), []() {});
         dlg->open();
     }
 
@@ -2474,8 +2475,8 @@ namespace beiklive
 
         beiklive::GameDB->flush();
 
-        auto *dlg = new brls::Dialog("同步完成\n\n已同步遮罩路径到 " + std::to_string(count) + " 个游戏");
-        dlg->addButton("确定", []() {});
+        auto *dlg = new brls::Dialog(L("同步完成\n\n已同步遮罩路径到 ") + std::to_string(count) + L(" 个游戏"));
+        dlg->addButton(L("确定"), []() {});
         dlg->open();
     }
 
@@ -2501,8 +2502,8 @@ namespace beiklive
 
         beiklive::GameDB->flush();
 
-        auto *dlg = new brls::Dialog("同步完成\n\n已同步着色器路径和参数到 " + std::to_string(count) + " 个游戏");
-        dlg->addButton("确定", []() {});
+        auto *dlg = new brls::Dialog(L("同步完成\n\n已同步着色器路径和参数到 ") + std::to_string(count) + L(" 个游戏"));
+        dlg->addButton(L("确定"), []() {});
         dlg->open();
     }
 

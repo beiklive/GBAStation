@@ -1,4 +1,5 @@
 #include "GameDataPage.hpp"
+#include "core/Translation.hpp"
 
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
@@ -564,7 +565,7 @@ namespace
             current.comments = trimText(std::move(current.comments));
             if (!current.code.empty()) {
                 if (current.name.empty())
-                    current.name = "未命名金手指";
+                    current.name = L("未命名金手指");
                 cheats.push_back(std::move(current));
             }
             current = {};
@@ -888,17 +889,17 @@ namespace beiklive
         };
 
         m_view->setLoadContent(
-            makeItem("纹理", "未导入",
+            makeItem(L("纹理"), L("未导入"),
                      beiklive::three_ds::texturePath(titleId),
                      beiklive::three_ds::disabledTexturePath(titleId)),
-            makeItem("MOD", "未导入",
+            makeItem("MOD", L("未导入"),
                      beiklive::three_ds::modPath(titleId),
                      beiklive::three_ds::disabledModPath(titleId)));
         m_view->setAddons(
-            makeItem("更新", "未安装",
+            makeItem(L("更新"), L("未安装"),
                      beiklive::three_ds::updateTitlePath(titleId),
                      beiklive::three_ds::disabledUpdateTitlePath(titleId)),
-            makeItem("DLC", "未安装",
+            makeItem("DLC", L("未安装"),
                      beiklive::three_ds::dlcTitlePath(titleId),
                      beiklive::three_ds::disabledDlcTitlePath(titleId)));
     }
@@ -907,14 +908,14 @@ namespace beiklive
     {
         std::error_code ec;
         if (!fs::exists(_statePath(slot), ec)) return;
-        auto* dialog = new brls::Dialog("确认删除" + beiklive::tools::slotName(slot) + "？");
-        dialog->addButton("取消", []() {});
-        dialog->addButton("删除", [this, slot]() {
+        auto* dialog = new brls::Dialog(L("确认删除") + beiklive::tools::slotName(slot) + "？");
+        dialog->addButton(L("取消"), []() {});
+        dialog->addButton(L("删除"), [this, slot]() {
             std::error_code stateError;
             fs::remove(_statePath(slot), stateError);
             std::error_code thumbError;
             fs::remove(_stateThumbPath(slot), thumbError);
-            brls::Application::notify(stateError ? "删除失败" : "已删除存档");
+            brls::Application::notify(stateError ? L("删除失败") : L("已删除存档"));
             _refreshStateList();
             m_view->restoreFocus();
         });
@@ -925,12 +926,12 @@ namespace beiklive
     {
         if (index < 0 || index >= static_cast<int>(m_screenshotPaths.size())) return;
         const fs::path path = m_screenshotPaths[static_cast<size_t>(index)];
-        auto* dialog = new brls::Dialog("确认删除截图\n" + path.filename().string() + "？");
-        dialog->addButton("取消", []() {});
-        dialog->addButton("删除", [this, path]() {
+        auto* dialog = new brls::Dialog(L("确认删除截图\n") + path.filename().string() + "？");
+        dialog->addButton(L("取消"), []() {});
+        dialog->addButton(L("删除"), [this, path]() {
             std::error_code ec;
             fs::remove(path, ec);
-            brls::Application::notify(ec ? "删除失败" : "已删除截图");
+            brls::Application::notify(ec ? L("删除失败") : L("已删除截图"));
             _refreshScreenshotList();
             m_view->restoreFocus();
         });
@@ -942,16 +943,16 @@ namespace beiklive
         if (index < 0 || index >= static_cast<int>(m_screenshotPaths.size())) return;
         const std::string cover = m_screenshotPaths[static_cast<size_t>(index)].string();
         auto* dialog = new brls::Dialog(
-            "确认将该截图设置为封面？\n" +
+            L("确认将该截图设置为封面？\n") +
             m_screenshotPaths[static_cast<size_t>(index)].filename().string());
-        dialog->addButton("取消", []() {});
-        dialog->addButton("确认", [this, cover]() {
+        dialog->addButton(L("取消"), []() {});
+        dialog->addButton(L("确认"), [this, cover]() {
             if (!beiklive::GameDB) return;
             beiklive::GameDB->set(m_entry.path, "logoPath", nlohmann::json(cover));
             beiklive::GameDB->flush();
             m_entry.logoPath = cover;
             m_view->setCoverPath(cover);
-            brls::Application::notify("已设置为封面图片");
+            brls::Application::notify(L("已设置为封面图片"));
             m_view->restoreFocus();
         });
         dialog->open();
@@ -963,26 +964,26 @@ namespace beiklive
             const std::string titleId = _threeDsTitleId();
             const fs::path source = _batterySaveDir();
             if (titleId.empty()) {
-                brls::Application::notify("缺少3DS Title ID，无法定位存档");
+                brls::Application::notify(L("缺少3DS Title ID，无法定位存档"));
                 return;
             }
             if (!directoryContainsFiles(source)) {
-                brls::Application::notify("未找到3DS游戏存档");
+                brls::Application::notify(L("未找到3DS游戏存档"));
                 return;
             }
-            auto* dialog = new brls::Dialog("确认导出当前3DS游戏存档为压缩包？");
-            dialog->addButton("取消", []() {});
-            dialog->addButton("导出", [source, titleId]() {
+            auto* dialog = new brls::Dialog(L("确认导出当前3DS游戏存档为压缩包？"));
+            dialog->addButton(L("取消"), []() {});
+            dialog->addButton(L("导出"), [source, titleId]() {
                 const fs::path target = fs::path(beiklive::three_ds::exportDirectory()) /
                     (titleId + "_" + timestampForFile() + ".zip");
                 std::string error;
                 if (!createDirectoryArchive(source, target, &error)) {
                     brls::Logger::warning("导出3DS存档失败: {} -> {}, error={}",
                         source.string(), target.string(), error);
-                    brls::Application::notify("导出失败：" + error);
+                    brls::Application::notify(L("导出失败：") + error);
                     return;
                 }
-                brls::Application::notify("已导出到 GBAStation/export/3DS");
+                brls::Application::notify(L("已导出到 GBAStation/export/3DS"));
             });
             dialog->open();
             return;
@@ -991,20 +992,20 @@ namespace beiklive
         const std::string source = _savPath();
         std::error_code ec;
         if (!fs::exists(source, ec)) {
-            brls::Application::notify("未找到电池存档");
+            brls::Application::notify(L("未找到电池存档"));
             return;
         }
-        auto* dialog = new brls::Dialog("确认导出当前电池存档？");
-        dialog->addButton("取消", []() {});
-        dialog->addButton("导出", [source]() {
+        auto* dialog = new brls::Dialog(L("确认导出当前电池存档？"));
+        dialog->addButton(L("取消"), []() {});
+        dialog->addButton(L("导出"), [source]() {
             const fs::path directory("sdmc:/GBAStation/export");
             std::string error;
             if (!copyBinaryFile(source, directory / fs::path(source).filename(), &error)) {
                 brls::Logger::warning("导出电池存档失败: {}", error);
-                brls::Application::notify("导出失败");
+                brls::Application::notify(L("导出失败"));
                 return;
             }
-            brls::Application::notify("已导出存档");
+            brls::Application::notify(L("已导出存档"));
         });
         dialog->open();
     }
@@ -1013,22 +1014,22 @@ namespace beiklive
     {
         if (_isThreeDs()) {
             if (_threeDsTitleId().empty()) {
-                brls::Application::notify("缺少3DS Title ID，无法定位存档");
+                brls::Application::notify(L("缺少3DS Title ID，无法定位存档"));
                 return;
             }
-            auto* dialog = new brls::Dialog("确认导入3DS存档压缩包并覆盖当前存档？");
-            dialog->addButton("取消", []() {});
+            auto* dialog = new brls::Dialog(L("确认导入3DS存档压缩包并覆盖当前存档？"));
+            dialog->addButton(L("取消"), []() {});
             const auto alive = m_alive;
-            dialog->addButton("选择文件", [this, alive]() {
+            dialog->addButton(L("选择文件"), [this, alive]() {
                 beiklive::openFilePicker({"zip"}, [this, alive](const std::string& selected) {
                     if (!alive->load()) return;
                     std::string error;
                     if (!replaceDirectoryFromArchive(selected, _batterySaveDir(), &error)) {
                         brls::Logger::warning("导入3DS存档失败: {}", error);
-                        brls::Application::notify("导入失败");
+                        brls::Application::notify(L("导入失败"));
                         return;
                     }
-                    brls::Application::notify("已导入3DS存档");
+                    brls::Application::notify(L("已导入3DS存档"));
                     _refreshBackupList();
                     m_view->restoreFocus();
                 }, beiklive::path::GetRootPath());
@@ -1041,19 +1042,19 @@ namespace beiklive
             m_entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis);
         const std::string extension = isGenesis ? "srm" : "sav";
         auto* dialog = new brls::Dialog(
-            "确认导入外部 ." + extension + " 并覆盖当前电池存档？");
-        dialog->addButton("取消", []() {});
+            L("确认导入外部 .") + extension + L(" 并覆盖当前电池存档？"));
+        dialog->addButton(L("取消"), []() {});
         const auto alive = m_alive;
-        dialog->addButton("选择文件", [this, alive, extension]() {
+        dialog->addButton(L("选择文件"), [this, alive, extension]() {
             beiklive::openFilePicker({extension}, [this, alive](const std::string& selected) {
                 if (!alive->load()) return;
                 std::string error;
                 if (!copyBinaryFile(selected, _savPath(), &error)) {
                     brls::Logger::warning("导入电池存档失败: {}", error);
-                    brls::Application::notify("导入失败");
+                    brls::Application::notify(L("导入失败"));
                     return;
                 }
-                brls::Application::notify("已导入存档");
+                brls::Application::notify(L("已导入存档"));
                 _refreshBackupList();
                 m_view->restoreFocus();
             }, beiklive::path::GetRootPath());
@@ -1067,26 +1068,26 @@ namespace beiklive
             const std::string titleId = _threeDsTitleId();
             const fs::path source = _batterySaveDir();
             if (titleId.empty()) {
-                brls::Application::notify("缺少3DS Title ID，无法定位存档");
+                brls::Application::notify(L("缺少3DS Title ID，无法定位存档"));
                 return;
             }
             if (!directoryContainsFiles(source)) {
-                brls::Application::notify("未找到3DS游戏存档");
+                brls::Application::notify(L("未找到3DS游戏存档"));
                 return;
             }
-            auto* dialog = new brls::Dialog("确认为当前3DS游戏存档创建备份？");
-            dialog->addButton("取消", []() {});
-            dialog->addButton("备份", [this, source, titleId]() {
+            auto* dialog = new brls::Dialog(L("确认为当前3DS游戏存档创建备份？"));
+            dialog->addButton(L("取消"), []() {});
+            dialog->addButton(L("备份"), [this, source, titleId]() {
                 const fs::path backup = fs::path(beiklive::three_ds::backupDirectory(titleId)) /
                     (titleId + "_" + timestampForFile() + ".zip");
                 std::string error;
                 if (!createDirectoryArchive(source, backup, &error)) {
                     brls::Logger::warning("备份3DS存档失败: {} -> {}, error={}",
                         source.string(), backup.string(), error);
-                    brls::Application::notify("备份失败：" + error);
+                    brls::Application::notify(L("备份失败：") + error);
                     return;
                 }
-                brls::Application::notify("已创建3DS存档备份");
+                brls::Application::notify(L("已创建3DS存档备份"));
                 _refreshBackupList();
                 m_view->restoreFocus();
             });
@@ -1097,22 +1098,22 @@ namespace beiklive
         const std::string source = _savPath();
         std::error_code ec;
         if (!fs::exists(source, ec)) {
-            brls::Application::notify("未找到电池存档");
+            brls::Application::notify(L("未找到电池存档"));
             return;
         }
-        auto* dialog = new brls::Dialog("确认为当前电池存档创建备份？");
-        dialog->addButton("取消", []() {});
-        dialog->addButton("备份", [this, source]() {
+        auto* dialog = new brls::Dialog(L("确认为当前电池存档创建备份？"));
+        dialog->addButton(L("取消"), []() {});
+        dialog->addButton(L("备份"), [this, source]() {
             const fs::path backup = source + ".bak_" + timestampForFile();
             std::string error;
             if (!copyBinaryFile(source, backup, &error)) {
                 std::error_code removeError;
                 fs::remove(backup, removeError);
                 brls::Logger::warning("备份电池存档失败: {}", error);
-                brls::Application::notify("备份失败");
+                brls::Application::notify(L("备份失败"));
                 return;
             }
-            brls::Application::notify("已创建备份");
+            brls::Application::notify(L("已创建备份"));
             _refreshBackupList();
             m_view->restoreFocus();
         });
@@ -1123,19 +1124,19 @@ namespace beiklive
     {
         if (index < 0 || index >= static_cast<int>(m_backupPaths.size())) return;
         const fs::path backup = m_backupPaths[static_cast<size_t>(index)];
-        auto* dialog = new brls::Dialog("确认还原备份\n" + backup.filename().string() + "？");
-        dialog->addButton("取消", []() {});
-        dialog->addButton("还原", [this, backup]() {
+        auto* dialog = new brls::Dialog(L("确认还原备份\n") + backup.filename().string() + "？");
+        dialog->addButton(L("取消"), []() {});
+        dialog->addButton(L("还原"), [this, backup]() {
             std::string error;
             const bool restored = _isThreeDs()
                 ? replaceDirectoryFromArchive(backup, _batterySaveDir(), &error)
                 : copyBinaryFile(backup, _savPath(), &error);
             if (!restored) {
                 brls::Logger::warning("还原存档失败: {}", error);
-                brls::Application::notify("还原失败");
+                brls::Application::notify(L("还原失败"));
                 return;
             }
-            brls::Application::notify("已还原存档");
+            brls::Application::notify(L("已还原存档"));
             _refreshBackupList();
             m_view->restoreFocus();
         });
@@ -1146,12 +1147,12 @@ namespace beiklive
     {
         if (index < 0 || index >= static_cast<int>(m_backupPaths.size())) return;
         const fs::path backup = m_backupPaths[static_cast<size_t>(index)];
-        auto* dialog = new brls::Dialog("确认删除备份\n" + backup.filename().string() + "？");
-        dialog->addButton("取消", []() {});
-        dialog->addButton("删除", [this, backup]() {
+        auto* dialog = new brls::Dialog(L("确认删除备份\n") + backup.filename().string() + "？");
+        dialog->addButton(L("取消"), []() {});
+        dialog->addButton(L("删除"), [this, backup]() {
             std::error_code ec;
             fs::remove(backup, ec);
-            brls::Application::notify(ec ? "删除失败" : "已删除备份");
+            brls::Application::notify(ec ? L("删除失败") : L("已删除备份"));
             _refreshBackupList();
             m_view->restoreFocus();
         });
@@ -1163,7 +1164,7 @@ namespace beiklive
         const bool isThreeDs = _isThreeDs();
         const fs::path savePath = isThreeDs ? fs::path(_batterySaveDir()) : fs::path(_savPath());
         if (savePath.empty()) {
-            brls::Application::notify("无法定位游戏存档");
+            brls::Application::notify(L("无法定位游戏存档"));
             return;
         }
 
@@ -1172,18 +1173,18 @@ namespace beiklive
             return fs::is_regular_file(savePath, ec) && !ec;
         }();
         if (!saveExists) {
-            brls::Application::notify(isThreeDs ? "未找到3DS游戏存档" : "未找到电池存档");
+            brls::Application::notify(isThreeDs ? L("未找到3DS游戏存档") : L("未找到电池存档"));
             return;
         }
 
         auto* dialog = new brls::Dialog(
             isThreeDs
-                ? "确认删除该游戏存档目录中的所有文件？\n此操作不可撤销，备份文件不会被删除。"
+                ? L("确认删除该游戏存档目录中的所有文件？\n此操作不可撤销，备份文件不会被删除。")
                 : (m_entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)
-                       ? "确认删除该游戏的 .srm 存档？\n此操作不可撤销，备份文件不会被删除。"
-                       : "确认删除该游戏的 .sav 存档？\n此操作不可撤销，备份文件不会被删除。"));
-        dialog->addButton("取消", [this]() { m_view->restoreFocus(); });
-        dialog->addButton("删除", [this, isThreeDs, savePath]() {
+                       ? L("确认删除该游戏的 .srm 存档？\n此操作不可撤销，备份文件不会被删除。")
+                       : L("确认删除该游戏的 .sav 存档？\n此操作不可撤销，备份文件不会被删除。")));
+        dialog->addButton(L("取消"), [this]() { m_view->restoreFocus(); });
+        dialog->addButton(L("删除"), [this, isThreeDs, savePath]() {
             std::string error;
             bool success = false;
             if (isThreeDs) {
@@ -1196,7 +1197,7 @@ namespace beiklive
             if (!success && !error.empty())
                 brls::Logger::warning("删除游戏存档失败: path={} error={}",
                                       savePath.string(), error);
-            brls::Application::notify(success ? "已删除游戏存档" : "删除游戏存档失败");
+            brls::Application::notify(success ? L("已删除游戏存档") : L("删除游戏存档失败"));
             _refreshBackupList();
             m_view->restoreFocus();
         });
@@ -1207,23 +1208,23 @@ namespace beiklive
     {
         const std::string titleId = _threeDsTitleId();
         if (titleId.empty()) {
-            brls::Application::notify("缺少3DS Title ID，无法清理缓存");
+            brls::Application::notify(L("缺少3DS Title ID，无法清理缓存"));
             return;
         }
         const auto stats = beiklive::three_ds::shaderCacheStats(titleId);
         if (!stats.valid) {
-            brls::Application::notify("读取着色器缓存信息失败");
+            brls::Application::notify(L("读取着色器缓存信息失败"));
             return;
         }
         auto* dialog = new brls::Dialog(
-            "确认清除该游戏的着色器缓存？\nTitle ID: " + titleId +
-            "\n缓存文件：" + std::to_string(stats.fileCount) +
-            " 个\n占用空间：" + formatByteSize(stats.totalBytes) +
-            "\n下次启动游戏时将重新编译着色器。");
-        dialog->addButton("取消", []() {});
-        dialog->addButton("清除", [this, titleId]() {
+            L("确认清除该游戏的着色器缓存？\nTitle ID: ") + titleId +
+            L("\n缓存文件：") + std::to_string(stats.fileCount) +
+            L(" 个\n占用空间：") + formatByteSize(stats.totalBytes) +
+            L("\n下次启动游戏时将重新编译着色器。"));
+        dialog->addButton(L("取消"), []() {});
+        dialog->addButton(L("清除"), [this, titleId]() {
             const bool success = beiklive::three_ds::clearShaderCache(titleId);
-            brls::Application::notify(success ? "已清除着色器缓存" : "清除着色器缓存失败");
+            brls::Application::notify(success ? L("已清除着色器缓存") : L("清除着色器缓存失败"));
             m_view->restoreFocus();
         });
         dialog->open();
@@ -1233,7 +1234,7 @@ namespace beiklive
     {
         const std::string path = beiklive::three_ds::cheatFilePath(_threeDsTitleId());
         if (path.empty() || !saveGatewayCheats(path, m_cheats)) {
-            brls::Application::notify("保存金手指失败");
+            brls::Application::notify(L("保存金手指失败"));
             return false;
         }
         return true;
@@ -1248,7 +1249,7 @@ namespace beiklive
             !ensureDirectory(cheatPath.parent_path(), &directoryError)) {
             brls::Logger::warning("创建金手指目录失败: path={} error={}",
                                   cheatPath.string(), directoryError);
-            brls::Application::notify("创建金手指文件失败");
+            brls::Application::notify(L("创建金手指文件失败"));
             return;
         }
         std::error_code existsError;
@@ -1256,7 +1257,7 @@ namespace beiklive
         if (existsError) {
             brls::Logger::warning("检查金手指文件失败: path={} error={}",
                                   cheatPath.string(), existsError.message());
-            brls::Application::notify("创建金手指文件失败");
+            brls::Application::notify(L("创建金手指文件失败"));
             return;
         }
         if (!cheatFileExists) {
@@ -1264,13 +1265,13 @@ namespace beiklive
             if (!file) {
                 brls::Logger::warning("创建金手指文件失败: path={}",
                                       cheatPath.string());
-                brls::Application::notify("创建金手指文件失败");
+                brls::Application::notify(L("创建金手指文件失败"));
                 return;
             }
         }
         auto* ime = brls::Application::getPlatform()->getImeManager();
         if (!ime) {
-            brls::Application::notify("输入法不可用");
+            brls::Application::notify(L("输入法不可用"));
             return;
         }
         const auto alive = m_alive;
@@ -1284,7 +1285,7 @@ namespace beiklive
                 }
                 auto* codeIme = brls::Application::getPlatform()->getImeManager();
                 if (!codeIme) {
-                    brls::Application::notify("输入法不可用");
+                    brls::Application::notify(L("输入法不可用"));
                     m_view->restoreFocus();
                     return;
                 }
@@ -1295,23 +1296,23 @@ namespace beiklive
                         if (code.empty()) {
                             if (!codeText.empty())
                                 brls::Application::notify(
-                                    "金手指代码无效，请使用XXXXXXXX XXXXXXXX格式");
+                                    L("金手指代码无效，请使用XXXXXXXX XXXXXXXX格式"));
                             m_view->restoreFocus();
                             return;
                         }
                         m_cheats.push_back({name, code, {}, false});
                         if (_saveCheats()) {
-                            brls::Application::notify("已新增金手指");
+                            brls::Application::notify(L("已新增金手指"));
                             _refreshCheats();
                         } else {
                             m_cheats.pop_back();
                         }
                         m_view->restoreFocus();
                     },
-                    "输入金手指内容", "每行格式：XXXXXXXX XXXXXXXX", 4096, "",
+                    L("输入金手指内容"), L("每行格式：XXXXXXXX XXXXXXXX"), 4096, "",
                     brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
             },
-            "输入金手指名称", "", 128, "",
+            L("输入金手指名称"), "", 128, "",
             brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
     }
 
@@ -1319,11 +1320,11 @@ namespace beiklive
     {
         if (index < 0 || index >= static_cast<int>(m_cheats.size()))
             return;
-        auto* dialog = new brls::Dialog("管理金手指\n" + m_cheats[static_cast<size_t>(index)].name);
-        dialog->addButton("修改金手指名称", [this, index]() { _editCheatName(index); });
-        dialog->addButton("修改金手指代码", [this, index]() { _editCheatCode(index); });
-        dialog->addButton("删除金手指", [this, index]() { _confirmDeleteCheat(index); });
-        dialog->addButton("取消", [this]() { m_view->restoreFocus(); });
+        auto* dialog = new brls::Dialog(L("管理金手指\n") + m_cheats[static_cast<size_t>(index)].name);
+        dialog->addButton(L("修改金手指名称"), [this, index]() { _editCheatName(index); });
+        dialog->addButton(L("修改金手指代码"), [this, index]() { _editCheatCode(index); });
+        dialog->addButton(L("删除金手指"), [this, index]() { _confirmDeleteCheat(index); });
+        dialog->addButton(L("取消"), [this]() { m_view->restoreFocus(); });
         dialog->open();
     }
 
@@ -1343,13 +1344,13 @@ namespace beiklive
                 if (!name.empty()) {
                     m_cheats[static_cast<size_t>(index)].name = name;
                     if (_saveCheats()) {
-                        brls::Application::notify("已修改金手指名称");
+                        brls::Application::notify(L("已修改金手指名称"));
                         _refreshCheats();
                     }
                 }
                 m_view->restoreFocus();
             },
-            "修改金手指名称", "", 128, current,
+            L("修改金手指名称"), "", 128, current,
             brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
     }
 
@@ -1369,18 +1370,18 @@ namespace beiklive
                 if (code.empty()) {
                     if (!text.empty())
                         brls::Application::notify(
-                            "金手指代码无效，请使用XXXXXXXX XXXXXXXX格式");
+                            L("金手指代码无效，请使用XXXXXXXX XXXXXXXX格式"));
                     m_view->restoreFocus();
                     return;
                 }
                 m_cheats[static_cast<size_t>(index)].code = code;
                 if (_saveCheats()) {
-                    brls::Application::notify("已修改金手指代码");
+                    brls::Application::notify(L("已修改金手指代码"));
                     _refreshCheats();
                 }
                 m_view->restoreFocus();
             },
-            "修改金手指代码", "每行格式：XXXXXXXX XXXXXXXX", 4096, current,
+            L("修改金手指代码"), L("每行格式：XXXXXXXX XXXXXXXX"), 4096, current,
             brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
     }
 
@@ -1389,13 +1390,13 @@ namespace beiklive
         if (index < 0 || index >= static_cast<int>(m_cheats.size()))
             return;
         const std::string name = m_cheats[static_cast<size_t>(index)].name;
-        auto* dialog = new brls::Dialog("确认删除金手指\n" + name + "？");
-        dialog->addButton("取消", [this]() { m_view->restoreFocus(); });
-        dialog->addButton("删除", [this, index]() {
+        auto* dialog = new brls::Dialog(L("确认删除金手指\n") + name + "？");
+        dialog->addButton(L("取消"), [this]() { m_view->restoreFocus(); });
+        dialog->addButton(L("删除"), [this, index]() {
             if (index < 0 || index >= static_cast<int>(m_cheats.size())) return;
             m_cheats.erase(m_cheats.begin() + index);
             if (_saveCheats()) {
-                brls::Application::notify("已删除金手指");
+                brls::Application::notify(L("已删除金手指"));
                 _refreshCheats();
             }
             m_view->restoreFocus();
@@ -1412,13 +1413,13 @@ namespace beiklive
         std::string enabledPath;
         std::string disabledPath;
         if (section == GameDataView::Section::LOAD_CONTENT) {
-            label = index == 0 ? "纹理" : "MOD";
+            label = index == 0 ? L("纹理") : "MOD";
             enabledPath = index == 0 ? beiklive::three_ds::texturePath(titleId)
                                      : beiklive::three_ds::modPath(titleId);
             disabledPath = index == 0 ? beiklive::three_ds::disabledTexturePath(titleId)
                                       : beiklive::three_ds::disabledModPath(titleId);
         } else if (section == GameDataView::Section::ADDONS) {
-            label = index == 0 ? "更新" : "DLC";
+            label = index == 0 ? L("更新") : "DLC";
             enabledPath = index == 0 ? beiklive::three_ds::updateTitlePath(titleId)
                                      : beiklive::three_ds::dlcTitlePath(titleId);
             disabledPath = index == 0 ? beiklive::three_ds::disabledUpdateTitlePath(titleId)
@@ -1430,25 +1431,25 @@ namespace beiklive
         const bool enabledExists = pathExists(enabledPath);
         const bool disabledExists = pathExists(disabledPath);
         if (enabledExists && disabledExists) {
-            brls::Application::notify(label + "同时存在启用和停用目录，请先手动处理冲突");
+            brls::Application::notify(label + L("同时存在启用和停用目录，请先手动处理冲突"));
             return;
         }
         if (!enabledExists && !disabledExists) {
             brls::Application::notify(label + (section == GameDataView::Section::ADDONS
-                ? "未安装" : "未导入"));
+                ? L("未安装") : L("未导入")));
             return;
         }
 
         const bool enable = disabledExists;
-        const std::string action = enable ? "启用" : "停用";
+        const std::string action = enable ? L("启用") : L("停用");
         const std::string source = enable ? disabledPath : enabledPath;
         auto* dialog = new brls::Dialog(
-            "确认" + action + label + "？\n当前路径：\n" + source);
-        dialog->addButton("取消", [this]() { m_view->restoreFocus(); });
+            L("确认") + action + label + L("？\n当前路径：\n") + source);
+        dialog->addButton(L("取消"), [this]() { m_view->restoreFocus(); });
         dialog->addButton(action, [this, enabledPath, disabledPath, enable, action, label]() {
             const bool success = beiklive::three_ds::setManagedContentEnabled(
                 enabledPath, disabledPath, enable);
-            brls::Application::notify(success ? "已" + action + label : action + label + "失败");
+            brls::Application::notify(success ? "已" + action + label : action + label + L("失败"));
             _refreshManagedContent();
             m_view->restoreFocus();
         });
@@ -1464,13 +1465,13 @@ namespace beiklive
         std::string enabledPath;
         std::string disabledPath;
         if (section == GameDataView::Section::LOAD_CONTENT) {
-            label = index == 0 ? "纹理" : "MOD";
+            label = index == 0 ? L("纹理") : "MOD";
             enabledPath = index == 0 ? beiklive::three_ds::texturePath(titleId)
                                      : beiklive::three_ds::modPath(titleId);
             disabledPath = index == 0 ? beiklive::three_ds::disabledTexturePath(titleId)
                                       : beiklive::three_ds::disabledModPath(titleId);
         } else if (section == GameDataView::Section::ADDONS) {
-            label = index == 0 ? "更新" : "DLC";
+            label = index == 0 ? L("更新") : "DLC";
             enabledPath = index == 0 ? beiklive::three_ds::updateTitlePath(titleId)
                                      : beiklive::three_ds::dlcTitlePath(titleId);
             disabledPath = index == 0 ? beiklive::three_ds::disabledUpdateTitlePath(titleId)
@@ -1482,16 +1483,16 @@ namespace beiklive
         const bool present = pathExists(enabledPath) || pathExists(disabledPath);
         if (!present) {
             brls::Application::notify(label + (section == GameDataView::Section::ADDONS
-                ? "未安装" : "未导入"));
+                ? L("未安装") : L("未导入")));
             return;
         }
         auto* dialog = new brls::Dialog(
-            "确认永久删除" + label + "？\n此操作不可撤销。\n" + enabledPath);
-        dialog->addButton("取消", [this]() { m_view->restoreFocus(); });
-        dialog->addButton("删除", [this, enabledPath, disabledPath, label]() {
+            L("确认永久删除") + label + L("？\n此操作不可撤销。\n") + enabledPath);
+        dialog->addButton(L("取消"), [this]() { m_view->restoreFocus(); });
+        dialog->addButton(L("删除"), [this, enabledPath, disabledPath, label]() {
             const bool success = beiklive::three_ds::deleteManagedContent(
                 enabledPath, disabledPath);
-            brls::Application::notify(success ? "已删除" + label : "删除" + label + "失败");
+            brls::Application::notify(success ? L("已删除") + label : L("删除") + label + L("失败"));
             _refreshManagedContent();
             m_view->restoreFocus();
         });

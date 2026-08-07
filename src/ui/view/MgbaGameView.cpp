@@ -1,4 +1,5 @@
 #include "MgbaGameView.hpp"
+#include "core/Translation.hpp"
 #include "GameMenuView.hpp"
 #include "RewindSelectorView.hpp"
 #include "emulator/IEmulatorAudioOutput.hpp"
@@ -142,7 +143,7 @@ namespace beiklive
             return;
 
         auto *header = new brls::Header();
-        header->setTitle("GB 配色");
+        header->setTitle(L("GB 配色"));
         m_gameMenuView->addCoreDisplaySettingView(header);
 
         const auto& colors = beiklive::GetGbColorPresets();
@@ -158,7 +159,7 @@ namespace beiklive
         }
 
         auto *colorCell = new beiklive::SelectorButton();
-        colorCell->setText("GB 配色");
+        colorCell->setText(L("GB 配色"));
         colorCell->setOptions(colors, selected);
         colorCell->setOnSelect([this](int index) {
             const auto& presets = beiklive::GetGbColorPresets();
@@ -169,7 +170,7 @@ namespace beiklive
         });
         m_gameMenuView->addCoreDisplaySettingView(colorCell);
         m_gameMenuView->addCoreDisplaySettingView(
-            beiklive::ui::makeHint("为 GB 单色游戏着色，不影响 GBA 游戏"));
+            beiklive::ui::makeHint(L("为 GB 单色游戏着色，不影响 GBA 游戏")));
     }
 
 
@@ -3008,7 +3009,7 @@ namespace beiklive
         if (!m_core->Serialize(buf) || buf.empty()) {
             brls::Logger::warning("MgbaGameView: 存档序列化失败 (slot {})", slot);
             brls::sync([slot](){
-                brls::Application::notify("存档失败 (slot " + std::to_string(slot) + ")");
+                brls::Application::notify(L("存档失败 (slot ") + std::to_string(slot) + ")");
             });
             return;
         }
@@ -3018,7 +3019,7 @@ namespace beiklive
         if (!f) {
             brls::Logger::warning("MgbaGameView: 无法打开存档文件写入: {}", path);
             brls::sync([slot](){
-                brls::Application::notify("存档失败：无法写入文件 (slot " + std::to_string(slot) + ")");
+                brls::Application::notify(L("存档失败：无法写入文件 (slot ") + std::to_string(slot) + ")");
             });
             return;
         }
@@ -3046,7 +3047,7 @@ namespace beiklive
 
         // UI 线程通知
         brls::sync([slot](){
-            std::string msg = (slot == 0) ? "已保存到自动存档" : "已保存到槽位 " + std::to_string(slot);
+            std::string msg = (slot == 0) ? L("已保存到自动存档") : L("已保存到槽位 ") + std::to_string(slot);
             brls::Application::notify(msg);
         });
     }
@@ -3062,7 +3063,7 @@ namespace beiklive
         auto frame = m_core->GetVideoFrame();
         if (frame.pixels.empty() || frame.width == 0 || frame.height == 0) {
             brls::sync([]() {
-                brls::Application::notify("截图失败：没有可用画面");
+                brls::Application::notify(L("截图失败：没有可用画面"));
             });
             return;
         }
@@ -3075,7 +3076,7 @@ namespace beiklive
         if (ec) {
             brls::Logger::warning("MgbaGameView: 创建截图目录失败: {} ({})", dir, ec.message());
             brls::sync([]() {
-                brls::Application::notify("截图失败：无法创建存档目录");
+                brls::Application::notify(L("截图失败：无法创建存档目录"));
             });
             return;
         }
@@ -3098,14 +3099,14 @@ namespace beiklive
         if (!ok) {
             brls::Logger::warning("MgbaGameView: 截图保存失败: {}", outPath.string());
             brls::sync([]() {
-                brls::Application::notify("截图保存失败");
+                brls::Application::notify(L("截图保存失败"));
             });
             return;
         }
 
         brls::Logger::info("MgbaGameView: 截图已保存: {}", outPath.string());
         brls::sync([]() {
-            brls::Application::notify("截图已保存到存档目录");
+            brls::Application::notify(L("截图已保存到存档目录"));
         });
     }
 
@@ -3121,7 +3122,7 @@ namespace beiklive
         if (!std::filesystem::exists(path)) {
             brls::Logger::warning("MgbaGameView: 存档文件不存在: {}", path);
             brls::sync([slot](){
-                brls::Application::notify("读取失败：槽位 " + std::to_string(slot) + " 无存档");
+                brls::Application::notify(L("读取失败：槽位 ") + std::to_string(slot) + L(" 无存档"));
             });
             return;
         }
@@ -3130,7 +3131,7 @@ namespace beiklive
         if (!f) {
             brls::Logger::warning("MgbaGameView: 无法打开存档文件读取: {}", path);
             brls::sync([slot](){
-                brls::Application::notify("读取失败：无法读取文件 (slot " + std::to_string(slot) + ")");
+                brls::Application::notify(L("读取失败：无法读取文件 (slot ") + std::to_string(slot) + ")");
             });
             return;
         }
@@ -3140,7 +3141,7 @@ namespace beiklive
         f.seekg(0, std::ios::beg);
         if (fileSize <= 0) {
             brls::sync([slot](){
-                brls::Application::notify("读取失败：存档文件为空 (slot " + std::to_string(slot) + ")");
+                brls::Application::notify(L("读取失败：存档文件为空 (slot ") + std::to_string(slot) + ")");
             });
             return;
         }
@@ -3176,8 +3177,8 @@ namespace beiklive
             _flushAudioForTransition();
             brls::sync([slot](){
                 std::string msg = (slot == 0)
-                    ? "读取失败：自动存档无效或与当前 BIOS 设置不兼容"
-                    : "读取失败：槽位 " + std::to_string(slot) + " 无效或与当前 BIOS 设置不兼容";
+                    ? L("读取失败：自动存档无效或与当前 BIOS 设置不兼容")
+                    : L("读取失败：槽位 ") + std::to_string(slot) + L(" 无效或与当前 BIOS 设置不兼容");
                 brls::Application::notify(msg);
             });
             return;
@@ -3192,7 +3193,7 @@ namespace beiklive
 
         brls::Logger::info("MgbaGameView: 已从 {} 读取状态 ({} bytes)", path, got);
         brls::sync([slot](){
-            std::string msg = (slot == 0) ? "已从自动存档读取" : "已从槽位 " + std::to_string(slot) + " 读取";
+            std::string msg = (slot == 0) ? L("已从自动存档读取") : L("已从槽位 ") + std::to_string(slot) + L(" 读取");
             brls::Application::notify(msg);
         });
     }

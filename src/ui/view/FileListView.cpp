@@ -1,4 +1,5 @@
 #include "FileListView.hpp"
+#include "core/Translation.hpp"
 #include "ui/utils/GradientFocus.hpp"
 
 namespace beiklive {
@@ -160,10 +161,10 @@ void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
         nvgFontSize(vg, 20.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(225, 230, 238, 220));
-        nvgText(vg, cx, cy + 48.f, "正在加载目录...", nullptr);
+        nvgText(vg, cx, cy + 48.f, L("正在加载目录...").c_str(), nullptr);
         nvgFontSize(vg, 14.f);
         nvgFillColor(vg, nvgRGBA(195, 203, 215, 150));
-        nvgText(vg, cx, cy + 74.f, "文件较多时可能需要一些时间", nullptr);
+        nvgText(vg, cx, cy + 74.f, L("文件较多时可能需要一些时间").c_str(), nullptr);
         nvgRestore(vg);
         return;
     }
@@ -174,11 +175,11 @@ void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(205, 212, 223, 175));
         nvgText(vg, x + w * 0.5f, y + h * 0.5f - 8.f,
-                m_filterActive ? "没有匹配的文件" : "此目录为空", nullptr);
+                m_filterActive ? L("没有匹配的文件").c_str() : L("此目录为空").c_str(), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(190, 198, 211, 135));
         nvgText(vg, x + w * 0.5f, y + h * 0.5f + 24.f,
-                m_filterActive ? "按 B 关闭搜索" : "返回上一级或选择其他目录", nullptr);
+                m_filterActive ? L("按 B 关闭搜索").c_str() : L("返回上一级或选择其他目录").c_str(), nullptr);
         nvgRestore(vg);
         return;
     }

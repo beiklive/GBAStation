@@ -1,4 +1,5 @@
 #include "TabFrame.hpp"
+#include "core/Translation.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 
 
@@ -149,7 +150,7 @@ namespace beiklive
         m_contentArea->setPadding(16.f);
         this->addView(m_contentArea);
 
-        m_contentArea->registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+        m_contentArea->registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
             brls::sync([this]() {
                 brls::Application::giveFocus(m_tabBar->getDefaultFocus());
             });

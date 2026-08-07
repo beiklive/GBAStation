@@ -1,4 +1,5 @@
 #include "StartPage.hpp"
+#include "core/Translation.hpp"
 #include "SteamGridDbPage.hpp"
 #include "core/SteamGridDb.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
@@ -165,7 +166,7 @@ namespace beiklive
                 return true;
             };
 
-            registerAction("切换", brls::BUTTON_A, toggle, false, false, brls::SOUND_NONE);
+            registerAction(L("切换"), brls::BUTTON_A, toggle, false, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_LEFT, consume, true, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_RIGHT, consume, true, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_LEFT, consume, true, false, brls::SOUND_NONE);
@@ -174,8 +175,8 @@ namespace beiklive
             registerAction("", brls::BUTTON_DOWN, consume, true, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_UP, consume, true, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_DOWN, consume, true, false, brls::SOUND_NONE);
-            registerAction("返回", brls::BUTTON_B, closeAction, false, false, brls::SOUND_NONE);
-            registerAction("关闭", brls::BUTTON_START, closeAction, false, false, brls::SOUND_NONE);
+            registerAction(L("返回"), brls::BUTTON_B, closeAction, false, false, brls::SOUND_NONE);
+            registerAction(L("关闭"), brls::BUTTON_START, closeAction, false, false, brls::SOUND_NONE);
         }
 
         void open(bool pico8Visible)
@@ -272,11 +273,11 @@ namespace beiklive
             nvgFontFaceId(vg, m_defaultFont);
             nvgFontSize(vg, 28.f);
             nvgFillColor(vg, nvgRGBA(246, 248, 252, 248));
-            nvgText(vg, panelX + 84.f, panelY + 50.f, "首页功能", nullptr);
+            nvgText(vg, panelX + 84.f, panelY + 50.f, L("首页功能").c_str(), nullptr);
             nvgFontSize(vg, 15.f);
             nvgFillColor(vg, nvgRGBA(192, 201, 215, 190));
             nvgText(vg, panelX + 35.f, panelY + 83.f,
-                    "首页快捷按键显示设置", nullptr);
+                    L("首页快捷按键显示设置").c_str(), nullptr);
 
             const float rowX = panelX + 28.f;
             const float rowY = panelY + 124.f;
@@ -303,15 +304,15 @@ namespace beiklive
             nvgFontSize(vg, 22.f);
             nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
             nvgText(vg, rowX + 72.f, rowY + rowH * 0.5f,
-                    "PICO-8入口显示", nullptr);
+                    L("PICO-8入口显示").c_str(), nullptr);
             _drawChoice(vg, rowX + rowW - 220.f, rowY + 17.f, "是", m_pico8Visible);
             _drawChoice(vg, rowX + rowW - 112.f, rowY + 17.f, "否", !m_pico8Visible);
             nvgRestore(vg);
 
             float cursor = panelX + panelW - 30.f;
-            _drawHint(vg, brls::BUTTON_START, "关闭", cursor, panelY + panelH - 27.f, alpha);
-            _drawHint(vg, brls::BUTTON_B, "返回", cursor, panelY + panelH - 27.f, alpha);
-            _drawHint(vg, brls::BUTTON_A, "切换", cursor, panelY + panelH - 27.f, alpha);
+            _drawHint(vg, brls::BUTTON_START, L("关闭").c_str(), cursor, panelY + panelH - 27.f, alpha);
+            _drawHint(vg, brls::BUTTON_B, L("返回").c_str(), cursor, panelY + panelH - 27.f, alpha);
+            _drawHint(vg, brls::BUTTON_A, L("切换").c_str(), cursor, panelY + panelH - 27.f, alpha);
         }
 
         std::function<void(bool)> onPico8VisibleChanged;
@@ -650,12 +651,12 @@ namespace beiklive
             if (!result.success)
             {
                 brls::Logger::error("NDS external NRO launch failed for {}: {}", title, result.message);
-                brls::Application::notify("NDS独立NRO启动失败：" + result.message);
+                brls::Application::notify(L("NDS独立NRO启动失败：") + result.message);
                 return false;
             }
 
             brls::Logger::info("NDS external NRO configured for {}: {}", title, result.message);
-            brls::Application::notify("正在启动NDS独立NRO...");
+            brls::Application::notify(L("正在启动NDS独立NRO..."));
             brls::sync([]() { brls::Application::quit(); });
             return true;
         }
@@ -673,12 +674,12 @@ namespace beiklive
             if (!result.success)
             {
                 brls::Logger::error("3DS external NRO launch failed for {}: {}", title, result.message);
-                brls::Application::notify("3DS独立NRO启动失败：" + result.message);
+                brls::Application::notify(L("3DS独立NRO启动失败：") + result.message);
                 return false;
             }
 
             brls::Logger::info("3DS external NRO configured for {}: {}", title, result.message);
-            brls::Application::notify("正在启动3DS独立NRO...");
+            brls::Application::notify(L("正在启动3DS独立NRO..."));
             brls::sync([]() { brls::Application::quit(); });
             return true;
         }
@@ -699,13 +700,13 @@ namespace beiklive
                 if (extension == ".iso")
                 {
                     brls::Application::notify(
-                        "DC外部核心不支持缺少轨道信息的原始ISO，请转换为CHD，或使用GDI/CDI/CUE");
+                        L("DC外部核心不支持缺少轨道信息的原始ISO，请转换为CHD，或使用GDI/CDI/CUE"));
                     return false;
                 }
                 if (extension == ".zip" || extension == ".7z")
                 {
                     brls::Application::notify(
-                        "DC外部核心不能直接运行压缩包，请先解压为CHD/GDI/CDI/CUE");
+                        L("DC外部核心不能直接运行压缩包，请先解压为CHD/GDI/CDI/CUE"));
                     return false;
                 }
             }
@@ -723,7 +724,7 @@ namespace beiklive
             if (!result.success)
             {
                 brls::Logger::error("{} external NRO launch failed for {}: {}", label, title, result.message);
-                brls::Application::notify(label + std::string("独立NRO启动失败：") + result.message);
+                brls::Application::notify(label + std::string(L("独立NRO启动失败：")) + result.message);
                 return false;
             }
 
@@ -731,7 +732,7 @@ namespace beiklive
 				brls::Logger::error("{} external session tracking could not start for {}", label, romPath);
 
             brls::Logger::info("{} external NRO configured for {}: {}", label, title, result.message);
-            brls::Application::notify("正在启动" + label + "独立NRO...");
+            brls::Application::notify(L("正在启动") + label + L("独立NRO..."));
             brls::sync([]() { brls::Application::quit(); });
             return true;
         }
@@ -875,7 +876,7 @@ namespace beiklive
                                       beiklive::Box* previousPage)
     {
         if (!beiklive::tools::isFileExists(entry.path)) {
-            brls::Application::notify("文件不存在: " + entry.title);
+            brls::Application::notify(L("文件不存在: ") + entry.title);
             return false;
         }
         if (shouldUseNdsExternalNro(entry))
@@ -891,7 +892,7 @@ namespace beiklive
 #ifdef __SWITCH__
             return launchThreeDsExternalNro(entry.path, entry.title);
 #else
-            brls::Application::notify("3DS 独立运行时仅支持 Switch");
+            brls::Application::notify(L("3DS 独立运行时仅支持 Switch"));
             return false;
 #endif
         }
@@ -903,7 +904,7 @@ namespace beiklive
                 "arcade.externalNro.path", "/GBAStation/core/GBAStationFBNeoStub.nro",
                 "arcade.externalNro.returnPath");
 #else
-            brls::Application::notify("Arcade 独立运行时仅支持 Switch");
+            brls::Application::notify(L("Arcade 独立运行时仅支持 Switch"));
             return false;
 #endif
         }
@@ -915,7 +916,7 @@ namespace beiklive
                 "dc.externalNro.path", "/GBAStation/core/GBAStationFlycastStub.nro",
                 "dc.externalNro.returnPath");
 #else
-            brls::Application::notify("DC 独立运行时仅支持 Switch");
+            brls::Application::notify(L("DC 独立运行时仅支持 Switch"));
             return false;
 #endif
         }
@@ -927,7 +928,7 @@ namespace beiklive
                 "psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro",
                 "psp.externalNro.returnPath");
 #else
-            brls::Application::notify("PSP 独立运行时仅支持 Switch");
+            brls::Application::notify(L("PSP 独立运行时仅支持 Switch"));
             return false;
 #endif
         }
@@ -951,7 +952,7 @@ namespace beiklive
     void StartPage::_pushGameActivity(const beiklive::DirListData& dirItem, beiklive::Box* previousPage)
     {
         if (!beiklive::tools::isFileExists(dirItem.fullPath)) {
-            brls::Application::notify("文件不存在: " + dirItem.fileName);
+            brls::Application::notify(L("文件不存在: ") + dirItem.fileName);
             return;
         }
         if (shouldUseThreeDsExternalNro(dirItem))
@@ -961,7 +962,7 @@ namespace beiklive
             launchThreeDsExternalNro(dirItem.fullPath, dirItem.fileName);
             return;
 #else
-            brls::Application::notify("3DS 独立运行时仅支持 Switch");
+            brls::Application::notify(L("3DS 独立运行时仅支持 Switch"));
             return;
 #endif
         }
@@ -985,7 +986,7 @@ namespace beiklive
                 "arcade.externalNro.returnPath");
             return;
 #else
-            brls::Application::notify("Arcade 独立运行时仅支持 Switch");
+            brls::Application::notify(L("Arcade 独立运行时仅支持 Switch"));
             return;
 #endif
         }
@@ -999,7 +1000,7 @@ namespace beiklive
                 "dc.externalNro.returnPath");
             return;
 #else
-            brls::Application::notify("DC 独立运行时仅支持 Switch");
+            brls::Application::notify(L("DC 独立运行时仅支持 Switch"));
             return;
 #endif
         }
@@ -1013,7 +1014,7 @@ namespace beiklive
                 "psp.externalNro.returnPath");
             return;
 #else
-            brls::Application::notify("PSP 独立运行时仅支持 Switch");
+            brls::Application::notify(L("PSP 独立运行时仅支持 Switch"));
             return;
 #endif
         }
@@ -1100,7 +1101,7 @@ namespace beiklive
                 brls::Application::quit();
             }
         };
-        switchLayout->registerAction("设置主页", brls::BUTTON_START,
+        switchLayout->registerAction(L("设置主页"), brls::BUTTON_START,
             [this](brls::View*) -> bool {
                 _showShortcutSettings();
                 return true;
@@ -1115,7 +1116,7 @@ namespace beiklive
             if (switchLayout)
                 switchLayout->setPico8ShortcutVisible(visible);
             brls::Application::notify(
-                visible ? "已显示 PICO-8 入口" : "已隐藏 PICO-8 入口");
+                visible ? L("已显示 PICO-8 入口") : L("已隐藏 PICO-8 入口"));
         };
         m_shortcutSettingsOverlay->onClosed = [this]() {
             if (switchLayout)
@@ -1152,8 +1153,8 @@ namespace beiklive
         if (!beiklive::GameDB ||
             (m_libraryPreparedData.ready &&
              m_libraryPreparedData.entries.empty())) {
-            auto* dialog = new brls::Dialog("游戏库为空，请从文件列表选择游戏或者从设置中进行游戏导入");
-            dialog->addButton("确定", [](){});
+            auto* dialog = new brls::Dialog(L("游戏库为空，请从文件列表选择游戏或者从设置中进行游戏导入"));
+            dialog->addButton(L("确定"), [](){});
             dialog->open();
             return;
         }
@@ -1191,7 +1192,7 @@ namespace beiklive
         };
 
         m_fileListPage->registerAction(
-            "关闭列表",
+            L("关闭列表"),
             brls::BUTTON_START,
             [this](brls::View *)
             {
@@ -1207,7 +1208,7 @@ namespace beiklive
             switch (dirItem.itemType)
             {
             case beiklive::enums::FileType::IMAGE_FILE:
-                brls::Application::notify("查看图片：" + dirItem.fileName);
+                brls::Application::notify(L("查看图片：") + dirItem.fileName);
                 break;
             case beiklive::enums::FileType::GBA_ROM:
             case beiklive::enums::FileType::GBC_ROM:
@@ -1220,7 +1221,7 @@ namespace beiklive
             case beiklive::enums::FileType::ARCADE_ROM:
             case beiklive::enums::FileType::DREAMCAST_ROM:
             case beiklive::enums::FileType::PSP_ROM:
-                brls::Application::notify("启动游戏：" + dirItem.fileName);
+                brls::Application::notify(L("启动游戏：") + dirItem.fileName);
                 _pushGameActivity(dirItem, this);
                 break;
             default:
@@ -1312,7 +1313,7 @@ namespace beiklive
             beiklive::tools::getFileNameWithoutExtension(entry.path);
 
         m_gameOptionsSidebar->addButton(
-            "启动游戏", beiklive::material::PLAY_ARROW,
+            L("启动游戏"), beiklive::material::PLAY_ARROW,
             [this, entry](const beiklive::GameEntry&) {
                 if (entry.platform == static_cast<int>(
                         beiklive::enums::EmuPlatform::EmuNDS) &&
@@ -1329,15 +1330,15 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->addButton(
-            entry.favourite ? "取消收藏" : "加入收藏",
+            entry.favourite ? L("取消收藏") : L("加入收藏"),
             entry.favourite ? beiklive::material::FAVORITE : beiklive::material::FAVORITE_BORDER,
             [this, path, fav = entry.favourite](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated([this, path, fav]() {
                     const std::string msg = fav
-                        ? "确定要取消收藏吗？"
-                        : "确定要加入收藏吗？";
+                        ? L("确定要取消收藏吗？")
+                        : L("确定要加入收藏吗？");
                     auto* dlg = new brls::Dialog(msg);
-                    dlg->addButton("确认", [this, path, fav]() {
+                    dlg->addButton(L("确认"), [this, path, fav]() {
                         if (beiklive::GameDB) {
                             beiklive::GameDB->set(
                                 path, "favourite", nlohmann::json(!fav));
@@ -1345,16 +1346,16 @@ namespace beiklive
                             _requestRecentGamesRefresh(false);
                         }
                     });
-                    dlg->addButton("取消", []() {});
+                    dlg->addButton(L("取消"), []() {});
                     dlg->open();
                 });
             });
 
         const int operationsMenu = m_gameOptionsSidebar->addSubmenu(
-            "游戏操作", beiklive::material::SETTINGS);
+            L("游戏操作"), beiklive::material::SETTINGS);
 
         m_gameOptionsSidebar->addSubmenuButton(
-            operationsMenu, "修改映射名称", beiklive::material::EDIT,
+            operationsMenu, L("修改映射名称"), beiklive::material::EDIT,
             [this, path, title = entry.title, filename](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated(
                     [this, path, title, filename]() {
@@ -1373,22 +1374,22 @@ namespace beiklive
                                 beiklive::NameMappingManager->Save();
                                 _requestRecentGamesRefresh(false);
                             },
-                            "编辑游戏名称", "", 128, title,
+                            L("编辑游戏名称"), "", 128, title,
                             brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
                     });
             });
 
         const int coverMenu = m_gameOptionsSidebar->addNestedSubmenu(
-            operationsMenu, "修改封面", beiklive::material::IMAGE);
+            operationsMenu, L("修改封面"), beiklive::material::IMAGE);
 
         m_gameOptionsSidebar->addNestedSubmenuButton(
-            operationsMenu, coverMenu, "从 SteamGridDB 获取",
+            operationsMenu, coverMenu, L("从 SteamGridDB 获取"),
             beiklive::material::CLOUD_DOWNLOAD,
             [this, entry](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated([this, entry]() {
                     if (!beiklive::steamgriddb::hasApiKey()) {
                         brls::Application::notify(
-                            "请去设置-模拟器页面输入 SteamGridDB Api Key");
+                            L("请去设置-模拟器页面输入 SteamGridDB Api Key"));
                         return;
                     }
                     beiklive::openSteamGridDbPage(entry,
@@ -1399,7 +1400,7 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->addNestedSubmenuButton(
-            operationsMenu, coverMenu, "从本地选择", 0xE2C8,
+            operationsMenu, coverMenu, L("从本地选择"), 0xE2C8,
             [this, path](const beiklive::GameEntry& game) {
                 const auto pickerLocation = beiklive::getGameCoverPickerLocation(game);
                 _closeGameOptionsPanelAnimated(
@@ -1420,7 +1421,7 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->addSubmenuButton(
-            operationsMenu, "安装到 Switch 桌面",
+            operationsMenu, L("安装到 Switch 桌面"),
             beiklive::material::INSTALL_APP,
             [this](const beiklive::GameEntry& game) {
                 _closeGameOptionsPanelAnimated([game]() {
@@ -1430,7 +1431,7 @@ namespace beiklive
 
         if (beiklive::GetCoreOptions(entry.platform).size() > 1) {
             m_gameOptionsSidebar->addSubmenuButton(
-                operationsMenu, "核心切换", beiklive::material::MEMORY,
+                operationsMenu, L("核心切换"), beiklive::material::MEMORY,
                 [this, path, platform = entry.platform,
                  core = entry.core](const beiklive::GameEntry&) {
                     _closeGameOptionsPanelAnimated(
@@ -1442,7 +1443,7 @@ namespace beiklive
                             for (const auto& option : options)
                                 names.push_back(option.name);
                             auto* dropdown = new brls::Dropdown(
-                                "核心切换", names,
+                                L("核心切换"), names,
                                 [this, path, options](int selected) {
                                     if (selected < 0 ||
                                         selected >= static_cast<int>(options.size()))
@@ -1453,7 +1454,7 @@ namespace beiklive
                                             nlohmann::json(options[selected].id));
                                         beiklive::GameDB->flush();
                                         brls::Application::notify(
-                                            "已切换核心：" + options[selected].name);
+                                            L("已切换核心：") + options[selected].name);
                                         _requestRecentGamesRefresh(false);
                                     }
                                 },
@@ -1465,12 +1466,12 @@ namespace beiklive
         }
 
         m_gameOptionsSidebar->addSubmenuButton(
-            operationsMenu, "删除游戏", beiklive::material::DELETE_ICON,
+            operationsMenu, L("删除游戏"), beiklive::material::DELETE_ICON,
             [this, path, entry](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated([this, path, entry]() {
                     auto deleteGame = [this, path, entry](bool deleteRomFile) {
                             if (!beiklive::GameDB) {
-                                brls::Application::notify("删除失败");
+                                brls::Application::notify(L("删除失败"));
                                 return;
                             }
                             m_homeDeletePending = true;
@@ -1515,8 +1516,8 @@ namespace beiklive
                                             switchLayout->cancelGameRemoval();
                                         brls::Application::notify(
                                             deleteRomFile && !removedFile
-                                                ? "游戏文件删除失败，记录已保留"
-                                                : "删除失败");
+                                                ? L("游戏文件删除失败，记录已保留")
+                                                : L("删除失败"));
                                         _requestRecentGamesRefresh(false);
                                         return;
                                     }
@@ -1528,11 +1529,11 @@ namespace beiklive
                                         m_homeDeletePending = false;
                                         if (deleteRomFile)
                                             brls::Application::notify(removedFile
-                                                ? "已删除游戏"
-                                                : "已移除记录，游戏文件删除失败");
+                                                ? L("已删除游戏")
+                                                : L("已移除记录，游戏文件删除失败"));
                                         else
                                             brls::Application::notify(
-                                                "已从游戏库移除该游戏");
+                                                L("已从游戏库移除该游戏"));
                                         _requestRecentGamesRefresh(false);
                                     };
                                     if (switchLayout)
@@ -1544,12 +1545,12 @@ namespace beiklive
                             });
                     };
                     auto* dialog = new brls::Dialog(
-                        "请选择游戏的删除方式");
-                    dialog->addButton("仅从库中移除",
+                        L("请选择游戏的删除方式"));
+                    dialog->addButton(L("仅从库中移除"),
                         [deleteGame]() { deleteGame(false); });
-                    dialog->addButton("移除并删除文件",
+                    dialog->addButton(L("移除并删除文件"),
                         [deleteGame]() { deleteGame(true); });
-                    dialog->addButton("取消", []() {});
+                    dialog->addButton(L("取消"), []() {});
                     dialog->setCancelable(false);
                     dialog->open();
                 });

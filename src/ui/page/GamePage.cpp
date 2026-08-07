@@ -1,4 +1,5 @@
 #include "GamePage.hpp"
+#include "core/Translation.hpp"
 #include "core/Tools.hpp"
 #include "core/GameSignal.hpp"
 #include "ui/utils/AnimationHelper.hpp"
@@ -36,7 +37,7 @@ namespace beiklive
         // 检查文件是否存在
         if (!beiklive::tools::isFileExists(m_gameData.fullPath))
         {
-            brls::Application::notify("文件不存在: " + m_gameData.fileName);
+            brls::Application::notify(L("文件不存在: ") + m_gameData.fileName);
             // 这里可以选择返回上一级或显示错误界面
             brls::sync([this]()
                        { brls::Application::popActivity(); });
@@ -55,7 +56,7 @@ namespace beiklive
         // 检查文件是否存在
         if (!beiklive::tools::isFileExists(m_gameEntry.path))
         {
-            brls::Application::notify("文件不存在: " + m_gameEntry.title);
+            brls::Application::notify(L("文件不存在: ") + m_gameEntry.title);
             // 这里可以选择返回上一级或显示错误界面
             brls::sync([this]()
                        { brls::Application::popActivity(); });
@@ -354,7 +355,7 @@ namespace beiklive
                 AnimationHelper::slideOutToBottom(m_gameMenuView, 120.f, MENU_EXIT_FADE_MS, true, [this]() {
                     int exitSlot = GET_SETTING_KEY_INT("save.autoSaveOnExit", 0);
                     if (exitSlot > 0 && exitSlot <= 10) {
-                        brls::Application::notify("正在自动存档...");
+                        brls::Application::notify(L("正在自动存档..."));
                         m_exitAutoSavePolls = 0;
                         GameSignal::instance().requestAutoSave(exitSlot - 1);
                         _waitExitAutoSaveThenPop();
@@ -574,7 +575,7 @@ namespace beiklive
 
     void GamePage::_showExitCleanupDialogThenPop()
     {
-        auto* dialog = new brls::Dialog("正在退出游戏...\n\n正在保存数据并释放模拟器核心");
+        auto* dialog = new brls::Dialog(L("正在退出游戏...\n\n正在保存数据并释放模拟器核心"));
         dialog->setCancelable(false);
         dialog->open();
 
@@ -614,7 +615,7 @@ namespace beiklive
 
         m_exitAutoSavePolls++;
         if (m_exitAutoSavePolls * EXIT_SAVE_POLL_MS >= EXIT_SAVE_TIMEOUT_MS) {
-            brls::Application::notify("自动存档等待超时，正在退出");
+            brls::Application::notify(L("自动存档等待超时，正在退出"));
             _finishExitAndPop();
             return;
         }

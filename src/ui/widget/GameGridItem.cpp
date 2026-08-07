@@ -1,4 +1,5 @@
 #include "GameGridItem.hpp"
+#include "core/Translation.hpp"
 
 namespace beiklive
 {
@@ -61,7 +62,7 @@ namespace beiklive
         this->addView(m_title);
 
         this->registerAction(
-            "确认", brls::BUTTON_A,
+            L("确认"), brls::BUTTON_A,
             [this](brls::View*) -> bool {
                 if (onItemClicked) onItemClicked(m_entry);
                 return true;

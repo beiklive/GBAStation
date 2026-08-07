@@ -1,4 +1,5 @@
 #include "DataManagementPage.hpp"
+#include "core/Translation.hpp"
 
 #include "ui/page/FileListPage.hpp"
 #include "ui/utils/UiHelper.hpp"
@@ -147,9 +148,9 @@ public:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 246));
         nvgText(vg, x + 108.f, y + 43.f,
-                "导入 RetroArch 播放列表", nullptr);
+                L("导入 RetroArch 播放列表").c_str(), nullptr);
 
-        const std::string platformLabel = "目标平台  " + m_platformName;
+        const std::string platformLabel = L("目标平台  ") + m_platformName;
         nvgFontSize(vg, 17.f);
         float badgeBounds[4]{};
         nvgTextBounds(vg, 0.f, 0.f, platformLabel.c_str(), nullptr,
@@ -212,8 +213,7 @@ public:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(181, 188, 202, 225));
         nvgText(vg, x + 30.f, y + 229.f,
-                "将读取播放列表并导入有效 ROM，文件中的平台需与目标平台一致。",
-                nullptr);
+                L("将读取播放列表并导入有效 ROM，文件中的平台需与目标平台一致。").c_str(), nullptr);
     }
 
 private:
@@ -653,17 +653,17 @@ public:
         registerAction("", brls::BUTTON_RIGHT, nextTab, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_LEFT, previousTab, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_RIGHT, nextTab, true, true, brls::SOUND_NONE);
-        registerAction("上一页", brls::BUTTON_LB, previousTab, true, false, brls::SOUND_NONE);
-        registerAction("下一页", brls::BUTTON_RB, nextTab, true, false, brls::SOUND_NONE);
+        registerAction(L("上一页"), brls::BUTTON_LB, previousTab, true, false, brls::SOUND_NONE);
+        registerAction(L("下一页"), brls::BUTTON_RB, nextTab, true, false, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_UP, moveUp, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_DOWN, moveDown, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_UP, moveUp, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_DOWN, moveDown, true, true, brls::SOUND_NONE);
-        registerAction("选择", brls::BUTTON_A, [this](brls::View*) -> bool {
+        registerAction(L("选择"), brls::BUTTON_A, [this](brls::View*) -> bool {
             _activateFocused();
             return true;
         }, false, false, brls::SOUND_NONE);
-        registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+        registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
             _beginClose();
             return true;
         }, false, false, brls::SOUND_NONE);
@@ -870,10 +870,10 @@ private:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFontSize(vg, 27.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 36.f, y + 43.f, "数据管理", nullptr);
+        nvgText(vg, x + 36.f, y + 43.f, L("数据管理").c_str(), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
-        nvgText(vg, x + 36.f, y + 72.f, "导入、维护与远程管理游戏库", nullptr);
+        nvgText(vg, x + 36.f, y + 72.f, L("导入、维护与远程管理游戏库").c_str(), nullptr);
 
         const float centerX = x + w * 0.5f;
         const float centerY = y + 45.f;
@@ -1003,7 +1003,7 @@ private:
         {
             _drawBadge(vg, badgeX, badgeY, "LPL", nvgRGB(79, 193, 255));
             badgeX += 62.f;
-            _drawBadge(vg, badgeX, badgeY, "6 平台", nvgRGB(100, 220, 150));
+            _drawBadge(vg, badgeX, badgeY, L("6 平台"), nvgRGB(100, 220, 150));
         }
         else if (m_tab == 1)
         {
@@ -1012,12 +1012,12 @@ private:
                 if (item.toggle && *item.toggle)
                     ++enabled;
             _drawBadge(vg, badgeX, badgeY,
-                       std::to_string(enabled) + " 项已开启",
+                       std::to_string(enabled) + L(" 项已开启"),
                        nvgRGB(100, 220, 150));
         }
         else
         {
-            _drawBadge(vg, badgeX, badgeY, "谨慎操作", nvgRGB(255, 190, 80));
+            _drawBadge(vg, badgeX, badgeY, L("谨慎操作"), nvgRGB(255, 190, 80));
         }
     }
 
@@ -1185,13 +1185,13 @@ private:
         const float hintY = y + h - 27.f
             + (1.f - dataBack(m_pageEntrance)) * 46.f;
         float cursor = x + w - 32.f;
-        _drawHint(vg, brls::BUTTON_B, "返回", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_B, L("返回").c_str(), cursor, hintY, alpha);
         _drawHint(vg, brls::BUTTON_A,
                   _currentTab().items[static_cast<size_t>(_focusIndex())].toggle
-                      ? "切换" : "选择",
+                      ? L("切换").c_str() : L("选择").c_str(),
                   cursor, hintY, alpha);
-        _drawHint(vg, brls::BUTTON_RB, "下一页", cursor, hintY, alpha);
-        _drawHint(vg, brls::BUTTON_LB, "上一页", cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_RB, L("下一页").c_str(), cursor, hintY, alpha);
+        _drawHint(vg, brls::BUTTON_LB, L("上一页").c_str(), cursor, hintY, alpha);
     }
 
     void _switchTab(int direction)
@@ -1318,10 +1318,10 @@ void DataManagementPage::draw(
         {
             m_importing.store(false, std::memory_order_release);
             m_progressTitleLabel->setText(
-                m_progressTask == ProgressTask::Cleanup ? "处理失败" : "导入失败");
+                m_progressTask == ProgressTask::Cleanup ? L("处理失败") : L("导入失败"));
             {
                 std::lock_guard<std::mutex> lock(m_statusMutex);
-                std::string err = m_errorMsg.empty() ? "未知错误" : m_errorMsg;
+                std::string err = m_errorMsg.empty() ? L("未知错误") : m_errorMsg;
                 if (err.size() > 60)
                     err = err.substr(0, 60) + "...";
                 m_progressCountLabel->setText(err);
@@ -1334,12 +1334,12 @@ void DataManagementPage::draw(
                 std::string err;
                 {
                     std::lock_guard<std::mutex> lock(m_statusMutex);
-                    err = m_errorMsg.empty() ? "未知错误" : m_errorMsg;
+                    err = m_errorMsg.empty() ? L("未知错误") : m_errorMsg;
                 }
                 rememberFocusBeforeModal();
                 auto* dialog = new brls::Dialog(
-                    std::string(m_progressTask == ProgressTask::Cleanup ? "处理失败\n\n"
-                                                                       : "导入失败\n\n") +
+                    std::string(m_progressTask == ProgressTask::Cleanup ? L("处理失败\n\n")
+                                                                       : L("导入失败\n\n")) +
                     err);
                 dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
                 dialog->open();
@@ -1358,21 +1358,21 @@ void DataManagementPage::draw(
             if (m_progressTask == ProgressTask::Cleanup)
             {
                 int removed = m_cleanupRemoved.load(std::memory_order_acquire);
-                m_progressTitleLabel->setText("处理完成");
+                m_progressTitleLabel->setText(L("处理完成"));
                 m_progressCountLabel->setText(
-                    "已扫描 " + std::to_string(total) + " 个游戏，移除 " +
-                    std::to_string(removed) + " 个无效记录");
+                    L("已扫描 ") + std::to_string(total) + L(" 个游戏，移除 ") +
+                    std::to_string(removed) + L(" 个无效记录"));
             }
             else
             {
                 int skipped = m_importSkipped.load(std::memory_order_acquire);
-                m_progressTitleLabel->setText("导入完成");
+                m_progressTitleLabel->setText(L("导入完成"));
                 if (skipped > 0)
                     m_progressCountLabel->setText(
-                        "共处理 " + std::to_string(total) + " 个游戏，跳过 " +
-                        std::to_string(skipped) + " 个已有游戏");
+                        L("共处理 ") + std::to_string(total) + L(" 个游戏，跳过 ") +
+                        std::to_string(skipped) + L(" 个已有游戏"));
                 else
-                    m_progressCountLabel->setText("共处理 " + std::to_string(total) + " 个游戏");
+                    m_progressCountLabel->setText(L("共处理 ") + std::to_string(total) + L(" 个游戏"));
             }
             hideProgressOverlay();
 
@@ -1385,16 +1385,16 @@ void DataManagementPage::draw(
                 {
                     int removed = m_cleanupRemoved.load(std::memory_order_acquire);
                     dialogText = removed > 0
-                        ? "处理完成\n\n已移除 " + std::to_string(removed) + " 个无效游戏记录"
-                        : "处理完成\n\n没有发现无效游戏记录";
+                        ? L("处理完成\n\n已移除 ") + std::to_string(removed) + L(" 个无效游戏记录")
+                        : L("处理完成\n\n没有发现无效游戏记录");
                 }
                 else
                 {
                     int skipped = m_importSkipped.load(std::memory_order_acquire);
                     dialogText = skipped > 0
-                        ? "导入完成\n\n共处理 " + std::to_string(total) +
-                              " 个游戏，跳过 " + std::to_string(skipped) + " 个已有游戏"
-                        : "导入完成\n\n共处理 " + std::to_string(total) + " 个游戏";
+                        ? L("导入完成\n\n共处理 ") + std::to_string(total) +
+                              L(" 个游戏，跳过 ") + std::to_string(skipped) + L(" 个已有游戏")
+                        : L("导入完成\n\n共处理 ") + std::to_string(total) + L(" 个游戏");
                 }
                 auto* dialog = new brls::Dialog(dialogText);
                 dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
@@ -1414,34 +1414,34 @@ void DataManagementPage::init()
     std::vector<Canvas::Tab> tabs;
 
     Canvas::Tab bundle;
-    bundle.title = "整合包导入";
-    bundle.summary = "从 RetroArch 播放列表导入游戏，并沿用列表中的游戏名称与现有缩略图。";
-    bundle.detail = "请选择与播放列表内容一致的平台。导入前会检查 ROM 类型，选择错误时不会写入游戏库。";
+    bundle.title = L("整合包导入");
+    bundle.summary = L("从 RetroArch 播放列表导入游戏，并沿用列表中的游戏名称与现有缩略图。");
+    bundle.detail = L("请选择与播放列表内容一致的平台。导入前会检查 ROM 类型，选择错误时不会写入游戏库。");
     bundle.icon = material::DESCRIPTION;
     struct BundlePlatform
     {
-        const char* title;
-        const char* badge;
+        std::string title;
+        std::string badge;
         int platform;
     };
     const BundlePlatform bundlePlatforms[] = {
-        {"导入 GBA 播放列表", "GBA · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBA)},
-        {"导入 GBC 播放列表", "GBC · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBC)},
-        {"导入 GB 播放列表", "GB · .lpl", static_cast<int>(enums::EmuPlatform::EmuGB)},
-        {"导入 FC 播放列表", "FC · .lpl", static_cast<int>(enums::EmuPlatform::EmuNES)},
-        {"导入 SFC 播放列表", "SFC · .lpl", static_cast<int>(enums::EmuPlatform::EmuSNES)},
-        {"导入 NDS 播放列表", "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS)},
-        {"导入 3DS 播放列表", "3DS · .lpl", static_cast<int>(enums::EmuPlatform::Emu3DS)},
-        {"导入 MD 播放列表", "MD · .lpl", static_cast<int>(enums::EmuPlatform::EmuGenesis)},
-        {"导入 Arcade 播放列表", "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade)},
-        {"导入 DC 播放列表", "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast)},
-        {"导入 PSP 播放列表", "PSP · .lpl", static_cast<int>(enums::EmuPlatform::EmuPSP)},
+        {L("导入 GBA 播放列表"), "GBA · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBA)},
+        {L("导入 GBC 播放列表"), "GBC · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBC)},
+        {L("导入 GB 播放列表"), "GB · .lpl", static_cast<int>(enums::EmuPlatform::EmuGB)},
+        {L("导入 FC 播放列表"), "FC · .lpl", static_cast<int>(enums::EmuPlatform::EmuNES)},
+        {L("导入 SFC 播放列表"), "SFC · .lpl", static_cast<int>(enums::EmuPlatform::EmuSNES)},
+        {L("导入 NDS 播放列表"), "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS)},
+        {L("导入 3DS 播放列表"), "3DS · .lpl", static_cast<int>(enums::EmuPlatform::Emu3DS)},
+        {L("导入 MD 播放列表"), "MD · .lpl", static_cast<int>(enums::EmuPlatform::EmuGenesis)},
+        {L("导入 Arcade 播放列表"), "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade)},
+        {L("导入 DC 播放列表"), "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast)},
+        {L("导入 PSP 播放列表"), "PSP · .lpl", static_cast<int>(enums::EmuPlatform::EmuPSP)},
     };
     for (const auto& platform : bundlePlatforms)
     {
         bundle.items.push_back({
             platform.title,
-            "选择 RetroArch playlists 目录中的对应文件",
+            L("选择 RetroArch playlists 目录中的对应文件"),
             platform.badge,
             material::DESCRIPTION,
             [this, value = platform.platform]() {
@@ -1455,14 +1455,14 @@ void DataManagementPage::init()
     tabs.push_back(std::move(bundle));
 
     Canvas::Tab scan;
-    scan.title = "扫描导入";
-    scan.summary = "扫描指定目录中的 ROM 文件，根据扩展名识别平台并批量加入游戏库。";
-    scan.detail = "先设置扫描范围和平台开关，再选择目录。关闭全部平台时不会找到可导入的游戏。";
+    scan.title = L("扫描导入");
+    scan.summary = L("扫描指定目录中的 ROM 文件，根据扩展名识别平台并批量加入游戏库。");
+    scan.detail = L("先设置扫描范围和平台开关，再选择目录。关闭全部平台时不会找到可导入的游戏。");
     scan.icon = material::SEARCH;
     scan.items.push_back({
-        "选择 ROM 目录并开始扫描",
-        "打开目录浏览器，确认后在后台完成扫描和导入",
-        "选择目录",
+        L("选择 ROM 目录并开始扫描"),
+        L("打开目录浏览器，确认后在后台完成扫描和导入"),
+        L("选择目录"),
         material::SEARCH,
         [this]() {
             if (!m_importing.load(std::memory_order_acquire))
@@ -1471,49 +1471,49 @@ void DataManagementPage::init()
         nullptr,
         false,
     });
-    scan.items.push_back({"扫描子目录", "同时扫描所选目录下的所有子目录", "",
+    scan.items.push_back({L("扫描子目录"), L("同时扫描所选目录下的所有子目录"), "",
                           material::STORAGE, {}, &m_autoSubDir, false});
-    scan.items.push_back({"读取映射名称", "存在名称映射时使用中文或规范化标题", "",
+    scan.items.push_back({L("读取映射名称"), L("存在名称映射时使用中文或规范化标题"), "",
                           material::EDIT, {}, &m_useNameMapping, false});
-    scan.items.push_back({"扫描 GBA 游戏", "识别 .gba 文件", "",
+    scan.items.push_back({L("扫描 GBA 游戏"), L("识别 .gba 文件"), "",
                           material::MEMORY, {}, &m_scanGBA, false});
-    scan.items.push_back({"扫描 GBC 游戏", "识别 .gbc 文件", "",
+    scan.items.push_back({L("扫描 GBC 游戏"), L("识别 .gbc 文件"), "",
                           material::MEMORY, {}, &m_scanGBC, false});
-    scan.items.push_back({"扫描 GB 游戏", "识别 .gb 文件", "",
+    scan.items.push_back({L("扫描 GB 游戏"), L("识别 .gb 文件"), "",
                           material::MEMORY, {}, &m_scanGB, false});
-    scan.items.push_back({"扫描 FC 游戏", "识别 .nes 与 .fds 文件", "",
+    scan.items.push_back({L("扫描 FC 游戏"), L("识别 .nes 与 .fds 文件"), "",
                           material::MEMORY, {}, &m_scanNES, false});
-    scan.items.push_back({"扫描 SFC 游戏", "识别 .sfc 与 .smc 文件", "",
+    scan.items.push_back({L("扫描 SFC 游戏"), L("识别 .sfc 与 .smc 文件"), "",
                           material::MEMORY, {}, &m_scanSNES, false});
-    scan.items.push_back({"扫描 NDS 游戏", "识别 .nds 文件", "",
+    scan.items.push_back({L("扫描 NDS 游戏"), L("识别 .nds 文件"), "",
                           material::MEMORY, {}, &m_scanNDS, false});
-    scan.items.push_back({"扫描 3DS 游戏", "识别 .cia、.cci 与 .3ds 文件", "",
+    scan.items.push_back({L("扫描 3DS 游戏"), L("识别 .cia、.cci 与 .3ds 文件"), "",
                           material::MEMORY, {}, &m_scan3DS, false});
-    scan.items.push_back({"扫描 MD 游戏", "识别 .md、.gen、.bin 与 .smd 文件", "",
+    scan.items.push_back({L("扫描 MD 游戏"), L("识别 .md、.gen、.bin 与 .smd 文件"), "",
                           material::MEMORY, {}, &m_scanGenesis, false});
-    scan.items.push_back({"扫描 Arcade 游戏", "识别 .zip 与 .7z 文件", "",
+    scan.items.push_back({L("扫描 Arcade 游戏"), L("识别 .zip 与 .7z 文件"), "",
                           material::MEMORY, {}, &m_scanArcade, false});
-    scan.items.push_back({"扫描 DC 游戏", "识别 .cdi、.gdi 与 .chd 文件", "",
+    scan.items.push_back({L("扫描 DC 游戏"), L("识别 .cdi、.gdi 与 .chd 文件"), "",
                           material::MEMORY, {}, &m_scanDreamcast, false});
     tabs.push_back(std::move(scan));
 
     Canvas::Tab process;
-    process.title = "数据处理";
-    process.summary = "维护游戏库记录，或启动局域网 Web 服务进行远程管理。";
-    process.detail = "清理无效记录不会删除 ROM。清空游戏库会删除数据库内容，但不会删除游戏文件和存档。";
+    process.title = L("数据处理");
+    process.summary = L("维护游戏库记录，或启动局域网 Web 服务进行远程管理。");
+    process.detail = L("清理无效记录不会删除 ROM。清空游戏库会删除数据库内容，但不会删除游戏文件和存档。");
     process.icon = material::STORAGE;
     process.items.push_back({
-        "启动 Web 管理服务",
-        "在同一局域网中上传 ROM、导入存档和修改封面",
-        "局域网",
+        L("启动 Web 管理服务"),
+        L("在同一局域网中上传 ROM、导入存档和修改封面"),
+        L("局域网"),
         material::WIFI,
         [this]() { startWebService(); },
         nullptr,
         false,
     });
     process.items.push_back({
-        "安装 CIA 文件",
-        "解密cia并将CIA游戏安装到数据库中",
+        L("安装 CIA 文件"),
+        L("解密cia并将CIA游戏安装到数据库中"),
         "3DS",
         material::INSTALL_APP,
         [this]() { launchCiaInstaller(); },
@@ -1521,18 +1521,18 @@ void DataManagementPage::init()
         false,
     });
     process.items.push_back({
-        "移除无效游戏记录",
-        "检查 ROM 是否存在，只移除文件已经丢失的数据库记录",
-        "不会删除 ROM",
+        L("移除无效游戏记录"),
+        L("检查 ROM 是否存在，只移除文件已经丢失的数据库记录"),
+        L("不会删除 ROM"),
         material::DELETE_SWEEP_ICON,
         [this]() { removeInvalidGames(); },
         nullptr,
         false,
     });
     process.items.push_back({
-        "清空游戏库",
-        "清除游戏库数据库，保留 ROM 文件和游戏存档",
-        "危险操作",
+        L("清空游戏库"),
+        L("清除游戏库数据库，保留 ROM 文件和游戏存档"),
+        L("危险操作"),
         material::DELETE_ICON,
         [this]() { clearGameLibrary(); },
         nullptr,
@@ -1563,7 +1563,7 @@ void DataManagementPage::setupProgressOverlay()
     m_progressOverlay->setBackgroundColor(nvgRGBA(0, 0, 0, 140));
     m_progressOverlay->setJustifyContent(brls::JustifyContent::CENTER);
     m_progressOverlay->setAlignItems(brls::AlignItems::CENTER);
-    m_progressOverlay->registerAction("返回", brls::BUTTON_B, [](brls::View*) { 
+    m_progressOverlay->registerAction(L("返回"), brls::BUTTON_B, [](brls::View*) { 
         return true; 
     
     });
@@ -1579,7 +1579,7 @@ void DataManagementPage::setupProgressOverlay()
     card->setAlignItems(brls::AlignItems::CENTER);
 
     m_progressTitleLabel = new brls::Label();
-    m_progressTitleLabel->setText("准备就绪");
+    m_progressTitleLabel->setText(L("准备就绪"));
     m_progressTitleLabel->setFontSize(24.f);
     m_progressTitleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
     m_progressTitleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -1694,12 +1694,12 @@ brls::View* DataManagementPage::buildScanImportTab()
     auto* scroll = makeScrollTab();
     auto* box = makeContentBox();
 
-    box->addView(makeHeader("扫描目录并导入"));
+    box->addView(makeHeader(L("扫描目录并导入")));
 
     auto* scanBtn = new beiklive::DetailCell();
-    scanBtn->setLeftText("选择ROM目录并导入");
+    scanBtn->setLeftText(L("选择ROM目录并导入"));
     scanBtn->setRightText("\uE14A");
-    scanBtn->registerAction("选择", brls::BUTTON_A, [this](brls::View*) -> bool {
+    scanBtn->registerAction(L("选择"), brls::BUTTON_A, [this](brls::View*) -> bool {
         if (m_importing.load(std::memory_order_acquire))
             return true;
         selectRomDir();
@@ -1708,54 +1708,54 @@ brls::View* DataManagementPage::buildScanImportTab()
     box->addView(scanBtn);
     m_scanDefaultFocus = scanBtn;
 
-    box->addView(makeHint("扫描时会根据下面的开关确认扫描对象，默认全部类型都导入，可按自己需要开关"));
+    box->addView(makeHint(L("扫描时会根据下面的开关确认扫描对象，默认全部类型都导入，可按自己需要开关")));
 
     auto* subDirSwitch = new brls::BooleanCell();
-    subDirSwitch->init("自动扫描子目录", m_autoSubDir, [this](bool on) { m_autoSubDir = on; });
+    subDirSwitch->init(L("自动扫描子目录"), m_autoSubDir, [this](bool on) { m_autoSubDir = on; });
     box->addView(subDirSwitch);
 
     auto* nameMapSwitch = new brls::BooleanCell();
-    nameMapSwitch->init("自动读取映射名称(如果存在)", m_useNameMapping, [this](bool on) { m_useNameMapping = on; });
+    nameMapSwitch->init(L("自动读取映射名称(如果存在)"), m_useNameMapping, [this](bool on) { m_useNameMapping = on; });
     box->addView(nameMapSwitch);
 
     auto* gbaSwitch = new brls::BooleanCell();
-    gbaSwitch->init("扫描GBA游戏", m_scanGBA, [this](bool on) { m_scanGBA = on; });
+    gbaSwitch->init(L("扫描GBA游戏"), m_scanGBA, [this](bool on) { m_scanGBA = on; });
     box->addView(gbaSwitch);
 
     auto* gbcSwitch = new brls::BooleanCell();
-    gbcSwitch->init("扫描GBC游戏", m_scanGBC, [this](bool on) { m_scanGBC = on; });
+    gbcSwitch->init(L("扫描GBC游戏"), m_scanGBC, [this](bool on) { m_scanGBC = on; });
     box->addView(gbcSwitch);
 
     auto* gbSwitch = new brls::BooleanCell();
-    gbSwitch->init("扫描GB游戏", m_scanGB, [this](bool on) { m_scanGB = on; });
+    gbSwitch->init(L("扫描GB游戏"), m_scanGB, [this](bool on) { m_scanGB = on; });
     box->addView(gbSwitch);
 
     auto* nesSwitch = new brls::BooleanCell();
-    nesSwitch->init("扫描FC游戏", m_scanNES, [this](bool on) { m_scanNES = on; });
+    nesSwitch->init(L("扫描FC游戏"), m_scanNES, [this](bool on) { m_scanNES = on; });
     box->addView(nesSwitch);
 
     auto* snesSwitch = new brls::BooleanCell();
-    snesSwitch->init("扫描SFC游戏", m_scanSNES, [this](bool on) { m_scanSNES = on; });
+    snesSwitch->init(L("扫描SFC游戏"), m_scanSNES, [this](bool on) { m_scanSNES = on; });
     box->addView(snesSwitch);
 
     auto* ndsSwitch = new brls::BooleanCell();
-    ndsSwitch->init("扫描NDS游戏", m_scanNDS, [this](bool on) { m_scanNDS = on; });
+    ndsSwitch->init(L("扫描NDS游戏"), m_scanNDS, [this](bool on) { m_scanNDS = on; });
     box->addView(ndsSwitch);
 
     auto* threeDsSwitch = new brls::BooleanCell();
-    threeDsSwitch->init("扫描3DS游戏", m_scan3DS, [this](bool on) { m_scan3DS = on; });
+    threeDsSwitch->init(L("扫描3DS游戏"), m_scan3DS, [this](bool on) { m_scan3DS = on; });
     box->addView(threeDsSwitch);
 
     auto* genesisSwitch = new brls::BooleanCell();
-    genesisSwitch->init("扫描MD游戏", m_scanGenesis, [this](bool on) { m_scanGenesis = on; });
+    genesisSwitch->init(L("扫描MD游戏"), m_scanGenesis, [this](bool on) { m_scanGenesis = on; });
     box->addView(genesisSwitch);
 
     auto* arcadeSwitch = new brls::BooleanCell();
-    arcadeSwitch->init("扫描Arcade游戏", m_scanArcade, [this](bool on) { m_scanArcade = on; });
+    arcadeSwitch->init(L("扫描Arcade游戏"), m_scanArcade, [this](bool on) { m_scanArcade = on; });
     box->addView(arcadeSwitch);
 
     auto* dcSwitch = new brls::BooleanCell();
-    dcSwitch->init("扫描DC游戏", m_scanDreamcast, [this](bool on) { m_scanDreamcast = on; });
+    dcSwitch->init(L("扫描DC游戏"), m_scanDreamcast, [this](bool on) { m_scanDreamcast = on; });
     box->addView(dcSwitch);
 
 
@@ -1777,37 +1777,37 @@ brls::View* DataManagementPage::buildBundleImportTab()
 
     auto* scroll = makeScrollTab();
     auto* box = makeContentBox();
-    box->addView(makeHeader("导入 RetroArch 整合包"));
+    box->addView(makeHeader(L("导入 RetroArch 整合包")));
 
     struct LplButtonConfig
     {
-        const char* text;
-        const char* icon;
+        std::string text;
+        std::string icon;
         int platform;
     };
 
     const LplButtonConfig configs[] = {
-        {"选择GBA游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA)},
-        {"选择GBC游戏的lpl文件",  "img/ui/icon_gb.png",  static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC)},
-        {"选择GB游戏的lpl文件",   "img/ui/icon_gb.png",  static_cast<int>(beiklive::enums::EmuPlatform::EmuGB)},
-        {"选择FC游戏的lpl文件",   "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNES)},
-        {"选择SFC游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES)},
-        {"选择NDS游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)},
-        {"选择3DS游戏的lpl文件",  "img/ui/3ds.png", static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)},
-        {"选择MD游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)},
-        {"选择Arcade游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade)},
-        {"选择DC游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)},
-        {"选择PSP游戏的lpl文件",  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)},
+        {L("选择GBA游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA)},
+        {L("选择GBC游戏的lpl文件"),  "img/ui/icon_gb.png",  static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC)},
+        {L("选择GB游戏的lpl文件"),   "img/ui/icon_gb.png",  static_cast<int>(beiklive::enums::EmuPlatform::EmuGB)},
+        {L("选择FC游戏的lpl文件"),   "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNES)},
+        {L("选择SFC游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES)},
+        {L("选择NDS游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)},
+        {L("选择3DS游戏的lpl文件"),  "img/ui/3ds.png", static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)},
+        {L("选择MD游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)},
+        {L("选择Arcade游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade)},
+        {L("选择DC游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)},
+        {L("选择PSP游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)},
     };
     
-    box->addView(makeHint("lpl 文件通常位于 RetroArch 的 playlists 目录下，不懂lpl文件语法规则不要自行删改"));
+    box->addView(makeHint(L("lpl 文件通常位于 RetroArch 的 playlists 目录下，不懂lpl文件语法规则不要自行删改")));
     for (size_t i = 0; i < sizeof(configs) / sizeof(configs[0]); ++i)
     {
         const auto& config = configs[i];
         auto* btn = new beiklive::DetailCell();
         btn->setLeftText(config.text);
         btn->setRightText("\uE14A");
-        btn->registerAction("选择", brls::BUTTON_A, [this, config](brls::View*) -> bool {
+        btn->registerAction(L("选择"), brls::BUTTON_A, [this, config](brls::View*) -> bool {
             if (m_importing.load(std::memory_order_acquire))
                 return true;
             onSelectLpl(config.platform);
@@ -1839,41 +1839,41 @@ brls::View* DataManagementPage::buildDataProcessingTab()
     auto* scroll = makeScrollTab();
     auto* box = makeContentBox();
 
-    box->addView(makeHeader("库数据处理"));
+    box->addView(makeHeader(L("库数据处理")));
 
     auto* webCell = new beiklive::DetailCell();
-    webCell->setLeftText("启动 Web 管理服务");
+    webCell->setLeftText(L("启动 Web 管理服务"));
     webCell->setRightText("\uE14A");
-    webCell->registerAction("启动", brls::BUTTON_A, [this](brls::View*) -> bool {
+    webCell->registerAction(L("启动"), brls::BUTTON_A, [this](brls::View*) -> bool {
         startWebService();
         return true;
     });
     box->addView(webCell);
     m_processDefaultFocus = webCell;
 
-    box->addView(makeHint("启动后可在同一局域网浏览器中管理游戏库、上传 ROM、导入存档和修改封面。"));
+    box->addView(makeHint(L("启动后可在同一局域网浏览器中管理游戏库、上传 ROM、导入存档和修改封面。")));
 
     auto* cleanCell = new beiklive::DetailCell();
-    cleanCell->setLeftText("从库中移除无效游戏");
+    cleanCell->setLeftText(L("从库中移除无效游戏"));
     cleanCell->setRightText("\uE14A");
-    cleanCell->registerAction("打开", brls::BUTTON_A, [this](brls::View*) -> bool {
+    cleanCell->registerAction(L("打开"), brls::BUTTON_A, [this](brls::View*) -> bool {
         removeInvalidGames();
         return true;
     });
     box->addView(cleanCell);
 
-    box->addView(makeHint("移除游戏库中仍有记录，但 ROM 文件已经不存在的游戏。"));
+    box->addView(makeHint(L("移除游戏库中仍有记录，但 ROM 文件已经不存在的游戏。")));
 
     auto* clearCell = new beiklive::DetailCell();
-    clearCell->setLeftText("清空游戏库");
+    clearCell->setLeftText(L("清空游戏库"));
     clearCell->setRightText("\uE14A");
-    clearCell->registerAction("打开", brls::BUTTON_A, [this](brls::View*) -> bool {
+    clearCell->registerAction(L("打开"), brls::BUTTON_A, [this](brls::View*) -> bool {
         clearGameLibrary();
         return true;
     });
     box->addView(clearCell);
 
-    box->addView(makeHint("此功能不会删除游戏文件和存档，仅清空 GBAStation/data 下的游戏库数据。"));
+    box->addView(makeHint(L("此功能不会删除游戏文件和存档，仅清空 GBAStation/data 下的游戏库数据。")));
 
     scroll->setContentView(box);
 
@@ -1950,11 +1950,11 @@ void DataManagementPage::onSelectLpl(int platform)
                         fileNameFromPath(selectedPath),
                         beiklive::tools::platformName(platform));
                     auto* dialog = new brls::Dialog(content);
-                    dialog->addButton("取消", [this]() {
+                    dialog->addButton(L("取消"), [this]() {
                         restoreFocusAfterModal();
                     });
                     dialog->addButton(
-                        "确定导入", [this, selectedPath, platform]() {
+                        L("确定导入"), [this, selectedPath, platform]() {
                             startImport(selectedPath, platform);
                         });
                     dialog->open();
@@ -1966,7 +1966,7 @@ void DataManagementPage::onSelectLpl(int platform)
     auto* container = new brls::Box(brls::Axis::COLUMN);
     container->setGrow(1.0f);
     container->addView(flPage);
-    container->registerAction("关闭"_i18n, brls::BUTTON_START,
+    container->registerAction(L("关闭"), brls::BUTTON_START,
                               [flPage](brls::View*) {
                                   flPage->requestClose();
                                   return true;
@@ -1984,7 +1984,7 @@ void DataManagementPage::onSelectLpl(int platform)
 void DataManagementPage::startImport(const std::string& lplPath, int platform)
 {
     m_progressTask = ProgressTask::Import;
-    resetProgressUi("正在解析LPL文件...");
+    resetProgressUi(L("正在解析LPL文件..."));
     finishWorker();
 
     std::string realPath = expandTilde(lplPath);
@@ -1993,7 +1993,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
     {
         hideProgressOverlay();
         rememberFocusBeforeModal();
-        auto* dialog = new brls::Dialog("无法打开LPL文件");
+        auto* dialog = new brls::Dialog(L("无法打开LPL文件"));
         dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
         dialog->open();
         return;
@@ -2011,7 +2011,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
     {
         hideProgressOverlay();
         rememberFocusBeforeModal();
-        auto* dialog = new brls::Dialog("LPL文件解析失败");
+        auto* dialog = new brls::Dialog(L("LPL文件解析失败"));
         dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
         dialog->open();
         return;
@@ -2021,7 +2021,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
     {
         hideProgressOverlay();
         rememberFocusBeforeModal();
-        auto* dialog = new brls::Dialog("LPL文件无数据");
+        auto* dialog = new brls::Dialog(L("LPL文件无数据"));
         dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
         dialog->open();
         return;
@@ -2033,11 +2033,11 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
         hideProgressOverlay();
         rememberFocusBeforeModal();
         auto* dialog = new brls::Dialog(
-            "选择错误\n\n当前选择的是 " +
+            L("选择错误\n\n当前选择的是 ") +
             beiklive::tools::platformName(platform) +
-            " 游戏的lpl导入按钮，但文件中的游戏类型是 " +
+            L(" 游戏的lpl导入按钮，但文件中的游戏类型是 ") +
             beiklive::tools::platformName(unexpectedPlatform) +
-            "。\n请返回后选择对应类型的按钮。");
+            L("。\n请返回后选择对应类型的按钮。"));
         dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
         dialog->open();
         return;
@@ -2054,7 +2054,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
 
     m_total.store(static_cast<int>(importItems.size()), std::memory_order_release);
     m_progressCountLabel->setText("0 / " + std::to_string(importItems.size()));
-    m_progressTitleLabel->setText("正在导入游戏数据，请勿操作");
+    m_progressTitleLabel->setText(L("正在导入游戏数据，请勿操作"));
 
     ImportSharedConfig config = buildSharedConfig(platform);
     m_importing.store(true, std::memory_order_release);
@@ -2156,7 +2156,7 @@ void DataManagementPage::selectRomDir()
 {
     auto* flPage = new beiklive::FileListPage();
     flPage->setDirSelectionMode(true);
-    flPage->registerAction("选择目录", brls::BUTTON_Y, [this, flPage](brls::View*) -> bool {
+    flPage->registerAction(L("选择目录"), brls::BUTTON_Y, [this, flPage](brls::View*) -> bool {
         std::string dirPath = flPage->getHeader()->getPath();
         if (dirPath.empty())
             return true;
@@ -2169,7 +2169,7 @@ void DataManagementPage::selectRomDir()
     auto* container = new brls::Box(brls::Axis::COLUMN);
     container->setGrow(1.0f);
     container->addView(flPage);
-    container->registerAction("关闭", brls::BUTTON_START,
+    container->registerAction(L("关闭"), brls::BUTTON_START,
                               [](brls::View*) { brls::Application::popActivity(); return true; });
 
     auto* frame = new brls::AppletFrame(container);
@@ -2184,7 +2184,7 @@ void DataManagementPage::selectRomDir()
 void DataManagementPage::startDirImport(const std::string& dirPath)
 {
     m_progressTask = ProgressTask::Import;
-    resetProgressUi("正在扫描ROM文件...");
+    resetProgressUi(L("正在扫描ROM文件..."));
     finishWorker();
 
     std::unordered_set<std::string> exts;
@@ -2322,13 +2322,13 @@ void DataManagementPage::removeInvalidGames()
     rememberFocusBeforeModal();
 
     auto* dialog = new brls::Dialog(
-        "确定要从游戏库中移除无效游戏吗？\n\n此操作将删除数据库中 ROM 文件已不存在的游戏记录。");
+        L("确定要从游戏库中移除无效游戏吗？\n\n此操作将删除数据库中 ROM 文件已不存在的游戏记录。"));
     dialog->addButton("取消", [this]() { restoreFocusAfterModal(); });
-    dialog->addButton("确认移除", [this]() {
+    dialog->addButton(L("确认移除"), [this]() {
         m_progressTask = ProgressTask::Cleanup;
-        resetProgressUi("正在扫描无效游戏...");
+        resetProgressUi(L("正在扫描无效游戏..."));
         finishWorker();
-        m_progressTitleLabel->setText("正在扫描无效游戏，请勿操作");
+        m_progressTitleLabel->setText(L("正在扫描无效游戏，请勿操作"));
         m_importing.store(true, std::memory_order_release);
 
         m_importThread = std::thread([this]() {
@@ -2380,12 +2380,12 @@ void DataManagementPage::clearGameLibrary()
 {
     rememberFocusBeforeModal();
 
-    auto* firstDialog = new brls::Dialog("确定要清空游戏库吗？");
+    auto* firstDialog = new brls::Dialog(L("确定要清空游戏库吗？"));
     firstDialog->addButton("取消", [this]() { restoreFocusAfterModal(); });
-    firstDialog->addButton("确定", [this]() {
-        auto* secondDialog = new brls::Dialog("真的要清空游戏库吗？\n数据都会丢失哦。");
+    firstDialog->addButton(L("确定"), [this]() {
+        auto* secondDialog = new brls::Dialog(L("真的要清空游戏库吗？\n数据都会丢失哦。"));
         secondDialog->addButton("取消", [this]() { restoreFocusAfterModal(); });
-        secondDialog->addButton("确定", [this]() {
+        secondDialog->addButton(L("确定"), [this]() {
             bool success = true;
 
             if (beiklive::GameDB)
@@ -2394,7 +2394,7 @@ void DataManagementPage::clearGameLibrary()
             success = clearDirectoryContents(beiklive::path::databasePath()) && success;
 
             restoreFocusAfterModal();
-            brls::Application::notify(success ? "游戏库数据已清空" : "清空游戏库时发生错误");
+            brls::Application::notify(success ? L("游戏库数据已清空") : L("清空游戏库时发生错误"));
         });
         secondDialog->open();
     });
@@ -2407,7 +2407,7 @@ void DataManagementPage::launchCiaInstaller()
         return;
 
 #ifndef __SWITCH__
-    brls::Application::notify("CIA安装器仅支持Switch");
+    brls::Application::notify(L("CIA安装器仅支持Switch"));
 #else
     exportThreeDsCoreConfigForDataPage();
     const std::string nroPath = GET_SETTING_KEY_STR(
@@ -2424,12 +2424,12 @@ void DataManagementPage::launchCiaInstaller()
     if (!result.success)
     {
         brls::Logger::error("3DS CIA installer launch failed: {}", result.message);
-        brls::Application::notify("CIA安装器启动失败：" + result.message);
+        brls::Application::notify(L("CIA安装器启动失败：") + result.message);
         return;
     }
 
     brls::Logger::info("3DS CIA installer configured: {}", result.message);
-    brls::Application::notify("正在启动CIA安装器...");
+    brls::Application::notify(L("正在启动CIA安装器..."));
     brls::sync([]() { brls::Application::quit(); });
 #endif
 }
@@ -2442,9 +2442,9 @@ void DataManagementPage::startWebService()
     {
         rememberFocusBeforeModal();
         auto* dialog = new brls::Dialog(
-            "Web 管理服务启动失败\n\n" +
+            L("Web 管理服务启动失败\n\n") +
             beiklive::network::WebService::LastError() +
-            "\n\n请确认网络已连接，端口未被占用。");
+            L("\n\n请确认网络已连接，端口未被占用。"));
         dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
         dialog->open();
         return;
@@ -2463,7 +2463,7 @@ void DataManagementPage::startWebService()
                         style["brls/dialog/paddingLeftRight"]);
 
     auto* title = new brls::Label();
-    title->setText("Web 管理服务已启动");
+    title->setText(L("Web 管理服务已启动"));
     title->setFontSize(style["brls/dialog/fontSize"]);
     title->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     title->setSingleLine(false);
@@ -2474,7 +2474,7 @@ void DataManagementPage::startWebService()
     content->addView(qr);
 
     auto* address = new brls::Label();
-    address->setText("访问地址:\n" + url);
+    address->setText(L("访问地址:\n") + url);
     address->setFontSize(style["brls/dialog/fontSize"] * 0.82f);
     address->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     address->setSingleLine(false);
@@ -2482,7 +2482,7 @@ void DataManagementPage::startWebService()
 
     auto* hint = new brls::Label();
     hint->setText("\n" + beiklive::network::WebService::KeepAwakeMessage() +
-                  "\n关闭此窗口会停止 Web 服务");
+                  L("\n关闭此窗口会停止 Web 服务"));
     hint->setFontSize(style["brls/dialog/fontSize"] * 0.72f);
     hint->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     hint->setSingleLine(false);
@@ -2490,7 +2490,7 @@ void DataManagementPage::startWebService()
 
     auto* dialog = new brls::Dialog(content);
     dialog->setCancelable(false);
-    dialog->addButton("关闭服务", [this]() {
+    dialog->addButton(L("关闭服务"), [this]() {
         beiklive::network::WebService::Stop();
         restoreFocusAfterModal();
     });

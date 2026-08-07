@@ -194,7 +194,7 @@ bool launchDirectGameActivity(const std::string& romPath)
 				[](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 			if (extension == ".zip" || extension == ".7z")
 			{
-				brls::Application::notify("DC外部核心不能直接运行压缩包，请先解压为CHD/GDI/CDI/CUE");
+				brls::Application::notify(L("DC外部核心不能直接运行压缩包，请先解压为CHD/GDI/CDI/CUE"));
 				return false;
 			}
 		}
@@ -212,7 +212,7 @@ bool launchDirectGameActivity(const std::string& romPath)
 		if (!result.success)
 		{
 			brls::Logger::error("Direct {} NRO launch failed: {}", label, result.message);
-			brls::Application::notify(std::string(label) + "独立NRO启动失败：" + result.message);
+			brls::Application::notify(std::string(label) + L("独立NRO启动失败：") + result.message);
 			return false;
 		}
 
@@ -235,7 +235,7 @@ bool launchDirectGameActivity(const std::string& romPath)
 		if (!result.success)
 		{
 			brls::Logger::error("Direct 3DS NRO launch failed: {}", result.message);
-			brls::Application::notify("3DS独立NRO启动失败：" + result.message);
+			brls::Application::notify(L("3DS独立NRO启动失败：") + result.message);
 			return false;
 		}
 		brls::Logger::info("Direct 3DS NRO launch configured: {}", result.message);
@@ -427,7 +427,7 @@ int main(int argc, char* argv[]) {
 			brls::sync([&updater]() {
 				auto& info = updater.info();
 				if (info.hasUpdate) {
-					brls::Application::notify("新版本 " + info.version + " 可用，请到关于界面更新");
+					brls::Application::notify(L("新版本 ") + info.version + L(" 可用，请到关于界面更新"));
 				}
 			});
 		});

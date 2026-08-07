@@ -312,7 +312,7 @@ public:
 
         // 标题
         auto* titleLabel = new brls::Label();
-        titleLabel->setText("按键捕获");
+        titleLabel->setText(L("按键捕获"));
         titleLabel->setFontSize(26.f);
         titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
         titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -329,7 +329,7 @@ public:
 
         // 提示文字
         m_promptLabel = new brls::Label();
-        m_promptLabel->setText("按下要绑定的按键(支持组合键)");
+        m_promptLabel->setText(L("按下要绑定的按键(支持组合键)"));
         m_promptLabel->setFontSize(17.f);
         m_promptLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
         m_promptLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -366,7 +366,7 @@ public:
         // 倒计时文字
         m_countdownLabel = new brls::Label();
         std::ostringstream oss;
-        oss << std::fixed << std::setprecision(2) << m_countdownSeconds << " 秒";
+        oss << std::fixed << std::setprecision(2) << m_countdownSeconds << L(" 秒");
         m_countdownLabel->setText(oss.str());
         m_countdownLabel->setFontSize(16.f);
         m_countdownLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
@@ -377,7 +377,7 @@ public:
 
         // 提示
         m_hintLabel = new brls::Label();
-        m_hintLabel->setText("松开所有按键以开始捕获  |  最多 2 个按键");
+        m_hintLabel->setText(L("松开所有按键以开始捕获  |  最多 2 个按键"));
         m_hintLabel->setFontSize(14.f);
         m_hintLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
         m_hintLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
@@ -444,19 +444,19 @@ public:
             {
                 checkAllReleased();
                 m_startTime = std::chrono::steady_clock::now();
-                m_visualPrompt = "松开所有已按下的按键";
-                m_visualHint = "松开后开始捕获，最多可同时绑定 2 个按键";
+                m_visualPrompt = L("松开所有已按下的按键");
+                m_visualHint = L("松开后开始捕获，最多可同时绑定 2 个按键");
                 m_barProgress = 1.f;
                 m_barColor = nvgRGB(255, 183, 77);
-                m_promptLabel->setText("松开所有已按下的按键...");
+                m_promptLabel->setText(L("松开所有已按下的按键..."));
                 m_promptLabel->setTextColor(nvgRGB(255, 183, 77));
                 m_hintLabel->setVisibility(brls::Visibility::VISIBLE);
             }
             else
             {
-                m_visualPrompt = "按下要绑定的按键";
-                m_visualHint = "支持手柄、摇杆方向、键盘和双键组合";
-                m_promptLabel->setText("按下要绑定的按键...");
+                m_visualPrompt = L("按下要绑定的按键");
+                m_visualHint = L("支持手柄、摇杆方向、键盘和双键组合");
+                m_promptLabel->setText(L("按下要绑定的按键..."));
                 m_promptLabel->setTextColor(GET_THEME_COLOR("brls/text_disabled"));
                 m_hintLabel->setVisibility(brls::Visibility::GONE);
 
@@ -474,7 +474,7 @@ public:
                 else
                 {
                     std::ostringstream oss;
-                    oss << std::fixed << std::setprecision(2) << remaining << " 秒后自动确认";
+                    oss << std::fixed << std::setprecision(2) << remaining << L(" 秒后自动确认");
                     m_countdownLabel->setText(oss.str());
 
                     // 更新进度条宽度
@@ -521,8 +521,8 @@ private:
     bool m_waitingForRelease = true;
     std::vector<std::string> m_capturedKeys;
     std::string m_captured;
-    std::string m_visualPrompt = "松开所有已按下的按键";
-    std::string m_visualHint = "松开后开始捕获，最多可同时绑定 2 个按键";
+    std::string m_visualPrompt = L("松开所有已按下的按键");
+    std::string m_visualHint = L("松开后开始捕获，最多可同时绑定 2 个按键");
     float m_barProgress = 1.f;
     float m_keyPulse = 0.f;
     NVGcolor m_barColor = nvgRGB(79, 193, 255);
@@ -777,10 +777,10 @@ private:
         nvgFontSize(vg, 27.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
-        nvgText(vg, panelX + 34.f, panelY + 42.f, L("按键捕获"), nullptr);
+        nvgText(vg, panelX + 34.f, panelY + 42.f, L("按键捕获").c_str(), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(195, 204, 217, 170));
-        nvgText(vg, panelX + 34.f, panelY + 70.f, L("当前绑定会在倒计时结束后确认"), nullptr);
+        nvgText(vg, panelX + 34.f, panelY + 70.f, L("当前绑定会在倒计时结束后确认").c_str(), nullptr);
         nvgBeginPath(vg);
         nvgMoveTo(vg, panelX + 30.f, panelY + 92.f);
         nvgLineTo(vg, panelX + panelW - 30.f, panelY + 92.f);
@@ -842,7 +842,7 @@ private:
         nvgFontSize(vg, 14.f);
         nvgFillColor(vg, nvgRGBA(180, 190, 204, 130));
         nvgText(vg, panelX + panelW * 0.5f, panelY + 354.f,
-            "保持按键组合，松开后等待自动确认", nullptr);
+            L("保持按键组合，松开后等待自动确认").c_str(), nullptr);
         nvgRestore(vg);
     }
 
@@ -855,7 +855,7 @@ private:
         {
             m_keyLabel->setText(result);
             m_keyLabel->setTextColor(nvgRGB(79, 193, 255));
-            m_countdownLabel->setText("已确认");
+            m_countdownLabel->setText(L("已确认"));
             m_countdownLabel->setTextColor(nvgRGB(129, 199, 132));
             m_progressBar->setWidth(240.f);
             m_progressBar->setColor(nvgRGB(129, 199, 132));
@@ -914,9 +914,9 @@ public:
         if (m_switchFont < 0)
             m_switchFont = brls::Application::getFont(brls::FONT_SWITCH_ICONS);
         float cursor = x + w - 32.f;
-        _drawHint(vg, brls::BUTTON_B, m_contentMode ? "返回分类" : "返回",
+        _drawHint(vg, brls::BUTTON_B, m_contentMode ? L("返回分类").c_str() : L("返回").c_str(),
                   cursor, y + h * 0.5f);
-        _drawHint(vg, brls::BUTTON_A, m_contentMode ? "修改" : "进入",
+        _drawHint(vg, brls::BUTTON_A, m_contentMode ? L("修改").c_str() : L("进入").c_str(),
                   cursor, y + h * 0.5f);
     }
 
@@ -973,7 +973,7 @@ public:
         registerAction("", brls::BUTTON_RIGHT, next, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_LEFT, previous, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_RIGHT, next, true, true, brls::SOUND_NONE);
-        registerAction("进入", brls::BUTTON_A, [this](brls::View*) -> bool {
+        registerAction(L("进入"), brls::BUTTON_A, [this](brls::View*) -> bool {
             if (m_onEnter) m_onEnter();
             return true;
         }, false, false, brls::SOUND_NONE);
@@ -981,7 +981,7 @@ public:
             if (m_onEnter) m_onEnter();
             return true;
         }, false, true, brls::SOUND_NONE);
-        registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+        registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
             if (m_onBack) m_onBack();
             return true;
         }, false, false, brls::SOUND_NONE);
@@ -1021,10 +1021,10 @@ public:
         nvgFontSize(vg, 27.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 36.f, y + 43.f, L("设置"), nullptr);
+        nvgText(vg, x + 36.f, y + 43.f, L("设置").c_str(), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
-        nvgText(vg, x + 36.f, y + 72.f, L("模拟器、画面、声音与输入配置"), nullptr);
+        nvgText(vg, x + 36.f, y + 72.f, L("模拟器、画面、声音与输入配置").c_str(), nullptr);
 
         const float centerY = y + 45.f;
         const float startX = x + 250.f;
@@ -1181,7 +1181,7 @@ public:
         surface->addView(view);
         surface->setVisibility(index == 0 ? brls::Visibility::VISIBLE
                                           : brls::Visibility::GONE);
-        surface->registerAction("返回分类", brls::BUTTON_B,
+        surface->registerAction(L("返回分类"), brls::BUTTON_B,
             [this](brls::View*) -> bool {
                 _leaveContent();
                 return true;
@@ -1383,17 +1383,17 @@ public:
         registerAction("", brls::BUTTON_NAV_DOWN, down, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_LEFT, left, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_RIGHT, right, true, true, brls::SOUND_NONE);
-        registerAction("上一类", brls::BUTTON_LB, previousCategory, true, false, brls::SOUND_NONE);
-        registerAction("下一类", brls::BUTTON_RB, nextCategory, true, false, brls::SOUND_NONE);
-        registerAction("选择", brls::BUTTON_A, [this](brls::View*) -> bool {
+        registerAction(L("上一类"), brls::BUTTON_LB, previousCategory, true, false, brls::SOUND_NONE);
+        registerAction(L("下一类"), brls::BUTTON_RB, nextCategory, true, false, brls::SOUND_NONE);
+        registerAction(L("选择"), brls::BUTTON_A, [this](brls::View*) -> bool {
             _activate();
             return true;
         }, false, false, brls::SOUND_NONE);
-        registerAction("清除", brls::BUTTON_X, [this](brls::View*) -> bool {
+        registerAction(L("清除"), brls::BUTTON_X, [this](brls::View*) -> bool {
             _clearBinding();
             return true;
         }, false, false, brls::SOUND_NONE);
-        registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+        registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
             _back();
             return true;
         }, false, false, brls::SOUND_NONE);
@@ -1477,8 +1477,8 @@ private:
 
     NanoSettingsHost m_host;
     std::array<Category, 6> m_categories{{
-        {"模拟器", 0xE322, {}}, {"按键", 0xE30F, {}}, {"游戏", 0xE338, {}},
-        {"显示", 0xE333, {}}, {"声音", 0xE050, {}}, {"调试", 0xE868, {}}
+        {L("模拟器"), 0xE322, {}}, {L("按键"), 0xE30F, {}}, {L("游戏"), 0xE338, {}},
+        {L("显示"), 0xE333, {}}, {L("声音"), 0xE050, {}}, {L("调试"), 0xE868, {}}
     }};
     std::vector<NanoSettingItem> m_mappingItems;
     std::vector<NanoSettingItem> m_coreItems;
@@ -1556,7 +1556,7 @@ private:
         item.hint = hint;
         item.icon = icon;
         // value 保持中文原值用于 _drawItem 的开关判断；显示时由渲染层 L() 翻译。
-        item.value = [get]() { return get() ? "开启" : "关闭"; };
+        item.value = [get]() { return get() ? L("开启") : L("关闭"); };
         item.activate = [get, set]() { set(!get()); };
         return item;
     }
@@ -1602,71 +1602,71 @@ private:
         cfgSetBool("input.joystick.enabled", true);
         cfgSetBool("input.joystick.diagonal", true);
         auto& emulator = m_categories[0].items;
-        emulator.push_back(_section("核心设置"));
+        emulator.push_back(_section(L("核心设置")));
         auto addCore = [this, &emulator](const std::string& title,
                                          const std::string& coreName,
                                          char32_t icon,
                                          std::function<void()> open) {
-            emulator.push_back(_action(title, "配置 " + coreName + " 核心参数", icon,
+            emulator.push_back(_action(title, L("配置 ") + coreName + L(" 核心参数"), icon,
                 [coreName]() { return coreName + "  >"; }, std::move(open)));
         };
-        addCore("GBA 核心", "mGBA", 0xE30F, [this]() { _openMgbaCore(); });
-        addCore("NDS 核心", "melonDS", 0xE322, [this]() { _openMelonDsCore(); });
-        addCore("3DS 核心", "Azahar", 0xE30F, [this]() { _openThreeDsCore(); });
-        addCore("FC/NES 核心", "Nestopia", 0xE333,
-                [this]() { _openLibretroCore("Nestopia 核心设置", CoreType::Nestopia); });
+        addCore(L("GBA 核心"), "mGBA", 0xE30F, [this]() { _openMgbaCore(); });
+        addCore(L("NDS 核心"), "melonDS", 0xE322, [this]() { _openMelonDsCore(); });
+        addCore(L("3DS 核心"), "Azahar", 0xE30F, [this]() { _openThreeDsCore(); });
+        addCore(L("FC/NES 核心"), "Nestopia", 0xE333,
+                [this]() { _openLibretroCore(L("Nestopia 核心设置"), CoreType::Nestopia); });
         LibretroLoader::discoverCoreOptions(CoreType::Fceumm, beiklive::SettingManager);
         if (!LibretroLoader::coreOptions(CoreType::Fceumm).empty()) {
-            addCore("FC/NES 核心", "FCEUmm", 0xE333,
-                    [this]() { _openLibretroCore("FCEUmm 核心设置", CoreType::Fceumm); });
+            addCore(L("FC/NES 核心"), "FCEUmm", 0xE333,
+                    [this]() { _openLibretroCore(L("FCEUmm 核心设置"), CoreType::Fceumm); });
         }
-        addCore("SFC 核心", "Snes9x", 0xE338,
-                [this]() { _openLibretroCore("Snes9x 核心设置", CoreType::Snes9x); });
-        addCore("SFC 核心", "Snes9x 2005", 0xE338,
-                [this]() { _openLibretroCore("Snes9x 2005 核心设置", CoreType::Snes9x2005); });
-        addCore("GB/GBC 核心", "GameBattle", 0xE30F,
-                [this]() { _openLibretroCore("GameBattle 核心设置", CoreType::Gambatte); });
-        addCore("MD 核心", "Genesis Plus GX", 0xE338,
+        addCore(L("SFC 核心"), "Snes9x", 0xE338,
+                [this]() { _openLibretroCore(L("Snes9x 核心设置"), CoreType::Snes9x); });
+        addCore(L("SFC 核心"), "Snes9x 2005", 0xE338,
+                [this]() { _openLibretroCore(L("Snes9x 2005 核心设置"), CoreType::Snes9x2005); });
+        addCore(L("GB/GBC 核心"), "GameBattle", 0xE30F,
+                [this]() { _openLibretroCore(L("GameBattle 核心设置"), CoreType::Gambatte); });
+        addCore(L("MD 核心"), "Genesis Plus GX", 0xE338,
                 [this]() { _openGenesisCore(); });
-        addCore("Arcade 核心", "FBNeo", 0xE30F,
+        addCore(L("Arcade 核心"), "FBNeo", 0xE30F,
                 [this]() { _openFbneoCore(); });
-        addCore("Dreamcast 核心", "Flycast", 0xE30F,
+        addCore(L("Dreamcast 核心"), "Flycast", 0xE30F,
                 [this]() { _openFlycastCore(); });
-        addCore("PSP 核心", "PPSSPP", 0xE30F,
+        addCore(L("PSP 核心"), "PPSSPP", 0xE30F,
                 [this]() { _openPpssppCore(); });
 
-        emulator.push_back(_section("存档与封面"));
-        emulator.push_back(_selector("SRAM 存档目录", "选择 SRAM 与 ROM 同目录或模拟器统一目录", beiklive::material::STORAGE,
-            {"ROM 所在目录", "模拟器目录"},
+        emulator.push_back(_section(L("存档与封面")));
+        emulator.push_back(_selector(L("SRAM 存档目录"), L("选择 SRAM 与 ROM 同目录或模拟器统一目录"), beiklive::material::STORAGE,
+            {L("ROM 所在目录"), L("模拟器目录")},
             []() { return cfgGetStr("save.sramDir", "").empty() ? 0 : 1; },
             [](int i) { cfgSetStr("save.sramDir", i == 0 ? "" : beiklive::path::savePath()); }));
         const std::vector<std::string> slots = {
-            "关闭", "档位0", "档位1", "档位2", "档位3", "档位4", "档位5", "档位6", "档位7", "档位8", "档位9"};
-        emulator.push_back(_selector("自动保存游戏状态", "启动游戏后使用的自动存档档位", beiklive::material::SAVE, slots,
+            L("关闭"), L("档位0"), L("档位1"), L("档位2"), L("档位3"), L("档位4"), L("档位5"), L("档位6"), L("档位7"), L("档位8"), L("档位9")};
+        emulator.push_back(_selector(L("自动保存游戏状态"), L("启动游戏后使用的自动存档档位"), beiklive::material::SAVE, slots,
             []() { return std::clamp(cfgGetInt("save.autoSaveState", 0), 0, 10); },
             [](int i) { cfgSetInt("save.autoSaveState", i); }));
-        const std::vector<std::string> intervalLabels = {"关闭", "1 分钟", "3 分钟", "5 分钟", "10 分钟"};
+        const std::vector<std::string> intervalLabels = {L("关闭"), L("1 分钟"), L("3 分钟"), L("5 分钟"), L("10 分钟")};
         const std::vector<int> intervalValues = {0, 60, 180, 300, 600};
-        emulator.push_back(_selector("自动保存间隔", "定时创建即时存档，降低意外丢失进度的风险", 0xE425, intervalLabels,
+        emulator.push_back(_selector(L("自动保存间隔"), L("定时创建即时存档，降低意外丢失进度的风险"), 0xE425, intervalLabels,
             [intervalValues]() { const int cur = cfgGetInt("save.autoSaveInterval", 0); for (int i = 0; i < 5; ++i) if (intervalValues[i] == cur) return i; return 0; },
             [intervalValues](int i) { if (i >= 0 && i < 5) cfgSetInt("save.autoSaveInterval", intervalValues[i]); }));
-        emulator.push_back(_selector("启动时自动加载", "进入游戏时自动读取指定即时存档", beiklive::material::RESTORE, slots,
+        emulator.push_back(_selector(L("启动时自动加载"), L("进入游戏时自动读取指定即时存档"), beiklive::material::RESTORE, slots,
             []() { return std::clamp(cfgGetInt("save.autoLoadState0", 0), 0, 10); },
             [](int i) { cfgSetInt("save.autoLoadState0", i); }));
-        emulator.push_back(_selector("退出游戏时自动保存", "关闭游戏时写入指定即时存档", beiklive::material::BACKUP, slots,
+        emulator.push_back(_selector(L("退出游戏时自动保存"), L("关闭游戏时写入指定即时存档"), beiklive::material::BACKUP, slots,
             []() { return std::clamp(cfgGetInt("save.autoSaveOnExit", 0), 0, 10); },
             [](int i) { cfgSetInt("save.autoSaveOnExit", i); }));
-        emulator.push_back(_toggle("使用存档截图作为封面", "使用即时存档 0 的截图，且不会覆盖自定义封面", beiklive::material::PHOTO_LIBRARY,
+        emulator.push_back(_toggle(L("使用存档截图作为封面"), L("使用即时存档 0 的截图，且不会覆盖自定义封面"), beiklive::material::PHOTO_LIBRARY,
             []() { return cfgGetBool(KEY_UI_USE_SAVESTATE_THUMB, false); },
             [](bool v) { cfgSetBool(KEY_UI_USE_SAVESTATE_THUMB, v); }));
 
-        emulator.push_back(_section("界面"));
-        emulator.push_back(_toggle("动态渐变背景", "显示与主页一致的动态背景", 0xE3B7,
+        emulator.push_back(_section(L("界面")));
+        emulator.push_back(_toggle(L("动态渐变背景"), L("显示与主页一致的动态背景"), 0xE3B7,
             []() { return cfgGetBool(KEY_UI_SHOW_SHADER, false); },
             [this](bool v) { cfgSetBool(KEY_UI_SHOW_SHADER, v); if (m_host.showShader) m_host.showShader(v); }));
-        const std::vector<std::string> themeLabels = {"深夜蓝", "柠檬黄", "牛油果绿", "草莓红", "海洋蓝", "樱花粉", "VSCode黑"};
+        const std::vector<std::string> themeLabels = {L("深夜蓝"), L("柠檬黄"), L("牛油果绿"), L("草莓红"), L("海洋蓝"), L("樱花粉"), L("VSCode黑")};
         const std::vector<std::string> themeValues = {"Midnight", "LemonYellow", "AvocadoGreen", "StrawberryRed", "OceanBlue", "SakuraPink", "VscodeBlack"};
-        emulator.push_back(_selector("渐变主题", "切换后立即应用到当前页面", 0xE40A, themeLabels,
+        emulator.push_back(_selector(L("渐变主题"), L("切换后立即应用到当前页面"), 0xE40A, themeLabels,
             [themeValues]() { return findIndex(themeValues, cfgGetStr(KEY_UI_GRADIENT_THEME, "VscodeBlack"), 6); },
             [this, themeValues](int i) {
                 if (i < 0 || i >= static_cast<int>(themeValues.size())) return;
@@ -1677,11 +1677,11 @@ private:
                     GradientTheme::SakuraPink, GradientTheme::VscodeBlack};
                 m_host.setGradientTheme(themes[i]);
             }));
-        emulator.push_back(_toggle("启用背景图片", "在动态背景上显示自定义 PNG 图片", beiklive::material::IMAGE,
+        emulator.push_back(_toggle(L("启用背景图片"), L("在动态背景上显示自定义 PNG 图片"), beiklive::material::IMAGE,
             []() { return cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false); },
             [this](bool v) { cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); if (m_host.showBackground) m_host.showBackground(v); }));
-        emulator.push_back(_action("背景图片路径", "从文件浏览器选择 PNG 图片", beiklive::material::IMAGE,
-            []() { const auto path = cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
+        emulator.push_back(_action(L("背景图片路径"), L("从文件浏览器选择 PNG 图片"), beiklive::material::IMAGE,
+            []() { const auto path = cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""); return path.empty() ? L("未设置") : beiklive::tools::getFileName(path); },
             [this]() {
                 const std::filesystem::path current(cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""));
                 beiklive::openFilePicker({"png"}, [this](const std::string& path) {
@@ -1690,17 +1690,17 @@ private:
                     invalidate();
                 }, current.parent_path().string(), current.filename().string());
             }));
-        emulator.push_back(_toggle("文件列表滚动动画", "关闭后文件列表会直接跳转", 0xE8D5,
+        emulator.push_back(_toggle(L("文件列表滚动动画"), L("关闭后文件列表会直接跳转"), 0xE8D5,
             []() { return cfgGetBool(KEY_FILE_LIST_SCROLL_ANIM, true); },
             [](bool v) { cfgSetBool(KEY_FILE_LIST_SCROLL_ANIM, v); }));
-        emulator.push_back(_selector("游戏库标题字号", "调整网格卡片标题的字号", 0xE245,
-            {"正常", "大", "超大"},
+        emulator.push_back(_selector(L("游戏库标题字号"), L("调整网格卡片标题的字号"), 0xE245,
+            {L("正常"), "大", L("超大")},
             []() { return std::clamp(cfgGetInt(KEY_UI_LIBRARY_TITLE_SIZE, 0), 0, 2); },
             [](int i) { cfgSetInt(KEY_UI_LIBRARY_TITLE_SIZE, i); }));
 
-        emulator.push_back(_section("语言 / Language"));
-        emulator.push_back(_selector("语言 / Language", "重启后生效 / Takes effect after restart", 0xE873,
-            {"简体中文", "English"},
+        emulator.push_back(_section(L("语言 / Language")));
+        emulator.push_back(_selector(L("语言 / Language"), L("重启后生效 / Takes effect after restart"), 0xE873,
+            {L("简体中文"), "English"},
             []() {
                 std::string lang = cfgGetStr(KEY_UI_LANGUAGE, "zh-CN");
                 return lang == "en-US" || lang == "en" ? 1 : 0;
@@ -1710,32 +1710,32 @@ private:
         emulator.push_back(_section("SteamGridDB"));
         emulator.push_back(_action(
             "SteamGridDB API Key",
-            "用于在线搜索游戏封面；密钥保存在 GBAStation/SteamGirdDB/api",
+            L("用于在线搜索游戏封面；密钥保存在 GBAStation/SteamGirdDB/api"),
             0xE0DA,
-            []() { return beiklive::steamgriddb::hasApiKey() ? "已输入  >" : "空  >"; },
+            []() { return beiklive::steamgriddb::hasApiKey() ? L("已输入  >") : "空  >"; },
             [this]() { _openSteamApiDialog(); }));
         emulator.push_back(_action(
-            "清空 SteamGridDB 缓存",
-            "清理本地 API 查询结果和已下载的预览图片",
+            L("清空 SteamGridDB 缓存"),
+            L("清理本地 API 查询结果和已下载的预览图片"),
             0xE872,
-            []() { return std::string("清理  >"); },
+            []() { return std::string(L("清理  >")); },
             [this]() { _beginSteamCacheClear(); }));
 
         auto& key = m_categories[1].items;
-        key.push_back(_section("游戏平台"));
-        struct Platform { const char* name; const char* prefix; const char* hint; bool nds; };
+        key.push_back(_section(L("游戏平台")));
+        struct Platform { std::string name; std::string prefix; std::string hint; bool nds; };
         static const Platform platforms[] = {
-            {"GBA 按键映射", "", "Game Boy Advance 游戏", false},
-            {"GBC 按键映射", "gbc.", "Game Boy Color 游戏", false},
-            {"GB 按键映射", "gb.", "Game Boy 游戏", false},
-            {"FC/NES 按键映射", "nes.", "Nintendo Entertainment System 游戏", false},
-            {"SFC 按键映射", "sfc.", "Super Famicom 游戏", false},
-            {"NDS 按键映射", "nds.", "Nintendo DS 游戏与触摸指针热键", true},
-            {"3DS 按键映射", "3ds.", "Nintendo 3DS 游戏与双摇杆控制", false},
-            {"MD 按键映射", "md.", "Mega Drive 六键手柄与 Mode 键", false},
-            {"Arcade 按键映射", "arcade.", "外部街机核心按键与热键", false},
-            {"DC 按键映射", "dc.", "Dreamcast 外部核心按键与热键", false},
-            {"PSP 按键映射", "psp.", "PPSSPP 外部核心按键与热键", false},
+            {L("GBA 按键映射"), "", L("Game Boy Advance 游戏"), false},
+            {L("GBC 按键映射"), "gbc.", L("Game Boy Color 游戏"), false},
+            {L("GB 按键映射"), "gb.", L("Game Boy 游戏"), false},
+            {L("FC/NES 按键映射"), "nes.", L("Nintendo Entertainment System 游戏"), false},
+            {L("SFC 按键映射"), "sfc.", L("Super Famicom 游戏"), false},
+            {L("NDS 按键映射"), "nds.", L("Nintendo DS 游戏与触摸指针热键"), true},
+            {L("3DS 按键映射"), "3ds.", L("Nintendo 3DS 游戏与双摇杆控制"), false},
+            {L("MD 按键映射"), "md.", L("Mega Drive 六键手柄与 Mode 键"), false},
+            {L("Arcade 按键映射"), "arcade.", L("外部街机核心按键与热键"), false},
+            {L("DC 按键映射"), "dc.", L("Dreamcast 外部核心按键与热键"), false},
+            {L("PSP 按键映射"), "psp.", L("PPSSPP 外部核心按键与热键"), false},
         };
         for (const auto& platform : platforms)
         {
@@ -1744,53 +1744,53 @@ private:
             item.title = platform.name;
             item.hint = platform.hint;
             item.icon = 0xE30F;
-            item.value = []() { return std::string("进入配置"); };
+            item.value = []() { return std::string(L("进入配置")); };
             item.platformPrefix = platform.prefix;
             item.nds = platform.nds;
             key.push_back(std::move(item));
         }
 
         auto& game = m_categories[2].items;
-        game.push_back(_section("快进"));
-        game.push_back(_toggle("启用快进", "允许使用快进热键改变模拟速度", 0xE01F,
+        game.push_back(_section(L("快进")));
+        game.push_back(_toggle(L("启用快进"), L("允许使用快进热键改变模拟速度"), 0xE01F,
             []() { return cfgGetBool("fastforward.enabled", true); }, [](bool v) { cfgSetBool("fastforward.enabled", v); }));
-        game.push_back(_selector("快进触发模式", "按住：松开即停止；切换：再次按下才停止", 0xE043,
-            {"按住", "切换"}, []() { return cfgGetStr("fastforward.mode", "hold") == "toggle" ? 1 : 0; },
+        game.push_back(_selector(L("快进触发模式"), L("按住：松开即停止；切换：再次按下才停止"), 0xE043,
+            {L("按住"), L("切换")}, []() { return cfgGetStr("fastforward.mode", "hold") == "toggle" ? 1 : 0; },
             [](int i) { cfgSetStr("fastforward.mode", i == 1 ? "toggle" : "hold"); }));
-        const std::vector<std::string> multiplierLabels = {"0.1倍", "0.5倍", "1倍", "1.25倍", "1.5倍", "1.75倍", "2倍", "3倍", "4倍", "5倍", "6倍", "7倍", "8倍", "9倍", "10倍"};
+        const std::vector<std::string> multiplierLabels = {L("0.1倍"), L("0.5倍"), L("1倍"), L("1.25倍"), L("1.5倍"), L("1.75倍"), L("2倍"), L("3倍"), L("4倍"), L("5倍"), L("6倍"), L("7倍"), L("8倍"), L("9倍"), L("10倍")};
         const std::vector<float> multiplierValues = {0.1f, 0.5f, 1.f, 1.25f, 1.5f, 1.75f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f};
-        game.push_back(_selector("快进倍率", "低于 1 倍可用于慢动作", 0xE8E5, multiplierLabels,
+        game.push_back(_selector(L("快进倍率"), L("低于 1 倍可用于慢动作"), 0xE8E5, multiplierLabels,
             [multiplierValues]() { const float cur = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 2.f); for (int i = 0; i < static_cast<int>(multiplierValues.size()); ++i) if (std::fabs(cur - multiplierValues[i]) < 0.001f) return i; return 6; },
             [multiplierValues](int i) { if (i >= 0 && i < static_cast<int>(multiplierValues.size())) SET_SETTING_KEY_FLOAT("fastforward.multiplier", multiplierValues[i]); }));
-        game.push_back(_toggle("快进时静音", "避免高速播放产生刺耳音频", 0xE04F,
+        game.push_back(_toggle(L("快进时静音"), L("避免高速播放产生刺耳音频"), 0xE04F,
             []() { return cfgGetBool("fastforward.mute", true); }, [](bool v) { cfgSetBool("fastforward.mute", v); }));
-        game.push_back(_section("倒带"));
-        game.push_back(_toggle("启用倒带", "运行时保存历史状态以便回退", 0xE166,
+        game.push_back(_section(L("倒带")));
+        game.push_back(_toggle(L("启用倒带"), L("运行时保存历史状态以便回退"), 0xE166,
             []() { return cfgGetBool("rewind.enabled", false); }, [](bool v) { cfgSetBool("rewind.enabled", v); }));
-        game.push_back(_selector("倒带触发模式", "按住或切换倒带状态", 0xE043,
-            {"按住", "切换"}, []() { return cfgGetStr("rewind.mode", "hold") == "toggle" ? 1 : 0; },
+        game.push_back(_selector(L("倒带触发模式"), L("按住或切换倒带状态"), 0xE043,
+            {L("按住"), L("切换")}, []() { return cfgGetStr("rewind.mode", "hold") == "toggle" ? 1 : 0; },
             [](int i) { cfgSetStr("rewind.mode", i == 1 ? "toggle" : "hold"); }));
-        game.push_back(_toggle("倒带时静音", "回退期间停止播放反向音频", 0xE04F,
+        game.push_back(_toggle(L("倒带时静音"), L("回退期间停止播放反向音频"), 0xE04F,
             []() { return cfgGetBool("rewind.mute", false); }, [](bool v) { cfgSetBool("rewind.mute", v); }));
         const std::vector<int> stepValues = {1, 2, 4, 8};
-        game.push_back(_selector("倒带步进", "步进越小，回退控制越精细", 0xE5D5,
-            {"1 帧", "2 帧", "4 帧", "8 帧"},
+        game.push_back(_selector(L("倒带步进"), L("步进越小，回退控制越精细"), 0xE5D5,
+            {L("1 帧"), L("2 帧"), L("4 帧"), L("8 帧")},
             [stepValues]() { const int cur = cfgGetInt("rewind.step", 2); for (int i = 0; i < 4; ++i) if (stepValues[i] == cur) return i; return 1; },
             [stepValues](int i) { if (i >= 0 && i < 4) cfgSetInt("rewind.step", stepValues[i]); }));
-        game.push_back(_toggle("可视化倒带界面", "显示历史缩略图时间轴", beiklive::material::PHOTO_LIBRARY,
+        game.push_back(_toggle(L("可视化倒带界面"), L("显示历史缩略图时间轴"), beiklive::material::PHOTO_LIBRARY,
             []() { return cfgGetBool(KEY_REWIND_SHOW_UI, false); }, [](bool v) { cfgSetBool(KEY_REWIND_SHOW_UI, v); }));
         const std::vector<int> rewindIntervals = {1, 2, 4, 8, 16, 60, 120};
-        game.push_back(_selector("状态保存间隔", "间隔越短越精确，但内存与 CPU 占用越高", 0xE425,
-            {"每帧", "每2帧", "每4帧", "每8帧", "每16帧", "每60帧（约1秒）", "每120帧（约2秒）"},
+        game.push_back(_selector(L("状态保存间隔"), L("间隔越短越精确，但内存与 CPU 占用越高"), 0xE425,
+            {L("每帧"), L("每2帧"), L("每4帧"), L("每8帧"), L("每16帧"), L("每60帧（约1秒）"), L("每120帧（约2秒）")},
             [rewindIntervals]() { const int cur = cfgGetInt(KEY_REWIND_SAVE_INTERVAL, 1); for (int i = 0; i < 7; ++i) if (rewindIntervals[i] == cur) return i; return 0; },
             [rewindIntervals](int i) { if (i >= 0 && i < 7) cfgSetInt(KEY_REWIND_SAVE_INTERVAL, rewindIntervals[i]); }));
         const std::vector<int> bufferValues = {60, 120, 600, 1800};
-        game.push_back(_selector("最大倒带缓存", "缓存越大，可回退的时间越长", 0xE1DB,
-            {"60（约1秒）", "120（约2秒）", "600（约10秒）", "1800（约30秒）"},
+        game.push_back(_selector(L("最大倒带缓存"), L("缓存越大，可回退的时间越长"), 0xE1DB,
+            {L("60（约1秒）"), L("120（约2秒）"), L("600（约10秒）"), L("1800（约30秒）")},
             [bufferValues]() { const int cur = cfgGetInt(KEY_REWIND_BUFFER_SIZE, 600); for (int i = 0; i < 4; ++i) if (bufferValues[i] == cur) return i; return 2; },
             [bufferValues](int i) { if (i >= 0 && i < 4) cfgSetInt(KEY_REWIND_BUFFER_SIZE, bufferValues[i]); }));
-        game.push_back(_selector("缩略图压缩策略", "最近邻速度优先，双线性画面更平滑", beiklive::material::IMAGE,
-            {"最近邻（速度优先）", "双线性（质量优先）"},
+        game.push_back(_selector(L("缩略图压缩策略"), L("最近邻速度优先，双线性画面更平滑"), beiklive::material::IMAGE,
+            {L("最近邻（速度优先）"), L("双线性（质量优先）")},
             []() { return std::clamp(cfgGetInt(KEY_REWIND_THUMB_COMPRESSION, 0), 0, 1); },
             [](int i) { cfgSetInt(KEY_REWIND_THUMB_COMPRESSION, i); }));
 
@@ -1804,28 +1804,28 @@ private:
     {
         using namespace beiklive::SettingKey;
         auto& display = m_categories[3].items;
-        display.push_back(_section("画面"));
-        const std::vector<std::string> modeLabels = {"按比例（Fit）", "拉伸（Fill）", "原始（Original）", "4:3", "整数倍", "自定义"};
+        display.push_back(_section(L("画面")));
+        const std::vector<std::string> modeLabels = {L("按比例（Fit）"), L("拉伸（Fill）"), L("原始（Original）"), "4:3", L("整数倍"), L("自定义")};
         const std::vector<std::string> modeValues = {"fit", "fill", "original", "four_three", "integer", "custom"};
-        display.push_back(_selector("画面模式", "控制游戏画面的缩放与宽高比", 0xE8A1, modeLabels,
+        display.push_back(_selector(L("画面模式"), L("控制游戏画面的缩放与宽高比"), 0xE8A1, modeLabels,
             [modeValues]() { return findIndex(modeValues, cfgGetStr("display.mode", "original"), 2); },
             [modeValues](int i) { if (i >= 0 && i < 6) cfgSetStr("display.mode", modeValues[i]); }));
         const std::vector<int> scaleValues = {0, 1, 2, 3, 4, 5};
-        display.push_back(_selector("整数倍缩放", "画面模式为整数倍时生效", 0xE8FF,
-            {"自动", "1倍", "2倍", "3倍", "4倍", "5倍"},
+        display.push_back(_selector(L("整数倍缩放"), L("画面模式为整数倍时生效"), 0xE8FF,
+            {L("自动"), L("1倍"), L("2倍"), L("3倍"), L("4倍"), L("5倍")},
             [scaleValues]() { const int cur = cfgGetInt("display.integer_scale_mult", 0); for (int i = 0; i < 6; ++i) if (scaleValues[i] == cur) return i; return 0; },
             [scaleValues](int i) { if (i >= 0 && i < 6) cfgSetInt("display.integer_scale_mult", scaleValues[i]); }));
-        display.push_back(_selector("纹理过滤", "像素风格更锐利，平滑模式边缘更柔和", 0xE3F4,
-            {"像素风格（Nearest）", "平滑（Linear）"},
+        display.push_back(_selector(L("纹理过滤"), L("像素风格更锐利，平滑模式边缘更柔和"), 0xE3F4,
+            {L("像素风格（Nearest）"), L("平滑（Linear）")},
             []() { return cfgGetStr("display.filter", "nearest") == "linear" ? 1 : 0; },
             [](int i) { cfgSetStr("display.filter", i == 1 ? "linear" : "nearest"); }));
-        display.push_back(_toggle("显示快进覆盖层", "快进时显示状态提示", 0xE01F,
+        display.push_back(_toggle(L("显示快进覆盖层"), L("快进时显示状态提示"), 0xE01F,
             []() { return cfgGetBool("display.showFfOverlay", true); }, [](bool v) { cfgSetBool("display.showFfOverlay", v); }));
-        display.push_back(_toggle("显示倒带覆盖层", "倒带时显示状态提示", 0xE166,
+        display.push_back(_toggle(L("显示倒带覆盖层"), L("倒带时显示状态提示"), 0xE166,
             []() { return cfgGetBool("display.showRewindOverlay", true); }, [](bool v) { cfgSetBool("display.showRewindOverlay", v); }));
-        display.push_back(_toggle("显示静音覆盖层", "静音时显示状态提示", 0xE04F,
+        display.push_back(_toggle(L("显示静音覆盖层"), L("静音时显示状态提示"), 0xE04F,
             []() { return cfgGetBool("display.showMuteOverlay", true); }, [](bool v) { cfgSetBool("display.showMuteOverlay", v); }));
-        display.push_back(_toggle("显示 FPS 覆盖层", "在游戏画面上显示实时帧率", 0xE8E5,
+        display.push_back(_toggle(L("显示 FPS 覆盖层"), L("在游戏画面上显示实时帧率"), 0xE8E5,
             []() { return cfgGetBool("display.showFps", false); }, [](bool v) { cfgSetBool("display.showFps", v); }));
 
         const std::array<std::pair<const char*, const char*>, 9> platforms{{
@@ -1834,12 +1834,12 @@ private:
             {"SFC", KEY_DISPLAY_OVERLAY_SNES_PATH}, {"MD", KEY_DISPLAY_OVERLAY_GENESIS_PATH},
             {"Arcade", KEY_DISPLAY_OVERLAY_ARCADE_PATH}, {"DC", KEY_DISPLAY_OVERLAY_DC_PATH},
             {"PSP", KEY_DISPLAY_OVERLAY_PSP_PATH}}};
-        display.push_back(_section("默认遮罩"));
+        display.push_back(_section(L("默认遮罩")));
         for (const auto& platform : platforms)
         {
             const std::string key = platform.second;
-            display.push_back(_action(std::string(platform.first) + " 遮罩", "导入新游戏时自动套用", beiklive::material::IMAGE,
-                [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
+            display.push_back(_action(std::string(platform.first) + L(" 遮罩"), L("导入新游戏时自动套用"), beiklive::material::IMAGE,
+                [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? L("未设置") : beiklive::tools::getFileName(path); },
                 [this, key]() { _pickFile(key, {"png"}); }));
         }
         const std::array<std::pair<const char*, const char*>, 9> shaders{{
@@ -1848,12 +1848,12 @@ private:
             {"SFC", KEY_DISPLAY_SHADER_SNES_PATH}, {"MD", KEY_DISPLAY_SHADER_GENESIS_PATH},
             {"Arcade", KEY_DISPLAY_SHADER_ARCADE_PATH}, {"DC", KEY_DISPLAY_SHADER_DC_PATH},
             {"PSP", KEY_DISPLAY_SHADER_PSP_PATH}}};
-        display.push_back(_section("默认着色器"));
+        display.push_back(_section(L("默认着色器")));
         for (const auto& platform : shaders)
         {
             const std::string key = platform.second;
-            display.push_back(_action(std::string(platform.first) + " 着色器", "导入新游戏时自动套用", 0xE3B7,
-                [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? "未设置" : beiklive::tools::getFileName(path); },
+            display.push_back(_action(std::string(platform.first) + L(" 着色器"), L("导入新游戏时自动套用"), 0xE3B7,
+                [key]() { const auto path = cfgGetStr(key, ""); return path.empty() ? L("未设置") : beiklive::tools::getFileName(path); },
                 [this, key]() { _pickFile(key, {"glslp", "glsl"}); }));
         }
     }
@@ -1862,27 +1862,27 @@ private:
     {
         using namespace beiklive::SettingKey;
         auto& audio = m_categories[4].items;
-        audio.push_back(_section("音频输出"));
-        audio.push_back(_toggle("按钮音效", "播放界面导航和确认音效", 0xE050,
+        audio.push_back(_section(L("音频输出")));
+        audio.push_back(_toggle(L("按钮音效"), L("播放界面导航和确认音效"), 0xE050,
             []() { return cfgGetBool("audio.buttonSfx", true); }, [](bool v) { cfgSetBool("audio.buttonSfx", v); }));
         const std::vector<int> targetValues = {60, 90, 120, 160};
-        audio.push_back(_selector("目标缓冲延迟", "越低反馈越快，越高越不容易断音", 0xE425,
+        audio.push_back(_selector(L("目标缓冲延迟"), L("越低反馈越快，越高越不容易断音"), 0xE425,
             {"60 ms", "90 ms", "120 ms", "160 ms"},
             [targetValues]() { const int cur = cfgGetInt(KEY_AUDIO_TARGET_LATENCY_MS, 90); for (int i = 0; i < 4; ++i) if (targetValues[i] == cur) return i; return 1; },
             [targetValues](int i) { if (i >= 0 && i < 4) cfgSetInt(KEY_AUDIO_TARGET_LATENCY_MS, targetValues[i]); }));
         const std::vector<int> maxValues = {120, 180, 240, 320};
-        audio.push_back(_selector("最大缓冲延迟", "超过该延迟会丢弃旧音频，避免声音落后画面", 0xE8B5,
+        audio.push_back(_selector(L("最大缓冲延迟"), L("超过该延迟会丢弃旧音频，避免声音落后画面"), 0xE8B5,
             {"120 ms", "180 ms", "240 ms", "320 ms"},
             [maxValues]() { const int cur = cfgGetInt(KEY_AUDIO_MAX_LATENCY_MS, 180); for (int i = 0; i < 4; ++i) if (maxValues[i] == cur) return i; return 1; },
             [maxValues](int i) { if (i >= 0 && i < 4) cfgSetInt(KEY_AUDIO_MAX_LATENCY_MS, maxValues[i]); }));
         const std::vector<float> syncValues = {0.f, 0.008f, 0.015f, 0.025f};
-        audio.push_back(_selector("音画同步修正", "根据缓冲量微调模拟节奏，减少爆音和长期漂移", 0xE8D5,
-            {"关闭", "柔和", "标准", "强"},
+        audio.push_back(_selector(L("音画同步修正"), L("根据缓冲量微调模拟节奏，减少爆音和长期漂移"), 0xE8D5,
+            {L("关闭"), L("柔和"), L("标准"), "强"},
             [syncValues]() { const float cur = GET_SETTING_KEY_FLOAT(KEY_AUDIO_SYNC_STRENGTH, 0.015f); int best = 0; float delta = std::fabs(cur - syncValues[0]); for (int i = 1; i < 4; ++i) { const float d = std::fabs(cur - syncValues[i]); if (d < delta) { best = i; delta = d; } } return best; },
             [syncValues](int i) { if (i >= 0 && i < 4) SET_SETTING_KEY_FLOAT(KEY_AUDIO_SYNC_STRENGTH, syncValues[i]); }));
         const std::vector<int> fadeValues = {0, 4, 6, 10};
-        audio.push_back(_selector("切换淡入淡出", "暂停、静音和读档时降低咔哒声", 0xE8D5,
-            {"关闭", "4 ms", "6 ms", "10 ms"},
+        audio.push_back(_selector(L("切换淡入淡出"), L("暂停、静音和读档时降低咔哒声"), 0xE8D5,
+            {L("关闭"), "4 ms", "6 ms", "10 ms"},
             [fadeValues]() { const int cur = cfgGetInt(KEY_AUDIO_TRANSITION_FADE_MS, 6); for (int i = 0; i < 4; ++i) if (fadeValues[i] == cur) return i; return 2; },
             [fadeValues](int i) { if (i >= 0 && i < 4) cfgSetInt(KEY_AUDIO_TRANSITION_FADE_MS, fadeValues[i]); }));
     }
@@ -1891,10 +1891,10 @@ private:
     {
         using namespace beiklive::SettingKey;
         auto& debug = m_categories[5].items;
-        debug.push_back(_section("日志"));
-        const std::vector<std::string> logLabels = {"调试（debug）", "信息（info）", "警告（warning）", "错误（error）"};
+        debug.push_back(_section(L("日志")));
+        const std::vector<std::string> logLabels = {L("调试（debug）"), L("信息（info）"), L("警告（warning）"), L("错误（error）")};
         const std::vector<std::string> logValues = {"debug", "info", "warning", "error"};
-        debug.push_back(_selector("日志级别", "控制写入日志的最低消息等级", beiklive::material::DESCRIPTION, logLabels,
+        debug.push_back(_selector(L("日志级别"), L("控制写入日志的最低消息等级"), beiklive::material::DESCRIPTION, logLabels,
             [logValues]() { return findIndex(logValues, cfgGetStr(KEY_DEBUG_LOG_LEVEL, "info"), 1); },
             [logValues](int i) {
                 if (i < 0 || i >= 4) return;
@@ -1902,7 +1902,7 @@ private:
                 static const brls::LogLevel levels[] = {brls::LogLevel::LOG_DEBUG, brls::LogLevel::LOG_INFO, brls::LogLevel::LOG_WARNING, brls::LogLevel::LOG_ERROR};
                 brls::Logger::setLogLevel(levels[i]);
             }));
-        debug.push_back(_toggle("输出日志到文件", "将运行日志追加写入日志文件", beiklive::material::SAVE,
+        debug.push_back(_toggle(L("输出日志到文件"), L("将运行日志追加写入日志文件"), beiklive::material::SAVE,
             []() { return cfgGetBool(KEY_DEBUG_LOG_FILE, false); },
             [](bool v) {
                 cfgSetBool(KEY_DEBUG_LOG_FILE, v);
@@ -1919,7 +1919,7 @@ private:
                     if (logFile) { std::fclose(logFile); logFile = nullptr; }
                 }
             }));
-        debug.push_back(_toggle("调试信息覆盖层", "在屏幕上叠加帧率和帧时间等性能数据", 0xE868,
+        debug.push_back(_toggle(L("调试信息覆盖层"), L("在屏幕上叠加帧率和帧时间等性能数据"), 0xE868,
             []() { return cfgGetBool(KEY_DEBUG_LOG_OVERLAY, false); },
             [](bool v) { cfgSetBool(KEY_DEBUG_LOG_OVERLAY, v); brls::Application::enableDebuggingView(v); }));
     }
@@ -1935,15 +1935,15 @@ private:
 
     static std::string _coreCategoryTitle(const std::string& category)
     {
-        if (category == "system") return "系统";
-        if (category == "video") return "视频";
-        if (category == "audio") return "音频";
-        if (category == "input") return "输入";
-        if (category == "hacks") return "性能与兼容性";
-        if (category == "lightgun") return "光枪";
-        if (category == "mapping") return "按键与映射";
-        if (category == "advanced_av") return "高级音视频";
-        return "其他";
+        if (category == "system") return L("系统");
+        if (category == "video") return L("视频");
+        if (category == "audio") return L("音频");
+        if (category == "input") return L("输入");
+        if (category == "hacks") return L("性能与兼容性");
+        if (category == "lightgun") return L("光枪");
+        if (category == "mapping") return L("按键与映射");
+        if (category == "advanced_av") return L("高级音视频");
+        return L("其他");
     }
 
     static std::string _coreOptionTitle(const std::string& key,
@@ -1989,10 +1989,10 @@ private:
             if (key == item.first) return item.second;
         if (key.rfind("snes9x_layer_", 0) == 0) {
             const std::string layer = key.substr(std::string("snes9x_layer_").size());
-            return layer == "5" ? "显示精灵层" : "显示背景层 " + layer;
+            return layer == "5" ? L("显示精灵层") : L("显示背景层 ") + layer;
         }
         if (key.rfind("snes9x_sndchan_volume_", 0) == 0)
-            return "声道 " + key.substr(std::string("snes9x_sndchan_volume_").size()) + " 音量";
+            return L("声道 ") + key.substr(std::string("snes9x_sndchan_volume_").size()) + L(" 音量");
         return fallback.empty() ? key : fallback;
     }
 
@@ -2027,10 +2027,10 @@ private:
         };
         for (const auto& item : descriptions)
             if (key == item.first) return item.second;
-        if (key.find("crosshair") != std::string::npos) return "设置屏幕准星大小。";
-        if (key.find("_color") != std::string::npos) return "设置屏幕准星颜色。";
-        if (key.rfind("snes9x_layer_", 0) == 0) return "控制该画面图层是否显示。";
-        if (key.rfind("snes9x_sndchan_volume_", 0) == 0) return "调整该声音通道的输出音量。";
+        if (key.find("crosshair") != std::string::npos) return L("设置屏幕准星大小。");
+        if (key.find("_color") != std::string::npos) return L("设置屏幕准星颜色。");
+        if (key.rfind("snes9x_layer_", 0) == 0) return L("控制该画面图层是否显示。");
+        if (key.rfind("snes9x_sndchan_volume_", 0) == 0) return L("调整该声音通道的输出音量。");
         return fallback;
     }
 
@@ -2063,7 +2063,7 @@ private:
             if (lower == item.first) return item.second;
         const std::string blend = " (blend)";
         if (lower.size() > blend.size() && lower.compare(lower.size() - blend.size(), blend.size(), blend) == 0)
-            return _coreOptionValue(raw, source.substr(0, source.size() - blend.size())) + "（混合）";
+            return _coreOptionValue(raw, source.substr(0, source.size() - blend.size())) + L("（混合）");
         return source;
     }
 
@@ -2139,17 +2139,17 @@ private:
                                   const std::string& returnKey)
     {
         m_coreItems.push_back(_action(
-            coreName + " NRO 路径", "链式调用时启动的外部核心 Stub", beiklive::material::DESCRIPTION,
+            coreName + L(" NRO 路径"), L("链式调用时启动的外部核心 Stub"), beiklive::material::DESCRIPTION,
             [pathKey, defaultPath]() {
                 const auto p = cfgGetStr(pathKey, defaultPath);
-                return p.empty() ? "未设置  >" : beiklive::tools::getFileName(p) + "  >";
+                return p.empty() ? L("未设置  >") : beiklive::tools::getFileName(p) + "  >";
             },
             [this, pathKey]() { _pickFile(pathKey, {"nro"}); }));
         m_coreItems.push_back(_action(
-            "返回主程序路径", "外部核心退出游戏后返回的 GBAStation NRO", beiklive::material::DESCRIPTION,
+            L("返回主程序路径"), L("外部核心退出游戏后返回的 GBAStation NRO"), beiklive::material::DESCRIPTION,
             [returnKey]() {
                 const auto p = cfgGetStr(returnKey, "sdmc:/switch/GBAStation.nro");
-                return p.empty() ? "未设置  >" : beiklive::tools::getFileName(p) + "  >";
+                return p.empty() ? L("未设置  >") : beiklive::tools::getFileName(p) + "  >";
             },
             [this, returnKey]() { _pickFile(returnKey, {"nro"}); }));
     }
@@ -2161,8 +2161,8 @@ private:
     {
         const std::vector<std::string> modeValues = {"Display", "Integer"};
         m_coreItems.push_back(_selector(
-            "画面模式", "Display 为按比例填充，Integer 为整数缩放", 0xE8FF,
-            {"屏幕适配", "整数缩放"},
+            L("画面模式"), L("Display 为按比例填充，Integer 为整数缩放"), 0xE8FF,
+            {L("屏幕适配"), L("整数缩放")},
             [prefix, modeValues]() {
                 return findIndex(modeValues, cfgGetStr("core." + prefix + ".display_mode", "Display"));
             },
@@ -2171,7 +2171,7 @@ private:
                     cfgSetStr("core." + prefix + ".display_mode", modeValues[static_cast<size_t>(i)]);
             }));
         m_coreItems.push_back(_selector(
-            "画面尺寸", "外部核心启动和菜单会读取同一配置", 0xE8FF,
+            L("画面尺寸"), L("外部核心启动和菜单会读取同一配置"), 0xE8FF,
             sizeLabels,
             [prefix, sizeValues, defaultSize]() {
                 return findIndex(sizeValues, cfgGetStr("core." + prefix + ".display_size", defaultSize));
@@ -2192,24 +2192,24 @@ private:
     static std::string _externalOptionDescription(const ExternalCoreOption& option)
     {
         const std::string key = option.key;
-        if (key.find("resolution") != std::string::npos) return "提高内部渲染精度；较高倍率会增加 GPU 负载。";
-        if (key.find("frameskip") != std::string::npos || key.find("frame_skip") != std::string::npos) return "在性能不足时减少绘制的画面数量以保持运行速度。";
-        if (key.find("texture") != std::string::npos || key.find("filter") != std::string::npos) return "控制纹理的采样、过滤或替换方式。";
-        if (key.find("anisotropic") != std::string::npos) return "改善倾斜角度下的纹理清晰度。";
-        if (key.find("widescreen") != std::string::npos) return "为支持的游戏启用宽屏画面修正。";
-        if (key.find("vmu") != std::string::npos) return "配置 Dreamcast VMU 记忆卡及其屏幕显示。";
-        if (key.find("lightgun") != std::string::npos || key.find("crosshair") != std::string::npos) return "配置光枪输入和准星显示。";
-        if (key.find("deadzone") != std::string::npos) return "过滤摇杆或扳机的轻微抖动。";
-        if (key.find("language") != std::string::npos) return "设置模拟主机向游戏报告的系统语言。";
-        if (key.find("region") != std::string::npos || key.find("broadcast") != std::string::npos) return "设置模拟主机的地区和视频制式。";
-        if (key.find("bios") != std::string::npos) return "控制 BIOS 启动流程与兼容性行为。";
-        if (key.find("renderer") != std::string::npos || key.find("rendering") != std::string::npos) return "控制图形后端及渲染工作方式。";
-        if (key.find("cpu") != std::string::npos || key.find("clock") != std::string::npos) return "调整模拟 CPU 的执行方式或运行频率。";
-        if (key.find("cheat") != std::string::npos) return "控制游戏金手指功能。";
-        if (key.find("network") != std::string::npos || key.find("bba") != std::string::npos || key.find("upnp") != std::string::npos) return "控制网络与宽带适配器功能。";
-        if (key.find("audio") != std::string::npos || key.find("dsp") != std::string::npos) return "控制声音模拟和音频输出行为。";
-        if (key.find("input") != std::string::npos || key.find("analog") != std::string::npos || key.find("trigger") != std::string::npos) return "控制模拟器接收和解释手柄输入的方式。";
-        return "调整该核心功能的兼容性、画面或运行行为。";
+        if (key.find("resolution") != std::string::npos) return L("提高内部渲染精度；较高倍率会增加 GPU 负载。");
+        if (key.find("frameskip") != std::string::npos || key.find("frame_skip") != std::string::npos) return L("在性能不足时减少绘制的画面数量以保持运行速度。");
+        if (key.find("texture") != std::string::npos || key.find("filter") != std::string::npos) return L("控制纹理的采样、过滤或替换方式。");
+        if (key.find("anisotropic") != std::string::npos) return L("改善倾斜角度下的纹理清晰度。");
+        if (key.find("widescreen") != std::string::npos) return L("为支持的游戏启用宽屏画面修正。");
+        if (key.find("vmu") != std::string::npos) return L("配置 Dreamcast VMU 记忆卡及其屏幕显示。");
+        if (key.find("lightgun") != std::string::npos || key.find("crosshair") != std::string::npos) return L("配置光枪输入和准星显示。");
+        if (key.find("deadzone") != std::string::npos) return L("过滤摇杆或扳机的轻微抖动。");
+        if (key.find("language") != std::string::npos) return L("设置模拟主机向游戏报告的系统语言。");
+        if (key.find("region") != std::string::npos || key.find("broadcast") != std::string::npos) return L("设置模拟主机的地区和视频制式。");
+        if (key.find("bios") != std::string::npos) return L("控制 BIOS 启动流程与兼容性行为。");
+        if (key.find("renderer") != std::string::npos || key.find("rendering") != std::string::npos) return L("控制图形后端及渲染工作方式。");
+        if (key.find("cpu") != std::string::npos || key.find("clock") != std::string::npos) return L("调整模拟 CPU 的执行方式或运行频率。");
+        if (key.find("cheat") != std::string::npos) return L("控制游戏金手指功能。");
+        if (key.find("network") != std::string::npos || key.find("bba") != std::string::npos || key.find("upnp") != std::string::npos) return L("控制网络与宽带适配器功能。");
+        if (key.find("audio") != std::string::npos || key.find("dsp") != std::string::npos) return L("控制声音模拟和音频输出行为。");
+        if (key.find("input") != std::string::npos || key.find("analog") != std::string::npos || key.find("trigger") != std::string::npos) return L("控制模拟器接收和解释手柄输入的方式。");
+        return L("调整该核心功能的兼容性、画面或运行行为。");
     }
 
     static std::vector<std::string> _externalOptionValues(const ExternalCoreOption& option)
@@ -2321,121 +2321,121 @@ private:
     void _openMgbaCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section("系统"));
+        m_coreItems.push_back(_section(L("系统")));
         const std::vector<std::string> modelValues = {"Autodetect", "Game Boy", "Super Game Boy", "Game Boy Color", "Game Boy Advance"};
-        const std::vector<std::string> modelLabels = {"自动识别", "Game Boy", "Super Game Boy", "Game Boy Color", "Game Boy Advance"};
-        m_coreItems.push_back(_selector("GB 机型", "根据 ROM 头自动判断机型", 0xE30F, modelLabels,
+        const std::vector<std::string> modelLabels = {L("自动识别"), "Game Boy", "Super Game Boy", "Game Boy Color", "Game Boy Advance"};
+        m_coreItems.push_back(_selector(L("GB 机型"), L("根据 ROM 头自动判断机型"), 0xE30F, modelLabels,
             [modelValues]() { return findIndex(modelValues, cfgGetStr("core.mgba_gb_model", "Autodetect")); },
             [modelValues](int i) { if (i >= 0 && i < (int)modelValues.size()) cfgSetStr("core.mgba_gb_model", modelValues[i]); }));
-        m_coreItems.push_back(_toggle("使用 BIOS", "使用真实 BIOS 启动", 0xE86F,
+        m_coreItems.push_back(_toggle(L("使用 BIOS"), L("使用真实 BIOS 启动"), 0xE86F,
             []() { return cfgGetStr("core.mgba_use_bios", "ON") == "ON"; }, [](bool v) { cfgSetStr("core.mgba_use_bios", v ? "ON" : "OFF"); }));
-        m_coreItems.push_back(_toggle("跳过 BIOS 动画", "直接进入游戏", 0xE044,
+        m_coreItems.push_back(_toggle(L("跳过 BIOS 动画"), L("直接进入游戏"), 0xE044,
             []() { return cfgGetStr("core.mgba_skip_bios", "OFF") == "ON"; }, [](bool v) { cfgSetStr("core.mgba_skip_bios", v ? "ON" : "OFF"); }));
-        const std::vector<std::string> rtcLabels = {"持久化 RTC", "跟随系统时间"}, rtcValues = {"persist", "system"};
-        m_coreItems.push_back(_selector("RTC 时钟模式", "游戏实时时钟来源", 0xE8B5, rtcLabels,
+        const std::vector<std::string> rtcLabels = {L("持久化 RTC"), L("跟随系统时间")}, rtcValues = {"persist", "system"};
+        m_coreItems.push_back(_selector(L("RTC 时钟模式"), L("游戏实时时钟来源"), 0xE8B5, rtcLabels,
             [rtcValues]() { return findIndex(rtcValues, cfgGetStr("core.mgba_rtc_mode", "persist")); },
             [rtcValues](int i) { if (i >= 0 && i < 2) cfgSetStr("core.mgba_rtc_mode", rtcValues[i]); }));
-        m_coreItems.push_back(_section("视频"));
+        m_coreItems.push_back(_section(L("视频")));
         const auto colors = beiklive::GetGbColorPresets();
-        m_coreItems.push_back(_selector("GB 配色", "GB 单色游戏的调色板", 0xE40A, colors,
+        m_coreItems.push_back(_selector(L("GB 配色"), L("GB 单色游戏的调色板"), 0xE40A, colors,
             [colors]() { return findIndex(colors, cfgGetStr("core.mgba_gb_colors", "Grayscale")); },
             [colors](int i) { if (i >= 0 && i < (int)colors.size()) cfgSetStr("core.mgba_gb_colors", colors[i]); }));
-        m_coreItems.push_back(_toggle("SGB 边框", "显示 Super Game Boy 边框", 0xE3F4,
+        m_coreItems.push_back(_toggle(L("SGB 边框"), L("显示 Super Game Boy 边框"), 0xE3F4,
             []() { return cfgGetStr("core.mgba_sgb_borders", "OFF") == "ON"; }, [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); }));
         const std::vector<std::string> frames = {"0","1","2","3","4","5","6","7","8","9","10"};
-        m_coreItems.push_back(_selector("跳帧", "降低渲染负载", 0xE8D5, frames,
+        m_coreItems.push_back(_selector(L("跳帧"), L("降低渲染负载"), 0xE8D5, frames,
             [frames]() { return findIndex(frames, cfgGetStr("core.mgba_frameskip", "0")); },
             [frames](int i) { if (i >= 0 && i < (int)frames.size()) cfgSetStr("core.mgba_frameskip", frames[i]); }));
-        m_coreItems.push_back(_section("音频"));
-        m_coreItems.push_back(_toggle("低通滤波", "模拟硬件音色", 0xE050,
+        m_coreItems.push_back(_section(L("音频")));
+        m_coreItems.push_back(_toggle(L("低通滤波"), L("模拟硬件音色"), 0xE050,
             []() { return cfgGetStr("core.mgba_audio_low_pass_filter", "disabled") == "enabled"; }, [](bool v) { cfgSetStr("core.mgba_audio_low_pass_filter", v ? "enabled" : "disabled"); }));
         const std::vector<std::string> ranges = {"20","40","60","80","100"};
-        m_coreItems.push_back(_selector("滤波强度", "低通滤波截止范围", 0xE8E5, {"20%","40%","60%","80%","100%"},
+        m_coreItems.push_back(_selector(L("滤波强度"), L("低通滤波截止范围"), 0xE8E5, {"20%","40%","60%","80%","100%"},
             [ranges]() { return findIndex(ranges, cfgGetStr("core.mgba_audio_low_pass_range", "60"), 2); },
             [ranges](int i) { if (i >= 0 && i < 5) cfgSetStr("core.mgba_audio_low_pass_range", ranges[i]); }));
-        m_coreItems.push_back(_section("输入与性能"));
+        m_coreItems.push_back(_section(L("输入与性能")));
         const std::vector<std::string> idleValues = {"Remove Known", "Detect and Remove", "Don't Remove"};
-        const std::vector<std::string> idleLabels = {"移除已知空闲循环", "检测并移除", "不移除"};
-        m_coreItems.push_back(_selector("空闲循环优化", "降低无意义 CPU 占用", 0xE8EF, idleLabels,
+        const std::vector<std::string> idleLabels = {L("移除已知空闲循环"), L("检测并移除"), L("不移除")};
+        m_coreItems.push_back(_selector(L("空闲循环优化"), L("降低无意义 CPU 占用"), 0xE8EF, idleLabels,
             [idleValues]() { return findIndex(idleValues, cfgGetStr("core.mgba_idle_optimization", "Remove Known")); },
             [idleValues](int i) { if (i >= 0 && i < 3) cfgSetStr("core.mgba_idle_optimization", idleValues[i]); }));
-        m_coreItems.push_back(_toggle("允许相反方向", "允许左右或上下同时按下", 0xE5D5,
+        m_coreItems.push_back(_toggle(L("允许相反方向"), L("允许左右或上下同时按下"), 0xE5D5,
             []() { return cfgGetStr("core.mgba_allow_opposing_directions", "no") == "yes"; }, [](bool v) { cfgSetStr("core.mgba_allow_opposing_directions", v ? "yes" : "no"); }));
-        m_coreItems.push_back(_toggle("强制 GBP 振动", "模拟 Game Boy Player 振动", 0xE8B8,
+        m_coreItems.push_back(_toggle(L("强制 GBP 振动"), L("模拟 Game Boy Player 振动"), 0xE8B8,
             []() { return cfgGetStr("core.mgba_force_gbp", "OFF") == "ON"; }, [](bool v) { cfgSetStr("core.mgba_force_gbp", v ? "ON" : "OFF"); }));
         const std::vector<std::string> solar = {"0","1","2","3","4","5","6","7","8","9","10"};
-        m_coreItems.push_back(_selector("太阳传感器", "Boktai 等游戏使用", 0xE3B0, solar,
+        m_coreItems.push_back(_selector(L("太阳传感器"), L("Boktai 等游戏使用"), 0xE3B0, solar,
             [solar]() { return findIndex(solar, cfgGetStr("core.mgba_solar_sensor_level", "5"), 5); },
             [solar](int i) { if (i >= 0 && i < 11) cfgSetStr("core.mgba_solar_sensor_level", solar[i]); }));
-        _finishCorePage("mGBA 核心设置");
+        _finishCorePage(L("mGBA 核心设置"));
     }
 
     void _openMelonDsCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section("BIOS、固件与启动"));
+        m_coreItems.push_back(_section(L("BIOS、固件与启动")));
         auto file = [this](const std::string& title, const std::string& key, const std::vector<std::string>& ext) {
-            m_coreItems.push_back(_action(title, "选择 melonDS 使用的系统文件", beiklive::material::DESCRIPTION,
-                [key]() { const auto p = cfgGetStr(key, ""); return p.empty() ? "默认路径  >" : beiklive::tools::getFileName(p) + "  >"; },
+            m_coreItems.push_back(_action(title, L("选择 melonDS 使用的系统文件"), beiklive::material::DESCRIPTION,
+                [key]() { const auto p = cfgGetStr(key, ""); return p.empty() ? L("默认路径  >") : beiklive::tools::getFileName(p) + "  >"; },
                 [this, key, ext]() { _pickFile(key, ext); }));
         };
         file("ARM9 BIOS", "core.melonds_bios9_path", {"bin","rom"});
         file("ARM7 BIOS", "core.melonds_bios7_path", {"bin","rom"});
-        file("固件", "core.melonds_firmware_path", {"bin"});
-        m_coreItems.push_back(_selector("启动方式", "可直接进入游戏，或先进入 Nintendo DS 固件菜单", 0xE044,
-            {"直接进入游戏", "先进入固件菜单"},
+        file(L("固件"), "core.melonds_firmware_path", {"bin"});
+        m_coreItems.push_back(_selector(L("启动方式"), L("可直接进入游戏，或先进入 Nintendo DS 固件菜单"), 0xE044,
+            {L("直接进入游戏"), L("先进入固件菜单")},
             []() { return cfgGetBool("core.melonds_direct_boot", true) ? 0 : 1; },
             [](int i) { cfgSetBool("core.melonds_direct_boot", i == 0); }));
         const std::vector<std::string> firmwareLanguages = {
-            "跟随固件", "日语", "英语", "法语", "德语", "意大利语", "西班牙语", "简体中文"};
-        m_coreItems.push_back(_selector("固件语言", "仅覆盖运行时语言，不会修改固件文件", 0xE8C4,
+            L("跟随固件"), L("日语"), L("英语"), L("法语"), L("德语"), L("意大利语"), L("西班牙语"), L("简体中文")};
+        m_coreItems.push_back(_selector(L("固件语言"), L("仅覆盖运行时语言，不会修改固件文件"), 0xE8C4,
             firmwareLanguages,
             []() { return std::clamp(cfgGetInt("core.melonds_firmware_language", -1) + 1, 0, 7); },
             [](int i) { cfgSetInt("core.melonds_firmware_language", std::clamp(i, 0, 7) - 1); }));
-        m_coreItems.push_back(_section("JIT 与性能"));
-        m_coreItems.push_back(_toggle("启用 JIT", "显著提升模拟性能", 0xE8EF,
+        m_coreItems.push_back(_section(L("JIT 与性能")));
+        m_coreItems.push_back(_toggle(L("启用 JIT"), L("显著提升模拟性能"), 0xE8EF,
             []() { return cfgGetBool("core.melonds_jit_enabled", true); }, [](bool v) { cfgSetBool("core.melonds_jit_enabled", v); }));
         const std::vector<std::string> blocks = {"8","16","32","64"};
-        m_coreItems.push_back(_selector("JIT 最大块", "较大值性能更高但兼容性可能下降", 0xE1B1, blocks,
+        m_coreItems.push_back(_selector(L("JIT 最大块"), L("较大值性能更高但兼容性可能下降"), 0xE1B1, blocks,
             [blocks]() { return findIndex(blocks, cfgGetStr("core.melonds_jit_block_size", "32"), 2); },
             [blocks](int i) { if (i >= 0 && i < 4) cfgSetStr("core.melonds_jit_block_size", blocks[i]); }));
         m_coreItems.push_back(_toggle("分支优化", "优化 JIT 分支", 0xE8EF, []() { return cfgGetBool("core.melonds_jit_branch", true); }, [](bool v) { cfgSetBool("core.melonds_jit_branch", v); }));
         m_coreItems.push_back(_toggle("常量优化", "优化 JIT 常量访问", 0xE8EF, []() { return cfgGetBool("core.melonds_jit_literal", true); }, [](bool v) { cfgSetBool("core.melonds_jit_literal", v); }));
         m_coreItems.push_back(_toggle("快速内存", "提高内存访问速度", 0xE8EF, []() { return cfgGetBool("core.melonds_jit_fast_memory", true); }, [](bool v) { cfgSetBool("core.melonds_jit_fast_memory", v); }));
-        m_coreItems.push_back(_section("视频"));
-        m_coreItems.push_back(_toggle("线程渲染", "将软件渲染工作放到独立线程", 0xE8D5,
+        m_coreItems.push_back(_section(L("视频")));
+        m_coreItems.push_back(_toggle(L("线程渲染"), L("将软件渲染工作放到独立线程"), 0xE8D5,
             []() { return cfgGetBool("core.melonds_threaded_renderer", true); }, [](bool v) { cfgSetBool("core.melonds_threaded_renderer", v); }));
         const std::vector<std::string> scales = {"1","2","3","4"};
-        m_coreItems.push_back(_selector("内部渲染倍率", "提高 3D 画面的内部清晰度", 0xE8FF, {"1x","2x","3x","4x"},
+        m_coreItems.push_back(_selector(L("内部渲染倍率"), L("提高 3D 画面的内部清晰度"), 0xE8FF, {"1x","2x","3x","4x"},
             [scales]() { return findIndex(scales, cfgGetStr("core.melonds_render_scale", "1")); },
             [scales](int i) { if (i >= 0 && i < 4) cfgSetStr("core.melonds_render_scale", scales[i]); }));
-        m_coreItems.push_back(_toggle("改进多边形", "提高 3D 多边形边缘精度", 0xE3F4,
+        m_coreItems.push_back(_toggle(L("改进多边形"), L("提高 3D 多边形边缘精度"), 0xE3F4,
             []() { return cfgGetBool("core.melonds_better_polygons", false); }, [](bool v) { cfgSetBool("core.melonds_better_polygons", v); }));
-        m_coreItems.push_back(_section("存储与网络"));
+        m_coreItems.push_back(_section(L("存储与网络")));
         m_coreItems.push_back(_toggle("启用 DLDI", "启用虚拟 SD 卡访问", beiklive::material::STORAGE, []() { return cfgGetBool("core.melonds_dldi_enabled", false); }, [](bool v) { cfgSetBool("core.melonds_dldi_enabled", v); }));
-        file("DLDI SD 镜像", "core.melonds_dldi_path", {"img","bin"});
+        file(L("DLDI SD 镜像"), "core.melonds_dldi_path", {"img","bin"});
         m_coreItems.push_back(_toggle("随机 MAC 地址", "每次启动生成随机无线地址", beiklive::material::WIFI, []() { return cfgGetBool("core.melonds_randomize_mac", false); }, [](bool v) { cfgSetBool("core.melonds_randomize_mac", v); }));
-        _finishCorePage("melonDS 核心设置");
+        _finishCorePage(L("melonDS 核心设置"));
     }
 
     void _openFbneoCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section("外部核心"));
+        m_coreItems.push_back(_section(L("外部核心")));
         _appendExternalCorePaths(
             "FBNeo", "arcade.externalNro.path", "/GBAStation/core/GBAStationFBNeoStub.nro",
             "arcade.externalNro.returnPath");
 
-        m_coreItems.push_back(_section("画面"));
+        m_coreItems.push_back(_section(L("画面")));
         _appendExternalDisplaySettings(
             "fbneo",
             {"Auto", "4:3", "16:9", "Stretch", "Original", "1x", "2x"},
-            {"自动", "4:3", "16:9", "拉伸", "原始", "1x", "2x"},
+            {L("自动"), "4:3", "16:9", L("拉伸"), L("原始"), "1x", "2x"},
             "Auto");
         const std::vector<std::string> shaderValues = {"None", "xBRZ", "Eagle", "CrtEasyMode"};
         m_coreItems.push_back(_selector(
-            "着色器", "外部街机核心的画面滤镜", 0xE40A,
-            {"关闭", "xBRZ", "Eagle", "CRT EasyMode"},
+            L("着色器"), L("外部街机核心的画面滤镜"), 0xE40A,
+            {L("关闭"), "xBRZ", "Eagle", "CRT EasyMode"},
             [shaderValues]() {
                 return findIndex(shaderValues, cfgGetStr("core.fbneo.shader_type", "None"));
             },
@@ -2467,27 +2467,27 @@ private:
             {"Neo Geo", "fbneo-memcard-mode", "Neo Geo 记忆卡", "disabled"},
         });
 
-        m_coreItems.push_back(_section("按键"));
+        m_coreItems.push_back(_section(L("按键")));
         m_coreItems.push_back(_action(
-            "Arcade 按键映射", "配置 FBNeo 外部核心使用的 config.cfg 映射", 0xE30F,
-            []() { return std::string("进入配置  >"); },
-            [this]() { _openMappingPage("Arcade 按键映射", "arcade.", false); }));
-        _finishCorePage("FBNeo 核心设置");
+            L("Arcade 按键映射"), L("配置 FBNeo 外部核心使用的 config.cfg 映射"), 0xE30F,
+            []() { return std::string(L("进入配置  >")); },
+            [this]() { _openMappingPage(L("Arcade 按键映射"), "arcade.", false); }));
+        _finishCorePage(L("FBNeo 核心设置"));
     }
 
     void _openFlycastCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section("外部核心"));
+        m_coreItems.push_back(_section(L("外部核心")));
         _appendExternalCorePaths(
             "Flycast", "dc.externalNro.path", "/GBAStation/core/GBAStationFlycastStub.nro",
             "dc.externalNro.returnPath");
 
-        m_coreItems.push_back(_section("画面"));
+        m_coreItems.push_back(_section(L("画面")));
         _appendExternalDisplaySettings(
             "flycast",
             {"4:3", "16:9", "Stretch", "Original", "1x", "2x", "Auto"},
-            {"4:3", "16:9", "拉伸", "原始", "1x", "2x", "自动"},
+            {"4:3", "16:9", L("拉伸"), L("原始"), "1x", "2x", L("自动")},
             "4:3");
 
         _appendExternalOptions("flycast", {
@@ -2577,31 +2577,31 @@ private:
             {"VMU 屏幕", "reicast_vmu4_screen_opacity", "VMU 4 不透明度", "100%"},
         });
 
-        m_coreItems.push_back(_section("按键"));
+        m_coreItems.push_back(_section(L("按键")));
         m_coreItems.push_back(_action(
-            "DC 按键映射", "配置 Flycast 外部核心使用的 config.cfg 映射", 0xE30F,
-            []() { return std::string("进入配置  >"); },
-            [this]() { _openMappingPage("DC 按键映射", "dc.", false); }));
-        _finishCorePage("Flycast 核心设置");
+            L("DC 按键映射"), L("配置 Flycast 外部核心使用的 config.cfg 映射"), 0xE30F,
+            []() { return std::string(L("进入配置  >")); },
+            [this]() { _openMappingPage(L("DC 按键映射"), "dc.", false); }));
+        _finishCorePage(L("Flycast 核心设置"));
     }
 
     void _openPpssppCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section("外部核心"));
+        m_coreItems.push_back(_section(L("外部核心")));
         _appendExternalCorePaths(
             "PPSSPP", "psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro",
             "psp.externalNro.returnPath");
 
-        m_coreItems.push_back(_section("性能与画面"));
+        m_coreItems.push_back(_section(L("性能与画面")));
         _appendExternalDisplaySettings(
             "ppsspp",
             {"16:9", "4:3", "Stretch", "Original", "1x", "2x", "3x", "4x", "Auto"},
-            {"16:9", "4:3", "拉伸", "原始", "1x", "2x", "3x", "4x", "自动"},
+            {"16:9", "4:3", L("拉伸"), L("原始"), "1x", "2x", "3x", "4x", L("自动")},
             "16:9");
         const std::vector<std::string> resolutionValues = {"1", "2", "3", "4"};
         m_coreItems.push_back(_selector(
-            "渲染分辨率", "提高 3D 画面内部清晰度，倍率越高负载越大", 0xE8FF,
+            L("渲染分辨率"), L("提高 3D 画面内部清晰度，倍率越高负载越大"), 0xE8FF,
             {"1x PSP", "2x PSP", "3x PSP", "4x PSP"},
             [resolutionValues]() {
                 return findIndex(resolutionValues, cfgGetStr("core.ppsspp.rendering_resolution", "1"));
@@ -2612,8 +2612,8 @@ private:
             }));
         const std::vector<std::string> frameskipValues = {"0", "1", "2", "3", "4", "5"};
         m_coreItems.push_back(_selector(
-            "跳帧", "降低渲染压力；0 表示关闭", 0xE8D5,
-            {"关闭", "1", "2", "3", "4", "5"},
+            L("跳帧"), L("降低渲染压力；0 表示关闭"), 0xE8D5,
+            {L("关闭"), "1", "2", "3", "4", "5"},
             [frameskipValues]() {
                 return findIndex(frameskipValues, cfgGetStr("core.ppsspp.frameskip", "0"));
             },
@@ -2622,15 +2622,15 @@ private:
                     cfgSetStr("core.ppsspp.frameskip", frameskipValues[static_cast<size_t>(i)]);
             }));
         m_coreItems.push_back(_toggle(
-            "自动跳帧", "低帧率时自动跳过部分画面", 0xE8D5,
+            L("自动跳帧"), L("低帧率时自动跳过部分画面"), 0xE8D5,
             []() { return cfgGetBool("core.ppsspp.auto_frameskip", false); },
             [](bool v) { cfgSetBool("core.ppsspp.auto_frameskip", v); }));
         m_coreItems.push_back(_toggle(
-            "快速内存", "启用 PPSSPP Fast Memory，速度更快但可能影响少数游戏", 0xE8EF,
+            L("快速内存"), L("启用 PPSSPP Fast Memory，速度更快但可能影响少数游戏"), 0xE8EF,
             []() { return cfgGetBool("core.ppsspp.fast_memory", true); },
             [](bool v) { cfgSetBool("core.ppsspp.fast_memory", v); }));
         m_coreItems.push_back(_toggle(
-            "I/O 独立线程", "将部分文件读取放到独立线程，减少卡顿", 0xE8D5,
+            L("I/O 独立线程"), L("将部分文件读取放到独立线程，减少卡顿"), 0xE8D5,
             []() { return cfgGetBool("core.ppsspp.io_thread", true); },
             [](bool v) { cfgSetBool("core.ppsspp.io_thread", v); }));
 
@@ -2672,22 +2672,22 @@ private:
             {"高级", "ppsspp_disable_range_culling", "禁用范围剔除", "disabled"},
         });
 
-        m_coreItems.push_back(_section("按键"));
+        m_coreItems.push_back(_section(L("按键")));
         m_coreItems.push_back(_action(
-            "PSP 按键映射", "配置 PPSSPP 外部核心使用的 config.cfg 映射", 0xE30F,
-            []() { return std::string("进入配置  >"); },
-            [this]() { _openMappingPage("PSP 按键映射", "psp.", false); }));
-        _finishCorePage("PPSSPP 核心设置");
+            L("PSP 按键映射"), L("配置 PPSSPP 外部核心使用的 config.cfg 映射"), 0xE30F,
+            []() { return std::string(L("进入配置  >")); },
+            [this]() { _openMappingPage(L("PSP 按键映射"), "psp.", false); }));
+        _finishCorePage(L("PPSSPP 核心设置"));
     }
 
     void _openGenesisCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section("系统与兼容性"));
+        m_coreItems.push_back(_section(L("系统与兼容性")));
         const std::vector<std::string> regionValues = {"auto", "ntsc-u", "pal", "ntsc-j"};
         m_coreItems.push_back(_selector(
-            "主机区域", "自动识别失败时可强制游戏区域，重新启动游戏后生效", 0xE8B5,
-            {"自动识别", "NTSC-U（美版）", "PAL（欧版）", "NTSC-J（日版）"},
+            L("主机区域"), L("自动识别失败时可强制游戏区域，重新启动游戏后生效"), 0xE8B5,
+            {L("自动识别"), L("NTSC-U（美版）"), L("PAL（欧版）"), L("NTSC-J（日版）")},
             [regionValues]() {
                 return findIndex(regionValues, cfgGetStr("core.genesis.region", "auto"));
             },
@@ -2696,23 +2696,23 @@ private:
                     cfgSetStr("core.genesis.region", regionValues[static_cast<size_t>(i)]);
             }));
         m_coreItems.push_back(_selector(
-            "手柄类型", "六键模式支持 X、Y、Z 与 Mode，重新启动游戏后生效", 0xE30F,
-            {"三键手柄", "六键手柄"},
+            L("手柄类型"), L("六键模式支持 X、Y、Z 与 Mode，重新启动游戏后生效"), 0xE30F,
+            {L("三键手柄"), L("六键手柄")},
             []() { return cfgGetInt("core.genesis.pad_buttons", 6) == 3 ? 0 : 1; },
             [](int i) { cfgSetInt("core.genesis.pad_buttons", i == 0 ? 3 : 6); }));
         m_coreItems.push_back(_toggle(
-            "移除精灵限制", "减少横向精灵过多时的闪烁，可能改变原始硬件表现", 0xE8EF,
+            L("移除精灵限制"), L("减少横向精灵过多时的闪烁，可能改变原始硬件表现"), 0xE8EF,
             []() { return cfgGetStr("core.genesis.no_sprite_limit", "disabled") == "enabled"; },
             [](bool v) { cfgSetStr("core.genesis.no_sprite_limit", v ? "enabled" : "disabled"); }));
 
-        m_coreItems.push_back(_section("音频"));
+        m_coreItems.push_back(_section(L("音频")));
         m_coreItems.push_back(_toggle(
-            "低通滤波", "模拟 Mega Drive 原机的柔和音色", 0xE050,
+            L("低通滤波"), L("模拟 Mega Drive 原机的柔和音色"), 0xE050,
             []() { return cfgGetStr("core.genesis.low_pass", "enabled") == "enabled"; },
             [](bool v) { cfgSetStr("core.genesis.low_pass", v ? "enabled" : "disabled"); }));
         const std::vector<int> lowPassValues = {20, 40, 60, 80, 100};
         m_coreItems.push_back(_selector(
-            "低通滤波强度", "数值越高，保留的高频越多", 0xE8E5,
+            L("低通滤波强度"), L("数值越高，保留的高频越多"), 0xE8E5,
             {"20%", "40%", "60%", "80%", "100%"},
             [lowPassValues]() {
                 const int current = cfgGetInt("core.genesis.low_pass_range", 60);
@@ -2725,18 +2725,18 @@ private:
                     cfgSetInt("core.genesis.low_pass_range", lowPassValues[static_cast<size_t>(i)]);
             }));
         m_coreItems.push_back(_toggle(
-            "高质量 FM 重采样", "提高 YM2612 音频质量，低性能设备可关闭", 0xE050,
+            L("高质量 FM 重采样"), L("提高 YM2612 音频质量，低性能设备可关闭"), 0xE050,
             []() { return cfgGetStr("core.genesis.hq_fm", "enabled") == "enabled"; },
             [](bool v) { cfgSetStr("core.genesis.hq_fm", v ? "enabled" : "disabled"); }));
         m_coreItems.push_back(_toggle(
-            "高质量 PSG 重采样", "提高 PSG 方波音频质量，低性能设备可关闭", 0xE050,
+            L("高质量 PSG 重采样"), L("提高 PSG 方波音频质量，低性能设备可关闭"), 0xE050,
             []() { return cfgGetStr("core.genesis.hq_psg", "enabled") == "enabled"; },
             [](bool v) { cfgSetStr("core.genesis.hq_psg", v ? "enabled" : "disabled"); }));
         m_coreItems.push_back(_toggle(
-            "单声道输出", "将左右声道混合为单声道", 0xE04F,
+            L("单声道输出"), L("将左右声道混合为单声道"), 0xE04F,
             []() { return cfgGetStr("core.genesis.mono", "disabled") == "enabled"; },
             [](bool v) { cfgSetStr("core.genesis.mono", v ? "enabled" : "disabled"); }));
-        _finishCorePage("Genesis Plus GX 核心设置");
+        _finishCorePage(L("Genesis Plus GX 核心设置"));
     }
 
     void _openThreeDsTextInput(const std::string& title, const std::string& key,
@@ -2744,7 +2744,7 @@ private:
     {
         auto* ime = brls::Application::getPlatform()->getImeManager();
         if (!ime) {
-            brls::Application::notify("当前平台不支持文本输入");
+            brls::Application::notify(L("当前平台不支持文本输入"));
             return;
         }
         ime->openForText([this, key](std::string text) {
@@ -2759,8 +2759,8 @@ private:
         const auto key = [](const char* name) { return std::string("core.azahar.") + name; };
 
         m_coreItems.clear();
-        m_coreItems.push_back(_section("系统"));
-        m_coreItems.push_back(_selector("主机型号", "New 3DS 兼容更多游戏，Old 3DS 更接近旧机型", 0xE30F,
+        m_coreItems.push_back(_section(L("系统")));
+        m_coreItems.push_back(_selector(L("主机型号"), L("New 3DS 兼容更多游戏，Old 3DS 更接近旧机型"), 0xE30F,
             {"Old 3DS", "New 3DS"},
             [key]() { return cfgGetBool(key("new_3ds"), true) ? 1 : 0; },
             [key](int i) { cfgSetBool(key("new_3ds"), i == 1); }));
@@ -2772,7 +2772,7 @@ private:
             cpuValues.push_back(value);
             cpuLabels.push_back(std::to_string(value) + "%");
         }
-        m_coreItems.push_back(_selector("CPU 时钟", "提高可改善部分游戏速度，也可能引入兼容性问题", 0xE8EF,
+        m_coreItems.push_back(_selector(L("CPU 时钟"), L("提高可改善部分游戏速度，也可能引入兼容性问题"), 0xE8EF,
             cpuLabels,
             [key, cpuValues]() {
                 const int cur = cfgGetInt(key("cpu_clock"), 100);
@@ -2784,29 +2784,29 @@ private:
                     cfgSetInt(key("cpu_clock"), cpuValues[static_cast<size_t>(i)]);
             }));
         m_coreItems.push_back(_toggle(
-            "打开菜单时暂停", "打开游戏内菜单时暂停模拟并静音",
+            L("打开菜单时暂停"), L("打开游戏内菜单时暂停模拟并静音"),
             0xE034,
             [key]() { return cfgGetBool(key("pause_when_menu_open"), true); },
             [key](bool v) { cfgSetBool(key("pause_when_menu_open"), v); }));
         const std::vector<std::string> regionValues = {"auto", "japan", "usa", "europe", "australia", "china", "korea", "taiwan"};
-        m_coreItems.push_back(_selector("系统区域", "覆盖 3DS 系统区域，自动适合大多数游戏", 0xE8C4,
-            {"自动", "日本", "美国", "欧洲", "澳大利亚", "中国", "韩国", "台湾"},
+        m_coreItems.push_back(_selector(L("系统区域"), L("覆盖 3DS 系统区域，自动适合大多数游戏"), 0xE8C4,
+            {L("自动"), L("日本"), L("美国"), L("欧洲"), L("澳大利亚"), L("中国"), L("韩国"), L("台湾")},
             [key, regionValues]() { return findIndex(regionValues, cfgGetStr(key("region"), "auto")); },
             [key, regionValues](int i) { if (i >= 0 && i < static_cast<int>(regionValues.size())) cfgSetStr(key("region"), regionValues[static_cast<size_t>(i)]); }));
         const std::vector<std::string> languageValues = {"", "japanese", "english", "french", "german", "italian", "spanish", "simplified_chinese", "korean", "dutch", "portuguese", "russian", "traditional_chinese"};
-        m_coreItems.push_back(_selector("系统语言", "写入 3DS CFG 存档；留空表示不覆盖", 0xE8C4,
-            {"不覆盖", "日语", "英语", "法语", "德语", "意大利语", "西班牙语", "简体中文", "韩语", "荷兰语", "葡萄牙语", "俄语", "繁体中文"},
+        m_coreItems.push_back(_selector(L("系统语言"), L("写入 3DS CFG 存档；留空表示不覆盖"), 0xE8C4,
+            {L("不覆盖"), L("日语"), L("英语"), L("法语"), L("德语"), L("意大利语"), L("西班牙语"), L("简体中文"), L("韩语"), L("荷兰语"), L("葡萄牙语"), L("俄语"), L("繁体中文")},
             [key, languageValues]() { return findIndex(languageValues, cfgGetStr(key("language"), "")); },
             [key, languageValues](int i) { if (i >= 0 && i < static_cast<int>(languageValues.size())) cfgSetStr(key("language"), languageValues[static_cast<size_t>(i)]); }));
-        m_coreItems.push_back(_action("用户名", "写入 3DS CFG 存档，最多 10 个 UTF-16 字符", 0xE7FD,
-            [key]() { const auto name = cfgGetStr(key("username"), ""); return name.empty() ? "不覆盖" : name; },
-            [this, key]() { _openThreeDsTextInput("3DS 用户名", key("username"), "留空表示不覆盖", 32); }));
-        m_coreItems.push_back(_toggle("虚拟 SD 卡", "允许 3DS 软件访问模拟 SD 数据", beiklive::material::STORAGE,
+        m_coreItems.push_back(_action(L("用户名"), L("写入 3DS CFG 存档，最多 10 个 UTF-16 字符"), 0xE7FD,
+            [key]() { const auto name = cfgGetStr(key("username"), ""); return name.empty() ? L("不覆盖") : name; },
+            [this, key]() { _openThreeDsTextInput(L("3DS 用户名"), key("username"), L("留空表示不覆盖"), 32); }));
+        m_coreItems.push_back(_toggle(L("虚拟 SD 卡"), L("允许 3DS 软件访问模拟 SD 数据"), beiklive::material::STORAGE,
             [key]() { return cfgGetBool(key("use_virtual_sd"), true); },
             [key](bool v) { cfgSetBool(key("use_virtual_sd"), v); }));
 
-        m_coreItems.push_back(_section("图形与性能"));
-        m_coreItems.push_back(_toggle("CPU JIT", "启用 CPU 动态重编译，通常必须开启以保证性能", 0xE8EF,
+        m_coreItems.push_back(_section(L("图形与性能")));
+        m_coreItems.push_back(_toggle("CPU JIT", L("启用 CPU 动态重编译，通常必须开启以保证性能"), 0xE8EF,
             [key]() { return cfgGetBool(key("use_cpu_jit"), true); },
             [key](bool v) { cfgSetBool(key("use_cpu_jit"), v); }));
         // const std::vector<int> resValues = {0, 1, 2, 3, 4};
@@ -2819,36 +2819,36 @@ private:
         //         return 1;
         //     },
         //     [key, resValues](int i) { if (i >= 0 && i < static_cast<int>(resValues.size())) cfgSetInt(key("upscale"), resValues[static_cast<size_t>(i)]); }));
-        m_coreItems.push_back(_toggle("硬件着色器", "使用 GPU 模拟 3DS 着色器，通常性能更好", 0xE3B7,
+        m_coreItems.push_back(_toggle(L("硬件着色器"), L("使用 GPU 模拟 3DS 着色器，通常性能更好"), 0xE3B7,
             [key]() { return cfgGetBool(key("use_hw_shader"), true); },
             [key](bool v) { cfgSetBool(key("use_hw_shader"), v); }));
-        m_coreItems.push_back(_toggle("Shader JIT", "启用着色器 JIT 编译", 0xE8EF,
+        m_coreItems.push_back(_toggle("Shader JIT", L("启用着色器 JIT 编译"), 0xE8EF,
             [key]() { return cfgGetBool(key("use_shader_jit"), true); },
             [key](bool v) { cfgSetBool(key("use_shader_jit"), v); }));
-        m_coreItems.push_back(_toggle("精确乘法", "提高着色器精度，可能降低性能", 0xE3F4,
+        m_coreItems.push_back(_toggle(L("精确乘法"), L("提高着色器精度，可能降低性能"), 0xE3F4,
             [key]() { return cfgGetBool(key("accurate_mul"), true); },
             [key](bool v) { cfgSetBool(key("accurate_mul"), v); }));
         m_coreItems.push_back(_toggle(
-            "磁盘 Shader 缓存", "保存编译结果以减少后续卡顿",
+            L("磁盘 Shader 缓存"), L("保存编译结果以减少后续卡顿"),
             beiklive::material::SAVE,
             [key]() { return cfgGetBool(key("disk_shader_cache"), true); },
             [key](bool v) { cfgSetBool(key("disk_shader_cache"), v); }));
         m_coreItems.push_back(_toggle(
-            "异步 GPU 模拟", "实验性并行 GPU 路径；默认关闭以保证稳定性能",
+            L("异步 GPU 模拟"), L("实验性并行 GPU 路径；默认关闭以保证稳定性能"),
             0xE8D5,
             [key]() { return cfgGetBool(key("async_gpu"), false); },
             [key](bool v) { cfgSetBool(key("async_gpu"), v); }));
         m_coreItems.push_back(_toggle(
-            "严格 GPU 同步", "异步 GPU 开启时强制同步，用于兼容性排查",
+            L("严格 GPU 同步"), L("异步 GPU 开启时强制同步，用于兼容性排查"),
             0xE8D5,
             [key]() { return cfgGetBool(key("strict_gpu_sync"), false); },
             [key](bool v) { cfgSetBool(key("strict_gpu_sync"), v); }));
         m_coreItems.push_back(_toggle(
-            "异步 Shader 编译", "减少运行时卡顿，少数游戏可能闪烁", 0xE8D5,
+            L("异步 Shader 编译"), L("减少运行时卡顿，少数游戏可能闪烁"), 0xE8D5,
             [key]() { return cfgGetBool(key("async_shaders"), true); },
             [key](bool v) { cfgSetBool(key("async_shaders"), v); }));
         m_coreItems.push_back(_toggle(
-            "显示着色器编译文字", "在画面上显示后台着色器编译进度", 0xE8D5,
+            L("显示着色器编译文字"), L("在画面上显示后台着色器编译进度"), 0xE8D5,
             [key]() {
               return cfgGetBool(key("show_shader_compile_notice"), true);
             },
@@ -2856,26 +2856,26 @@ private:
               cfgSetBool(key("show_shader_compile_notice"), v);
             }));
         m_coreItems.push_back(_toggle(
-            "异步呈现", "允许渲染和呈现解耦，通常可改善流畅度", 0xE8D5,
+            L("异步呈现"), L("允许渲染和呈现解耦，通常可改善流畅度"), 0xE8D5,
             [key]() { return cfgGetBool(key("async_presentation"), true); },
             [key](bool v) { cfgSetBool(key("async_presentation"), v); }));
         m_coreItems.push_back(_toggle(
-            "SPIR-V Shader 生成", "Vulkan 后端使用 SPIR-V 着色器路径", 0xE3B7,
+            L("SPIR-V Shader 生成"), L("Vulkan 后端使用 SPIR-V 着色器路径"), 0xE3B7,
             [key]() { return cfgGetBool(key("spirv_shader_gen"), true); },
             [key](bool v) { cfgSetBool(key("spirv_shader_gen"), v); }));
         m_coreItems.push_back(_toggle(
-            "禁用 SPIR-V 优化器", "保持当前 Switch NVK 更稳定的默认路径",
+            L("禁用 SPIR-V 优化器"), L("保持当前 Switch NVK 更稳定的默认路径"),
             0xE868,
             [key]() {
               return cfgGetBool(key("disable_spirv_optimizer"), true);
             },
             [key](bool v) { cfgSetBool(key("disable_spirv_optimizer"), v); }));
-        m_coreItems.push_back(_toggle("垂直同步", "同步显示刷新，减少撕裂", 0xE8B5,
+        m_coreItems.push_back(_toggle(L("垂直同步"), L("同步显示刷新，减少撕裂"), 0xE8B5,
             [key]() { return cfgGetBool(key("vsync"), true); },
             [key](bool v) { cfgSetBool(key("vsync"), v); }));
         const std::vector<float> frameLimitValues = {0.f, 50.f, 75.f, 100.f, 150.f, 200.f};
-        m_coreItems.push_back(_selector("帧率限制", "100% 为正常速度，0 表示不限制", 0xE8E5,
-            {"不限制", "50%", "75%", "100%", "150%", "200%"},
+        m_coreItems.push_back(_selector(L("帧率限制"), L("100% 为正常速度，0 表示不限制"), 0xE8E5,
+            {L("不限制"), "50%", "75%", "100%", "150%", "200%"},
             [key, frameLimitValues]() {
                 const float cur = GET_SETTING_KEY_FLOAT(key("frame_limit"), 100.f);
                 int best = 3;
@@ -2887,21 +2887,21 @@ private:
                 return best;
             },
             [key, frameLimitValues](int i) { if (i >= 0 && i < static_cast<int>(frameLimitValues.size())) SET_SETTING_KEY_FLOAT(key("frame_limit"), frameLimitValues[static_cast<size_t>(i)]); }));
-        m_coreItems.push_back(_toggle("模拟 3DS GPU 时序", "更精确但更慢，调试兼容性时使用", 0xE868,
+        m_coreItems.push_back(_toggle(L("模拟 3DS GPU 时序"), L("更精确但更慢，调试兼容性时使用"), 0xE868,
             [key]() { return cfgGetBool(key("simulate_3ds_gpu_timings"), false); },
             [key](bool v) { cfgSetBool(key("simulate_3ds_gpu_timings"), v); }));
-        m_coreItems.push_back(_toggle("禁用右眼渲染", "关闭立体 3D 的右眼画面以节省性能", 0xE8A1,
+        m_coreItems.push_back(_toggle(L("禁用右眼渲染"), L("关闭立体 3D 的右眼画面以节省性能"), 0xE8A1,
             [key]() { return cfgGetBool(key("disable_right_eye"), true); },
             [key](bool v) { cfgSetBool(key("disable_right_eye"), v); }));
 
-        m_coreItems.push_back(_section("视频流"));
+        m_coreItems.push_back(_section(L("视频流")));
         m_coreItems.push_back(_toggle(
-            "视频 CPU 节流加速", "实验性：播放过场视频时临时降低 3DS Core Clock，可能改善部分游戏视频卡顿",
+            L("视频 CPU 节流加速"), L("实验性：播放过场视频时临时降低 3DS Core Clock，可能改善部分游戏视频卡顿"),
             0xE8EF,
             [key]() { return cfgGetBool(key("movie_cpu_throttle"), true); },
             [key](bool v) { cfgSetBool(key("movie_cpu_throttle"), v); }));
         const std::vector<int> movieClockValues = {10, 25, 40, 50, 75, 100};
-        m_coreItems.push_back(_selector("视频节流时钟", "视频加速开启时使用的 3DS Core Clock 百分比",
+        m_coreItems.push_back(_selector(L("视频节流时钟"), L("视频加速开启时使用的 3DS Core Clock 百分比"),
             0xE8E5,
             {"10%", "25%", "40%", "50%", "75%", "100%"},
             [key, movieClockValues]() {
@@ -2922,21 +2922,21 @@ private:
                     cfgSetInt(key("movie_throttle_clock"), movieClockValues[static_cast<size_t>(i)]);
             }));
 
-        m_coreItems.push_back(_section("纹理"));
+        m_coreItems.push_back(_section(L("纹理")));
         const std::vector<std::string> filterValues = {"none", "anime4k", "bicubic", "scaleforce", "xbrz", "mmpx"};
-        m_coreItems.push_back(_selector("纹理滤镜", "对游戏纹理做放大滤镜处理", 0xE3F4,
-            {"关闭", "Anime4K", "Bicubic", "ScaleForce", "xBRZ", "MMPX"},
+        m_coreItems.push_back(_selector(L("纹理滤镜"), L("对游戏纹理做放大滤镜处理"), 0xE3F4,
+            {L("关闭"), "Anime4K", "Bicubic", "ScaleForce", "xBRZ", "MMPX"},
             [key, filterValues]() { return findIndex(filterValues, cfgGetStr(key("texture_filter"), "none")); },
             [key, filterValues](int i) { if (i >= 0 && i < static_cast<int>(filterValues.size())) cfgSetStr(key("texture_filter"), filterValues[static_cast<size_t>(i)]); }));
         const std::vector<std::string> samplingValues = {"game", "nearest", "linear"};
-        m_coreItems.push_back(_selector("纹理采样", "控制纹理采样方式", 0xE8A1,
-            {"跟随游戏", "Nearest", "Linear"},
+        m_coreItems.push_back(_selector(L("纹理采样"), L("控制纹理采样方式"), 0xE8A1,
+            {L("跟随游戏"), "Nearest", "Linear"},
             [key, samplingValues]() { return findIndex(samplingValues, cfgGetStr(key("texture_sampling"), "game")); },
             [key, samplingValues](int i) { if (i >= 0 && i < static_cast<int>(samplingValues.size())) cfgSetStr(key("texture_sampling"), samplingValues[static_cast<size_t>(i)]); }));
-        m_coreItems.push_back(_toggle("自定义纹理", "加载用户替换纹理包", beiklive::material::IMAGE,
+        m_coreItems.push_back(_toggle(L("自定义纹理"), L("加载用户替换纹理包"), beiklive::material::IMAGE,
             [key]() { return cfgGetBool(key("custom_textures"), false); },
             [key](bool v) { cfgSetBool(key("custom_textures"), v); }));
-        m_coreItems.push_back(_toggle("导出纹理", "运行时将游戏纹理导出到用户目录", beiklive::material::SAVE,
+        m_coreItems.push_back(_toggle(L("导出纹理"), L("运行时将游戏纹理导出到用户目录"), beiklive::material::SAVE,
             [key]() { return cfgGetBool(key("dump_textures"), false); },
             [key](bool v) { cfgSetBool(key("dump_textures"), v); }));
 
@@ -2979,33 +2979,33 @@ private:
         //     },
         //     [key, proportionValues](int i) { if (i >= 0 && i < static_cast<int>(proportionValues.size())) SET_SETTING_KEY_FLOAT(key("large_screen_proportion"), proportionValues[static_cast<size_t>(i)]); }));
 
-        m_coreItems.push_back(_section("音频与输入"));
+        m_coreItems.push_back(_section(L("音频与输入")));
         const std::vector<std::string> audioValues = {"hle", "lle", "lle_multithreaded"};
-        m_coreItems.push_back(_selector("音频模拟", "HLE 性能更好；LLE 更接近硬件", 0xE050,
-            {"HLE", "LLE", "LLE 多线程"},
+        m_coreItems.push_back(_selector(L("音频模拟"), L("HLE 性能更好；LLE 更接近硬件"), 0xE050,
+            {"HLE", "LLE", L("LLE 多线程")},
             [key, audioValues]() { return findIndex(audioValues, cfgGetStr(key("audio_emulation"), "hle")); },
             [key, audioValues](int i) { if (i >= 0 && i < static_cast<int>(audioValues.size())) cfgSetStr(key("audio_emulation"), audioValues[static_cast<size_t>(i)]); }));
-        m_coreItems.push_back(_toggle("音频拉伸", "通过拉伸音频减少爆音，可能增加延迟", 0xE8B5,
+        m_coreItems.push_back(_toggle(L("音频拉伸"), L("通过拉伸音频减少爆音，可能增加延迟"), 0xE8B5,
             [key]() { return cfgGetBool(key("audio_stretching"), false); },
             [key](bool v) { cfgSetBool(key("audio_stretching"), v); }));
-        m_coreItems.push_back(_toggle("实时音频", "优先保持低延迟音频输出", 0xE8B5,
+        m_coreItems.push_back(_toggle(L("实时音频"), L("优先保持低延迟音频输出"), 0xE8B5,
             [key]() { return cfgGetBool(key("realtime_audio"), true); },
             [key](bool v) { cfgSetBool(key("realtime_audio"), v); }));
         const std::vector<std::string> micValues = {"null", "auto", "static_noise"};
-        m_coreItems.push_back(_selector("麦克风输入", "3DS 麦克风模拟来源", 0xE050,
-            {"关闭", "自动", "静态噪声"},
+        m_coreItems.push_back(_selector(L("麦克风输入"), L("3DS 麦克风模拟来源"), 0xE050,
+            {L("关闭"), L("自动"), L("静态噪声")},
             [key, micValues]() { return findIndex(micValues, cfgGetStr(key("input_type"), "null")); },
             [key, micValues](int i) { if (i >= 0 && i < static_cast<int>(micValues.size())) cfgSetStr(key("input_type"), micValues[static_cast<size_t>(i)]); }));
 
-        m_coreItems.push_back(_section("调试"));
-        m_coreItems.push_back(_toggle("渲染调试上下文", "启用 Vulkan/OpenGL 调试上下文，普通游玩建议关闭", 0xE868,
+        m_coreItems.push_back(_section(L("调试")));
+        m_coreItems.push_back(_toggle(L("渲染调试上下文"), L("启用 Vulkan/OpenGL 调试上下文，普通游玩建议关闭"), 0xE868,
             [key]() { return cfgGetBool(key("renderer_debug"), false); },
             [key](bool v) { cfgSetBool(key("renderer_debug"), v); }));
-        m_coreItems.push_back(_toggle("导出命令缓冲", "输出底层渲染命令数据，调试时使用", 0xE868,
+        m_coreItems.push_back(_toggle(L("导出命令缓冲"), L("输出底层渲染命令数据，调试时使用"), 0xE868,
             [key]() { return cfgGetBool(key("dump_command_buffers"), false); },
             [key](bool v) { cfgSetBool(key("dump_command_buffers"), v); }));
 
-        _finishCorePage("Azahar 3DS 核心设置");
+        _finishCorePage(L("Azahar 3DS 核心设置"));
     }
 
     void _openSteamApiDialog()
@@ -3015,13 +3015,13 @@ private:
             m_steamDialog = SteamDialog::ApiModify;
             m_steamDialogTitle = "SteamGridDB API Key";
             m_steamDialogMessage =
-                "当前已经保存 API Key。是否重新输入并验证新的密钥？";
+                L("当前已经保存 API Key。是否重新输入并验证新的密钥？");
         } else {
             m_steamDialog = SteamDialog::ApiInfo;
-            m_steamDialogTitle = "获取 SteamGridDB API Key";
+            m_steamDialogTitle = L("获取 SteamGridDB API Key");
             m_steamDialogMessage =
-                "请登录 steamgriddb.com，进入个人设置中的 API 页面，创建并复制 API Key。\n"
-                "密钥只保存在本机，不会写入游戏数据库。";
+                L("请登录 steamgriddb.com，进入个人设置中的 API 页面，创建并复制 API Key。\n")
+                + L("密钥只保存在本机，不会写入游戏数据库。");
         }
     }
 
@@ -3030,8 +3030,8 @@ private:
         auto* ime = brls::Application::getPlatform()->getImeManager();
         if (!ime) {
             m_steamDialog = SteamDialog::Result;
-            m_steamDialogTitle = "无法输入";
-            m_steamDialogMessage = "当前平台未提供文本输入服务。";
+            m_steamDialogTitle = L("无法输入");
+            m_steamDialogMessage = L("当前平台未提供文本输入服务。");
             m_steamDialogSuccess = false;
             return;
         }
@@ -3041,21 +3041,21 @@ private:
             std::string error;
             if (!beiklive::steamgriddb::saveApiKey(key, &error)) {
                 m_steamDialog = SteamDialog::Result;
-                m_steamDialogTitle = "保存失败";
-                m_steamDialogMessage = error.empty() ? "无法保存 API Key" : error;
+                m_steamDialogTitle = L("保存失败");
+                m_steamDialogMessage = error.empty() ? L("无法保存 API Key") : error;
                 m_steamDialogSuccess = false;
                 return;
             }
             _beginSteamApiValidation(key);
-        }, "SteamGridDB API Key", "请输入 API Key", 256, current,
+        }, "SteamGridDB API Key", L("请输入 API Key"), 256, current,
             brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
     }
 
     void _beginSteamApiValidation(std::string key)
     {
         m_steamDialog = SteamDialog::Working;
-        m_steamDialogTitle = "正在验证 API Key";
-        m_steamDialogMessage = "正在连接 SteamGridDB 并尝试获取搜索数据...";
+        m_steamDialogTitle = L("正在验证 API Key");
+        m_steamDialogMessage = L("正在连接 SteamGridDB 并尝试获取搜索数据...");
         auto alive = m_aliveToken;
         ThreadPool::instance().enqueuePriority([
             this, alive, key = std::move(key)]() {
@@ -3066,14 +3066,14 @@ private:
                 m_steamDialogChoice = 0;
                 m_steamDialogSuccess = result.ok;
                 if (result.ok) {
-                    m_steamDialogTitle = "验证成功";
+                    m_steamDialogTitle = L("验证成功");
                     m_steamDialogMessage =
-                        "API Key 可以正常访问 SteamGridDB，封面搜索功能已经可用。";
+                        L("API Key 可以正常访问 SteamGridDB，封面搜索功能已经可用。");
                 } else {
                     m_steamDialogTitle = result.networkError
-                        ? "网络异常" : "API Key 无效";
+                        ? L("网络异常") : L("API Key 无效");
                     m_steamDialogMessage = result.error.empty()
-                        ? "无法验证 API Key，请重新输入。" : result.error;
+                        ? L("无法验证 API Key，请重新输入。") : result.error;
                 }
                 invalidate();
             });
@@ -3084,19 +3084,19 @@ private:
     {
         m_steamDialog = SteamDialog::ConfirmCacheClear;
         m_steamDialogChoice = 1;
-        m_steamDialogTitle = "确认清空缓存";
-        m_steamDialogMessage =
-            "将删除 SteamGridDB 搜索结果和图片预览缓存。\n"
-            "已经保存到游戏目录中的封面不会被删除。";
+        m_steamDialogTitle = L("确认清空缓存");
+            m_steamDialogMessage =
+                L("将删除 SteamGridDB 搜索结果和图片预览缓存。\n")
+                + L("已经保存到游戏目录中的封面不会被删除。");
         m_steamDialogSuccess = false;
     }
 
     void _performSteamCacheClear()
     {
         m_steamDialog = SteamDialog::Working;
-        m_steamDialogTitle = "正在清空缓存";
+        m_steamDialogTitle = L("正在清空缓存");
         m_steamDialogMessage =
-            "正在删除 GBAStation/SteamGirdDB/cache 中的本地缓存...";
+            L("正在删除 GBAStation/SteamGirdDB/cache 中的本地缓存...");
         auto alive = m_aliveToken;
         ThreadPool::instance().enqueuePriority([this, alive]() {
             std::string error;
@@ -3106,10 +3106,10 @@ private:
                 m_steamDialog = SteamDialog::Result;
                 m_steamDialogChoice = 0;
                 m_steamDialogSuccess = ok;
-                m_steamDialogTitle = ok ? "缓存已清空" : "清理失败";
+                m_steamDialogTitle = ok ? L("缓存已清空") : L("清理失败");
                 m_steamDialogMessage = ok
-                    ? "SteamGridDB API 结果和图片预览缓存已经清理。"
-                    : (error.empty() ? "无法清理缓存目录。" : error);
+                    ? L("SteamGridDB API 结果和图片预览缓存已经清理。")
+                    : (error.empty() ? L("无法清理缓存目录。") : error);
                 invalidate();
             });
         });
@@ -3144,36 +3144,36 @@ private:
         {
             struct ArcadeBinding
             {
-                const char* label;
-                const char* suffix;
-                const char* defaultValue;
+                std::string label;
+                std::string suffix;
+                std::string defaultValue;
             };
-            static constexpr ArcadeBinding arcadeBindings[] = {
-                {"方向 上", "up", "PAD_UP"},
-                {"方向 下", "down", "PAD_DOWN"},
-                {"方向 左", "left", "PAD_LEFT"},
-                {"方向 右", "right", "PAD_RIGHT"},
-                {"街机按钮 1", "a", "PAD_A"},
-                {"街机按钮 2", "b", "PAD_B"},
-                {"街机按钮 3", "x", "PAD_X"},
-                {"街机按钮 4", "y", "PAD_Y"},
-                {"街机按钮 5", "l", "PAD_LB"},
-                {"街机按钮 6", "r", "PAD_RB"},
-                {"街机按钮 7", "l2", "PAD_LT"},
-                {"街机按钮 8", "r2", "PAD_RT"},
-                {"投币", "select", "PAD_BACK"},
-                {"开始", "start", "PAD_START"},
+            static const ArcadeBinding arcadeBindings[] = {
+                {L("方向 上"), "up", "PAD_UP"},
+                {L("方向 下"), "down", "PAD_DOWN"},
+                {L("方向 左"), "left", "PAD_LEFT"},
+                {L("方向 右"), "right", "PAD_RIGHT"},
+                {L("街机按钮 1"), "a", "PAD_A"},
+                {L("街机按钮 2"), "b", "PAD_B"},
+                {L("街机按钮 3"), "x", "PAD_X"},
+                {L("街机按钮 4"), "y", "PAD_Y"},
+                {L("街机按钮 5"), "l", "PAD_LB"},
+                {L("街机按钮 6"), "r", "PAD_RB"},
+                {L("街机按钮 7"), "l2", "PAD_LT"},
+                {L("街机按钮 8"), "r2", "PAD_RT"},
+                {L("投币"), "select", "PAD_BACK"},
+                {L("开始"), "start", "PAD_START"},
             };
 
-            m_mappingItems.push_back(_section("Arcade 游戏按键"));
+            m_mappingItems.push_back(_section(L("Arcade 游戏按键")));
             for (const auto& binding : arcadeBindings)
             {
-                _addBinding(binding.label, "直接映射到外部街机核心输入",
+                _addBinding(binding.label, L("直接映射到外部街机核心输入"),
                             beiklive::input_mapping::makeHandleKey(prefix, binding.suffix),
                             binding.defaultValue);
             }
-            m_mappingItems.push_back(_section("Arcade 功能键"));
-            _addBinding("打开菜单", "可绑定单键或双键组合",
+            m_mappingItems.push_back(_section(L("Arcade 功能键")));
+            _addBinding(L("打开菜单"), L("可绑定单键或双键组合"),
                         beiklive::input_mapping::makeKey(prefix, "hotkey.menu.pad"),
                         "PAD_LT+PAD_RT");
             m_mappingFocus = _firstFocusable(m_mappingItems);
@@ -3182,48 +3182,48 @@ private:
         }
 
         const unsigned mask = beiklive::input_mapping::platformMaskForPrefix(prefix);
-        m_mappingItems.push_back(_section("游戏按键"));
+        m_mappingItems.push_back(_section(L("游戏按键")));
         for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
         {
             if ((entry.platformMask & mask) == 0) continue;
             _addBinding(beiklive::input_mapping::gameButtonLabelForPrefix(prefix, entry),
-                        "游戏内对应按键",
+                        L("游戏内对应按键"),
                         beiklive::input_mapping::makeHandleKey(prefix, entry.suffix),
                         beiklive::input_mapping::defaultHandleValueForPrefix(
                             prefix, entry.suffix, entry.defaultValue));
         }
-        m_mappingItems.push_back(_section("功能热键"));
+        m_mappingItems.push_back(_section(L("功能热键")));
         for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
         {
             if ((nds && entry.hiddenOnNds) ||
                 (prefix == "3ds." && entry.hiddenOnThreeDs))
                 continue;
-            _addBinding(entry.label, "可绑定单键或双键组合", beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
+            _addBinding(entry.label, L("可绑定单键或双键组合"), beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
         }
         const bool pointerHotkeys = nds || prefix == "3ds.";
         if (pointerHotkeys)
         {
-            m_mappingItems.push_back(_section(nds ? "NDS 指针与屏幕" : "3DS 指针与屏幕"));
+            m_mappingItems.push_back(_section(nds ? L("NDS 指针与屏幕") : L("3DS 指针与屏幕")));
             for (const auto& entry : beiklive::input_mapping::kPointerHotkeys)
             {
                 if ((nds && entry.hiddenOnNds) ||
                     (prefix == "3ds." && entry.hiddenOnThreeDs))
                     continue;
-                _addBinding(entry.label, "右摇杆控制指针；麦克风热键再次按下可取消", beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
+                _addBinding(entry.label, L("右摇杆控制指针；麦克风热键再次按下可取消"), beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
             }
         }
-        m_mappingItems.push_back(_section("连发"));
-        _addBinding(prefix == "md." ? "MD C 连发" : "A 连发",
-                    prefix == "md." ? "按住时自动重复触发 MD C" : "按住时自动重复触发 A",
+        m_mappingItems.push_back(_section(L("连发")));
+        _addBinding(prefix == "md." ? L("MD C 连发") : L("A 连发"),
+                    prefix == "md." ? L("按住时自动重复触发 MD C") : L("按住时自动重复触发 A"),
                     beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey),
                     beiklive::input_mapping::kTurboADefault);
-        _addBinding(prefix == "md." ? "MD B 连发" : "B 连发",
-                    prefix == "md." ? "按住时自动重复触发 MD B" : "按住时自动重复触发 B",
+        _addBinding(prefix == "md." ? L("MD B 连发") : L("B 连发"),
+                    prefix == "md." ? L("按住时自动重复触发 MD B") : L("按住时自动重复触发 B"),
                     beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey),
                     beiklive::input_mapping::kTurboBDefault);
         const std::vector<float> rates = {1.f, 5.f, 10.f, 15.f, 30.f};
-        m_mappingItems.push_back(_selector("连发速度", "每秒自动触发次数", 0xE8E5,
-            {"每秒1次", "每秒5次", "每秒10次", "每秒15次", "每秒30次"},
+        m_mappingItems.push_back(_selector(L("连发速度"), L("每秒自动触发次数"), 0xE8E5,
+            {L("每秒1次"), L("每秒5次"), L("每秒10次"), L("每秒15次"), L("每秒30次")},
             [rates]() { const float cur = GET_SETTING_KEY_FLOAT("turbo.rate", 10.f); for (int i = 0; i < 5; ++i) if (std::fabs(cur - rates[i]) < 0.01f) return i; return 2; },
             [rates](int i) { if (i >= 0 && i < 5) SET_SETTING_KEY_FLOAT("turbo.rate", rates[i]); }));
         m_mappingFocus = _firstFocusable(m_mappingItems);
@@ -3542,11 +3542,11 @@ private:
         nvgFontSize(vg, 27.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 36.f, y + 42.f, L("设置"), nullptr);
+        nvgText(vg, x + 36.f, y + 42.f, L("设置").c_str(), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
         const std::string subtitle = m_inMapping ? m_mappingTitle :
-            (m_inCore ? m_coreTitle : "模拟器、输入、游戏与系统选项");
+            (m_inCore ? m_coreTitle : L("模拟器、输入、游戏与系统选项"));
         nvgText(vg, x + 36.f, y + 70.f, subtitle.c_str(), nullptr);
 
         const float startX = x + 238.f;
@@ -3713,7 +3713,7 @@ private:
         if (item.kind == NanoSettingKind::Binding)
             _drawBinding(vg, value, x + w - 24.f, y + h * 0.5f, focused);
         else if (item.kind == NanoSettingKind::Toggle)
-            _drawToggle(vg, value == "开启", x + w - 78.f, y + h * 0.5f, focused);
+            _drawToggle(vg, value == L("开启"), x + w - 78.f, y + h * 0.5f, focused);
         else
         {
             nvgFontFaceId(vg, m_defaultFont);
@@ -3791,7 +3791,7 @@ private:
             nvgFontSize(vg, 15.f);
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(190, 198, 210, 150));
-            nvgText(vg, right, centerY, L("未绑定"), nullptr);
+            nvgText(vg, right, centerY, L("未绑定").c_str(), nullptr);
             return;
         }
         const auto alternatives = splitSettingText(binding, '|');
@@ -3848,7 +3848,7 @@ private:
                 nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, nvgRGBA(200, 208, 220, 150));
                 cursor -= 17.f;
-                nvgText(vg, cursor + 8.f, centerY, L("或"), nullptr);
+                nvgText(vg, cursor + 8.f, centerY, L("或").c_str(), nullptr);
                 cursor -= 5.f;
             }
             if (cursor < right - 390.f) break;
@@ -3860,16 +3860,16 @@ private:
         float cursor = x + w - 32.f;
         const float hintY = y + h - 29.f;
         _drawHint(vg, brls::BUTTON_B,
-                  m_selectorOpen ? "取消" : (m_inMapping ? "返回平台" : (m_inCore ? "返回核心" : "返回")),
+                  m_selectorOpen ? L("取消").c_str() : (m_inMapping ? L("返回平台").c_str() : (m_inCore ? L("返回核心").c_str() : L("返回").c_str())),
                   cursor, hintY);
         if (m_inMapping && !m_selectorOpen && !m_mappingItems.empty()
             && m_mappingItems[static_cast<size_t>(m_mappingFocus)].kind == NanoSettingKind::Binding)
-            _drawHint(vg, brls::BUTTON_X, "清除绑定", cursor, hintY);
-        _drawHint(vg, brls::BUTTON_A, m_selectorOpen ? "确认" : "选择", cursor, hintY);
+            _drawHint(vg, brls::BUTTON_X, L("清除绑定").c_str(), cursor, hintY);
+        _drawHint(vg, brls::BUTTON_A, m_selectorOpen ? L("确认").c_str() : L("选择").c_str(), cursor, hintY);
         if (!m_inMapping && !m_inCore && !m_selectorOpen)
         {
-            _drawHint(vg, brls::BUTTON_RB, "下一类", cursor, hintY);
-            _drawHint(vg, brls::BUTTON_LB, "上一类", cursor, hintY);
+            _drawHint(vg, brls::BUTTON_RB, L("下一类").c_str(), cursor, hintY);
+            _drawHint(vg, brls::BUTTON_LB, L("上一类").c_str(), cursor, hintY);
         }
     }
 
@@ -4030,7 +4030,7 @@ private:
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(190, 200, 215, 190));
         nvgText(vg, panel.x + 120.f, panel.y + 78.f,
-                "SteamGridDB 在线封面服务", nullptr);
+                L("SteamGridDB 在线封面服务").c_str(), nullptr);
         nvgBeginPath(vg);
         nvgMoveTo(vg, panel.x + 30.f, panel.y + 116.f);
         nvgLineTo(vg, panel.x + panel.w - 30.f, panel.y + 116.f);
@@ -4047,12 +4047,12 @@ private:
         if (m_steamDialog == SteamDialog::ApiInfo ||
             m_steamDialog == SteamDialog::ApiModify ||
             m_steamDialog == SteamDialog::ConfirmCacheClear) {
-            const char* labels[2] = {
+            const std::string labels[2] = {
                 m_steamDialog == SteamDialog::ConfirmCacheClear
-                    ? "确认清理"
+                    ? L("确认清理")
                     : (m_steamDialog == SteamDialog::ApiInfo
-                        ? "我要输入" : "修改密钥"),
-                "取消"};
+                        ? L("我要输入") : L("修改密钥")),
+                L("取消")};
             for (int i = 0; i < 2; ++i) {
                 const float buttonW = 210.f;
                 const float buttonX = panel.x + panel.w * 0.5f - 220.f + i * 230.f;
@@ -4074,7 +4074,7 @@ private:
                 nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
                 nvgText(vg, buttonX + buttonW * 0.5f, buttonY + 26.f,
-                        labels[i], nullptr);
+                        labels[i].c_str(), nullptr);
             }
         } else if (m_steamDialog == SteamDialog::Result) {
             const float buttonW = 220.f;
@@ -4092,7 +4092,7 @@ private:
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
             nvgText(vg, buttonX + buttonW * 0.5f, buttonY + 26.f,
-                    "知道了", nullptr);
+                    L("知道了").c_str(), nullptr);
         }
         nvgRestore(vg);
     }
@@ -4115,138 +4115,138 @@ brls::View *SettingPage::buildUITab()
     auto *box    = makeContentBox();
 
     // ── GBA/GBC 核心设置 ──────────────────────────────────────────────────────
-    box->addView(makeHeader("mgba 核心设置"));
+    box->addView(makeHeader(L("mgba 核心设置")));
 
     {
         std::vector<std::string> gbModels = {
             "Autodetect", "Game Boy", "Super Game Boy", "Game Boy Color", "Game Boy Advance"};
         std::string curModel = cfgGetStr("core.mgba_gb_model", "Autodetect");
         auto *gbModelCell    = new brls::SelectorCell();
-        gbModelCell->init("GB 机型", gbModels, findIndex(gbModels, curModel),
+        gbModelCell->init(L("GB 机型"), gbModels, findIndex(gbModels, curModel),
                           [gbModels](int idx) { if (idx >= 0 && idx < 5) cfgSetStr("core.mgba_gb_model", gbModels[idx]); });
         box->addView(gbModelCell);
-        box->addView(makeHint("Autodetect: 根据 ROM 头自动检测硬件型号"));
+        box->addView(makeHint(L("Autodetect: 根据 ROM 头自动检测硬件型号")));
     }
 
     auto *biosCell = new brls::BooleanCell();
-    biosCell->init("使用 BIOS", cfgGetStr("core.mgba_use_bios", "ON") == "ON",
+    biosCell->init(L("使用 BIOS"), cfgGetStr("core.mgba_use_bios", "ON") == "ON",
                    [](bool v) { cfgSetStr("core.mgba_use_bios", v ? "ON" : "OFF"); });
     box->addView(biosCell);
-    box->addView(makeHint("开启 BIOS 后，之前在非 BIOS 模式下保存的即时存档可能会失效"));
+    box->addView(makeHint(L("开启 BIOS 后，之前在非 BIOS 模式下保存的即时存档可能会失效")));
 
     auto *skipBiosCell = new brls::BooleanCell();
-    skipBiosCell->init("跳过 BIOS 动画",
+    skipBiosCell->init(L("跳过 BIOS 动画"),
                        cfgGetStr("core.mgba_skip_bios", "OFF") == "ON",
                        [](bool v) { cfgSetStr("core.mgba_skip_bios", v ? "ON" : "OFF"); });
     box->addView(skipBiosCell);
 
-    box->addView(makeHint("BIOS 文件请放入 GBAStation/bios 目录下（gba_bios.bin）"));
+    box->addView(makeHint(L("BIOS 文件请放入 GBAStation/bios 目录下（gba_bios.bin）")));
 
     {
         auto& gbColors = beiklive::GetGbColorPresets();
         std::string curGbColor = cfgGetStr("core.mgba_gb_colors", "Grayscale");
         auto *gbColorCell      = new brls::SelectorCell();
-        gbColorCell->init("GB 配色", gbColors, findIndex(gbColors, curGbColor),
+        gbColorCell->init(L("GB 配色"), gbColors, findIndex(gbColors, curGbColor),
                           [&gbColors](int idx) { if (idx >= 0 && idx < (int)gbColors.size()) cfgSetStr("core.mgba_gb_colors", gbColors[idx]); });
         box->addView(gbColorCell);
-        box->addView(makeHint("为 GB/GBC 单色游戏着色，不影响 GBA 游戏"));
+        box->addView(makeHint(L("为 GB/GBC 单色游戏着色，不影响 GBA 游戏")));
     }
 
     auto *sgbBorderCell = new brls::BooleanCell();
-    sgbBorderCell->init("SGB 边框", cfgGetStr("core.mgba_sgb_borders", "OFF") == "ON",
+    sgbBorderCell->init(L("SGB 边框"), cfgGetStr("core.mgba_sgb_borders", "OFF") == "ON",
                         [](bool v) { cfgSetStr("core.mgba_sgb_borders", v ? "ON" : "OFF"); });
     box->addView(sgbBorderCell);
-    box->addView(makeHint("如果GB GBC游戏显示在左上角，请关闭此选项"));
+    box->addView(makeHint(L("如果GB GBC游戏显示在左上角，请关闭此选项")));
 
     {
-        std::vector<std::string> rtcModes = {"持久化 RTC", "跟随当前系统时间"};
+        std::vector<std::string> rtcModes = {L("持久化 RTC"), L("跟随当前系统时间")};
         std::vector<std::string> rtcModeIds = {"persist", "system"};
         std::string curRtcMode = cfgGetStr("core.mgba_rtc_mode", "persist");
         auto* rtcModeCell = new brls::SelectorCell();
-        rtcModeCell->init("RTC 时钟模式", rtcModes, findIndex(rtcModeIds, curRtcMode),
+        rtcModeCell->init(L("RTC 时钟模式"), rtcModes, findIndex(rtcModeIds, curRtcMode),
                           [rtcModeIds](int idx) {
                               if (idx >= 0 && idx < static_cast<int>(rtcModeIds.size()))
                                   cfgSetStr("core.mgba_rtc_mode", rtcModeIds[idx]);
                           });
         box->addView(rtcModeCell);
-        box->addView(makeHint("持久化 RTC：保留游戏内部时钟进度；跟随当前系统时间：每次启动时按当前设备时间校准"));
+        box->addView(makeHint(L("持久化 RTC：保留游戏内部时钟进度；跟随当前系统时间：每次启动时按当前设备时间校准")));
     }
 
     // ── 存档设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("存档设置"));
+    box->addView(makeHeader(L("存档设置")));
 
     {
-        std::vector<std::string> saveDirs = {"ROM 所在目录", "模拟器目录"};
+        std::vector<std::string> saveDirs = {L("ROM 所在目录"), L("模拟器目录")};
         std::string curSram = cfgGetStr("save.sramDir", "");
         auto *sramDirCell = new brls::SelectorCell();
-        sramDirCell->init("SRAM 存档目录", saveDirs, curSram.empty() ? 0 : 1,
+        sramDirCell->init(L("SRAM 存档目录"), saveDirs, curSram.empty() ? 0 : 1,
                           [](int idx) { cfgSetStr("save.sramDir", idx == 0 ? "" : beiklive::path::savePath()); });
         box->addView(sramDirCell);
     }
 
     auto *autoSaveCell = new brls::SelectorCell();
     {
-        std::vector<std::string> slotOpts = {"关闭", "档位0", "档位1", "档位2", "档位3", "档位4", "档位5", "档位6", "档位7", "档位8", "档位9"};
+        std::vector<std::string> slotOpts = {L("关闭"), L("档位0"), L("档位1"), L("档位2"), L("档位3"), L("档位4"), L("档位5"), L("档位6"), L("档位7"), L("档位8"), L("档位9")};
         int curSlot = GET_SETTING_KEY_INT("save.autoSaveState", 0);
         if (curSlot < 0 || curSlot > 10) curSlot = 0;
-        autoSaveCell->init("自动保存游戏状态", slotOpts, curSlot,
+        autoSaveCell->init(L("自动保存游戏状态"), slotOpts, curSlot,
                            [](int i) { SET_SETTING_KEY_INT("save.autoSaveState", i); });
     }
     box->addView(autoSaveCell);
 
     {
-        std::vector<std::string> intervals = {"关闭", "1 分钟", "3 分钟", "5 分钟", "10 分钟"};
+        std::vector<std::string> intervals = {L("关闭"), L("1 分钟"), L("3 分钟"), L("5 分钟"), L("10 分钟")};
         static const int intervalVals[] = {0, 60, 180, 300, 600};
         int curVal = GET_SETTING_KEY_INT("save.autoSaveInterval", 0);
         int idx = 0;
         for (int i = 0; i < 5; ++i) if (intervalVals[i] == curVal) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("自动保存间隔", intervals, idx,
+        cell->init(L("自动保存间隔"), intervals, idx,
                    [](int i) { if (i >= 0 && i < 5) SET_SETTING_KEY_INT("save.autoSaveInterval", intervalVals[i]); });
         box->addView(cell);
-        box->addView(makeHint("定时自动创建即时存档，防止意外丢失进度"));
+        box->addView(makeHint(L("定时自动创建即时存档，防止意外丢失进度")));
     }
 
     auto *autoLoadCell = new brls::SelectorCell();
     {
-        std::vector<std::string> slotOpts = {"关闭", "档位0", "档位1", "档位2", "档位3", "档位4", "档位5", "档位6", "档位7", "档位8", "档位9"};
+        std::vector<std::string> slotOpts = {L("关闭"), L("档位0"), L("档位1"), L("档位2"), L("档位3"), L("档位4"), L("档位5"), L("档位6"), L("档位7"), L("档位8"), L("档位9")};
         int curSlot = GET_SETTING_KEY_INT("save.autoLoadState0", 0);
         if (curSlot < 0 || curSlot > 10) curSlot = 0;
-        autoLoadCell->init("启动时自动加载", slotOpts, curSlot,
+        autoLoadCell->init(L("启动时自动加载"), slotOpts, curSlot,
                            [](int i) { SET_SETTING_KEY_INT("save.autoLoadState0", i); });
     }
     box->addView(autoLoadCell);
 
     {
-        std::vector<std::string> exitSlotOpts = {"关闭", "档位0", "档位1", "档位2", "档位3", "档位4", "档位5", "档位6", "档位7", "档位8", "档位9"};
+        std::vector<std::string> exitSlotOpts = {L("关闭"), L("档位0"), L("档位1"), L("档位2"), L("档位3"), L("档位4"), L("档位5"), L("档位6"), L("档位7"), L("档位8"), L("档位9")};
         int curExitSlot = GET_SETTING_KEY_INT("save.autoSaveOnExit", 0);
         if (curExitSlot < 0 || curExitSlot > 10) curExitSlot = 0;
         auto *exitSaveCell = new brls::SelectorCell();
-        exitSaveCell->init("退出游戏时自动保存", exitSlotOpts, curExitSlot,
+        exitSaveCell->init(L("退出游戏时自动保存"), exitSlotOpts, curExitSlot,
                            [](int i) { SET_SETTING_KEY_INT("save.autoSaveOnExit", i); });
         box->addView(exitSaveCell);
     }
 
     // ── 封面设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("封面设置"));
+    box->addView(makeHeader(L("封面设置")));
 
     {
         auto *thumbCell = new brls::BooleanCell();
-        thumbCell->init("使用存档截图作为封面",
+        thumbCell->init(L("使用存档截图作为封面"),
                        cfgGetBool(beiklive::SettingKey::KEY_UI_USE_SAVESTATE_THUMB, false),
                        [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_UI_USE_SAVESTATE_THUMB, v); });
         box->addView(thumbCell);
-        box->addView(makeHint("使用即时存档0截图作为封面，已自定义封面的游戏不覆盖"));
+        box->addView(makeHint(L("使用即时存档0截图作为封面，已自定义封面的游戏不覆盖")));
     }
 
 
 
     // ── 模拟器UI ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("模拟器UI"));
+    box->addView(makeHeader(L("模拟器UI")));
 
     {
         auto *shaderCell = new brls::BooleanCell();
-        shaderCell->init("启用动态渐变背景",
+        shaderCell->init(L("启用动态渐变背景"),
                         cfgGetBool(beiklive::SettingKey::KEY_UI_SHOW_SHADER, false),
                         [this](bool v) {
                             cfgSetBool(beiklive::SettingKey::KEY_UI_SHOW_SHADER, v);
@@ -4256,13 +4256,13 @@ brls::View *SettingPage::buildUITab()
     }
 
     {
-        std::vector<std::string> themes = {"深夜蓝", "柠檬黄", "牛油果绿", "草莓红", "海洋蓝", "樱花粉", "VSCode黑"};
+        std::vector<std::string> themes = {L("深夜蓝"), L("柠檬黄"), L("牛油果绿"), L("草莓红"), L("海洋蓝"), L("樱花粉"), L("VSCode黑")};
         std::vector<std::string> themeIds = {"Midnight", "LemonYellow", "AvocadoGreen", "StrawberryRed",
                                               "OceanBlue", "SakuraPink", "VscodeBlack"};
         std::string curTheme = cfgGetStr(beiklive::SettingKey::KEY_UI_GRADIENT_THEME, "VscodeBlack");
         int curIdx = findIndex(themeIds, curTheme, 6);
         auto *themeCell = new brls::SelectorCell();
-        themeCell->init("渐变主题", themes, curIdx,
+        themeCell->init(L("渐变主题"), themes, curIdx,
                        [this, themeIds](int idx) {
                            if (idx >= 0 && idx < (int)themeIds.size()) {
                                cfgSetStr(beiklive::SettingKey::KEY_UI_GRADIENT_THEME, themeIds[idx]);
@@ -4281,7 +4281,7 @@ brls::View *SettingPage::buildUITab()
     // ── 背景图片设置 ──
     {
         auto *bgSwitch = new brls::BooleanCell();
-        bgSwitch->init("启用背景图片",
+        bgSwitch->init(L("启用背景图片"),
                       cfgGetBool(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, false),
                       [this](bool v) {
                           cfgSetBool(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, v);
@@ -4290,10 +4290,10 @@ brls::View *SettingPage::buildUITab()
         box->addView(bgSwitch);
 
         auto *bgPathCell = new brls::DetailCell();
-        bgPathCell->setText("背景图片路径");
+        bgPathCell->setText(L("背景图片路径"));
         std::string curPath = cfgGetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, "");
-        bgPathCell->setDetailText(curPath.empty() ? "未设置" : beiklive::tools::getFileName(curPath));
-        bgPathCell->registerAction("选择", brls::BUTTON_A,
+        bgPathCell->setDetailText(curPath.empty() ? L("未设置") : beiklive::tools::getFileName(curPath));
+        bgPathCell->registerAction(L("选择"), brls::BUTTON_A,
             [this, bgPathCell](brls::View*) -> bool {
                 std::filesystem::path currentPath(cfgGetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, ""));
                 beiklive::openFilePicker({"png"},
@@ -4312,22 +4312,22 @@ brls::View *SettingPage::buildUITab()
     // 文件列表滚动动画
     {
         auto *scrollAnimCell = new brls::BooleanCell();
-        scrollAnimCell->init("文件列表滚动动画",
+        scrollAnimCell->init(L("文件列表滚动动画"),
                             cfgGetBool(beiklive::SettingKey::KEY_FILE_LIST_SCROLL_ANIM, true),
                             [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_FILE_LIST_SCROLL_ANIM, v); });
         box->addView(scrollAnimCell);
-        box->addView(makeHint("启用文件浏览器的平滑滚动效果，关闭后列表直接跳转"));
+        box->addView(makeHint(L("启用文件浏览器的平滑滚动效果，关闭后列表直接跳转")));
     }
 
     {
         auto* titleSizeCell = new brls::SelectorCell();
-        titleSizeCell->init("游戏库标题字号",
-            {"正常", "大", "超大"},
+        titleSizeCell->init(L("游戏库标题字号"),
+            {L("正常"), "大", L("超大")},
             cfgGetInt(beiklive::SettingKey::KEY_UI_LIBRARY_TITLE_SIZE, 0),
             [](int sel) { cfgSetInt(beiklive::SettingKey::KEY_UI_LIBRARY_TITLE_SIZE, sel); });
         box->addView(titleSizeCell);
     }
-    box->addView(makeHint("设置游戏库网格列表中游戏标题的显示字号"));
+    box->addView(makeHint(L("设置游戏库网格列表中游戏标题的显示字号")));
 
     scroll->setContentView(box);
     auto *container = new brls::Box(brls::Axis::COLUMN);
@@ -4347,7 +4347,7 @@ brls::View *SettingPage::buildGameTab()
     auto *box    = makeContentBox();
 
     // ── 快进设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("快进设置"));
+    box->addView(makeHeader(L("快进设置")));
 
     auto *ffEnabledCell = new brls::BooleanCell();
     ffEnabledCell->init("启用快进", cfgGetBool("fastforward.enabled", true),
@@ -4355,26 +4355,26 @@ brls::View *SettingPage::buildGameTab()
     box->addView(ffEnabledCell);
 
     {
-        std::vector<std::string> modes = {"按住", "切换"};
+        std::vector<std::string> modes = {L("按住"), L("切换")};
         std::string curMode = cfgGetStr("fastforward.mode", "hold");
         auto *cell = new brls::SelectorCell();
-        cell->init("触发模式", modes, curMode == "toggle" ? 1 : 0,
+        cell->init(L("触发模式"), modes, curMode == "toggle" ? 1 : 0,
                    [](int idx) { cfgSetStr("fastforward.mode", idx == 1 ? "toggle" : "hold"); });
         box->addView(cell);
-        box->addView(makeHint("按住：长按快进键触发  |  切换：按一次永久保持"));
+        box->addView(makeHint(L("按住：长按快进键触发  |  切换：按一次永久保持")));
     }
 
     {
-        std::vector<std::string> multis = {"0.1倍", "0.5倍", "1倍", "1.25倍", "1.5倍", "1.75倍", "2倍", "3倍", "4倍", "5倍", "6倍", "7倍", "8倍", "9倍", "10倍"};
+        std::vector<std::string> multis = {L("0.1倍"), L("0.5倍"), L("1倍"), L("1.25倍"), L("1.5倍"), L("1.75倍"), L("2倍"), L("3倍"), L("4倍"), L("5倍"), L("6倍"), L("7倍"), L("8倍"), L("9倍"), L("10倍")};
         static const float multiVals[] = {0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f};
         float curMulti = GET_SETTING_KEY_FLOAT("fastforward.multiplier", 2.0f);
         int idx = 6;
         for (int i = 0; i < 15; ++i) if (multiVals[i] == curMulti) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("快进倍率", multis, idx,
+        cell->init(L("快进倍率"), multis, idx,
                    [](int i) { if (i >= 0 && i < 15) SET_SETTING_KEY_FLOAT("fastforward.multiplier", multiVals[i]); });
         box->addView(cell);
-        box->addView(makeHint("小于1倍时可实现慢动作效果，大于1倍用于快进加速"));
+        box->addView(makeHint(L("小于1倍时可实现慢动作效果，大于1倍用于快进加速")));
     }
 
     auto *ffMuteCell = new brls::BooleanCell();
@@ -4383,7 +4383,7 @@ brls::View *SettingPage::buildGameTab()
     box->addView(ffMuteCell);
 
     // ── 倒带设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("倒带设置"));
+    box->addView(makeHeader(L("倒带设置")));
 
     auto *rewEnabledCell = new brls::BooleanCell();
     rewEnabledCell->init("启用倒带", cfgGetBool("rewind.enabled", false),
@@ -4391,13 +4391,13 @@ brls::View *SettingPage::buildGameTab()
     box->addView(rewEnabledCell);
 
     {
-        std::vector<std::string> modes = {"按住", "切换"};
+        std::vector<std::string> modes = {L("按住"), L("切换")};
         std::string curMode = cfgGetStr("rewind.mode", "hold");
         auto *cell = new brls::SelectorCell();
-        cell->init("触发模式", modes, curMode == "toggle" ? 1 : 0,
+        cell->init(L("触发模式"), modes, curMode == "toggle" ? 1 : 0,
                    [](int idx) { cfgSetStr("rewind.mode", idx == 1 ? "toggle" : "hold"); });
         box->addView(cell);
-        box->addView(makeHint("按住：长按倒带键触发  |  切换：按一次永久保持"));
+        box->addView(makeHint(L("按住：长按倒带键触发  |  切换：按一次永久保持")));
     }
 
     auto *rewMuteCell = new brls::BooleanCell();
@@ -4406,61 +4406,61 @@ brls::View *SettingPage::buildGameTab()
     box->addView(rewMuteCell);
 
     {
-        std::vector<std::string> stepOpts = {"1 帧", "2 帧", "4 帧", "8 帧"};
+        std::vector<std::string> stepOpts = {L("1 帧"), L("2 帧"), L("4 帧"), L("8 帧")};
         static const int stepVals[] = {1, 2, 4, 8};
         int curStep = GET_SETTING_KEY_INT("rewind.step", 2);
         int idx = 1;
         for (int i = 0; i < 4; ++i) if (stepVals[i] == curStep) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("倒带步进", stepOpts, idx,
+        cell->init(L("倒带步进"), stepOpts, idx,
                    [](int i) { if (i >= 0 && i < 4) SET_SETTING_KEY_INT("rewind.step", stepVals[i]); });
         box->addView(cell);
-        box->addView(makeHint("每次倒带操作回退的帧数，步进越小控制越精细"));
+        box->addView(makeHint(L("每次倒带操作回退的帧数，步进越小控制越精细")));
     }
 
     {
         bool showUI = cfgGetBool(beiklive::SettingKey::KEY_REWIND_SHOW_UI, false);
         auto *showUiCell = new brls::BooleanCell();
-        showUiCell->init("显示可视化倒带界面", showUI,
+        showUiCell->init(L("显示可视化倒带界面"), showUI,
                          [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_REWIND_SHOW_UI, v); });
         box->addView(showUiCell);
     }
 
     {
-        std::vector<std::string> intervalOpts = {"每帧", "每2帧", "每4帧", "每8帧", "每16帧", "每60帧(~1秒)", "每120帧(~2秒)"};
+        std::vector<std::string> intervalOpts = {L("每帧"), L("每2帧"), L("每4帧"), L("每8帧"), L("每16帧"), L("每60帧(~1秒)"), L("每120帧(~2秒)")};
         static const int intervalVals[] = {1, 2, 4, 8, 16, 60, 120};
         static const int intervalCount = 7;
         int curInterval = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SAVE_INTERVAL, 1);
         int curIdx = 0;
         for (int i = 0; i < intervalCount; ++i) if (intervalVals[i] == curInterval) { curIdx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("倒带保存间隔", intervalOpts, curIdx,
+        cell->init(L("倒带保存间隔"), intervalOpts, curIdx,
                    [](int i) { if (i >= 0 && i < intervalCount) SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_SAVE_INTERVAL, intervalVals[i]); });
         box->addView(cell);
-        box->addView(makeHint("间隔越短精度越高但内存占用越大"));
+        box->addView(makeHint(L("间隔越短精度越高但内存占用越大")));
     }
 
     {
-        std::vector<std::string> bufferOpts = {"60 (~1秒)", "120 (~2秒)", "600 (~10秒)", "1800 (~30秒)"};
+        std::vector<std::string> bufferOpts = {L("60 (~1秒)"), L("120 (~2秒)"), L("600 (~10秒)"), L("1800 (~30秒)")};
         static const int bufferVals[] = {60, 120, 600, 1800};
         int curBuffer = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_BUFFER_SIZE, 600);
         int curIdx = 2;
         for (int i = 0; i < 4; ++i) if (bufferVals[i] == curBuffer) { curIdx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("最大倒带缓存", bufferOpts, curIdx,
+        cell->init(L("最大倒带缓存"), bufferOpts, curIdx,
                    [](int i) { if (i >= 0 && i < 4) SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_BUFFER_SIZE, bufferVals[i]); });
         box->addView(cell);
-        box->addView(makeHint("缓冲帧越多可回退时间越长，但内存占用成倍增加"));
+        box->addView(makeHint(L("缓冲帧越多可回退时间越长，但内存占用成倍增加")));
     }
 
     {
         int curCompression = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, 0);
-        std::vector<std::string> compressionOpts = {"最近邻（速度优先）", "双线性（质量优先）"};
+        std::vector<std::string> compressionOpts = {L("最近邻（速度优先）"), L("双线性（质量优先）")};
         auto *cell = new brls::SelectorCell();
-        cell->init("缩略图压缩策略", compressionOpts, curCompression,
+        cell->init(L("缩略图压缩策略"), compressionOpts, curCompression,
                    [](int idx) { if (idx >= 0 && idx <= 1) SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_REWIND_THUMB_COMPRESSION, idx); });
         box->addView(cell);
-        box->addView(makeHint("最近邻速度更快但锯齿明显，双线性更平滑但性能略低"));
+        box->addView(makeHint(L("最近邻速度更快但锯齿明显，双线性更平滑但性能略低")));
     }
 
     scroll->setContentView(box);
@@ -4481,45 +4481,45 @@ brls::View *SettingPage::buildDisplayTab()
     auto *box    = makeContentBox();
 
     // ── 画面显示 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("画面显示"));
+    box->addView(makeHeader(L("画面显示")));
 
     {
-        std::vector<std::string> modes = {"按比例 (Fit)", "拉伸 (Fill)", "原始 (Original)", "4:3", "整数倍 (Integer)", "自定义 (Custom)"};
+        std::vector<std::string> modes = {L("按比例 (Fit)"), L("拉伸 (Fill)"), L("原始 (Original)"), "4:3", L("整数倍 (Integer)"), L("自定义 (Custom)")};
         std::string curMode = cfgGetStr("display.mode", "original");
         std::vector<std::string> modeIds = {"fit", "fill", "original", "four_three", "integer", "custom"};
         int idx = findIndex(modeIds, curMode);
         auto *cell = new brls::SelectorCell();
-        cell->init("画面模式", modes, idx,
+        cell->init(L("画面模式"), modes, idx,
                    [](int i) {
                        static const char* vals[] = {"fit", "fill", "original", "four_three", "integer", "custom"};
                        if (i >= 0 && i < 6) cfgSetStr("display.mode", vals[i]);
                    });
         box->addView(cell);
-        box->addView(makeHint("画面缩放模式：Fit=保持比例最大化 Fill=拉伸填满 4:3=按窗口高度等比换算宽度"));
+        box->addView(makeHint(L("画面缩放模式：Fit=保持比例最大化 Fill=拉伸填满 4:3=按窗口高度等比换算宽度")));
     }
 
     {
-        std::vector<std::string> scales = {"自动", "1倍", "2倍", "3倍", "4倍", "5倍"};
+        std::vector<std::string> scales = {L("自动"), L("1倍"), L("2倍"), L("3倍"), L("4倍"), L("5倍")};
         static const int scaleVals[] = {0, 1, 2, 3, 4, 5};
         int curScale = GET_SETTING_KEY_INT("display.integer_scale_mult", 0);
         int idx = 0;
         for (int i = 0; i < 6; ++i) if (scaleVals[i] == curScale) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("整数倍缩放", scales, idx,
+        cell->init(L("整数倍缩放"), scales, idx,
                    [](int i) { if (i >= 0 && i < 6) SET_SETTING_KEY_INT("display.integer_scale_mult", scaleVals[i]); });
         box->addView(cell);
-        box->addView(makeHint("画面模式为整数倍时生效，自动=取最大整数倍"));
+        box->addView(makeHint(L("画面模式为整数倍时生效，自动=取最大整数倍")));
     }
 
     {
-        std::vector<std::string> filters = {"像素风格 (Nearest)", "平滑 (Linear)"};
+        std::vector<std::string> filters = {L("像素风格 (Nearest)"), L("平滑 (Linear)")};
         std::string curFilter = cfgGetStr("display.filter", "nearest");
         int idx = (curFilter == "linear") ? 1 : 0;
         auto *cell = new brls::SelectorCell();
-        cell->init("纹理过滤", filters, idx,
+        cell->init(L("纹理过滤"), filters, idx,
                    [](int i) { cfgSetStr("display.filter", i == 1 ? "linear" : "nearest"); });
         box->addView(cell);
-        box->addView(makeHint("Nearest 像素点阵风格（锐利）| Linear 平滑柔和（模糊）"));
+        box->addView(makeHint(L("Nearest 像素点阵风格（锐利）| Linear 平滑柔和（模糊）")));
     }
 
     auto *ffOverlayCell = new brls::BooleanCell();
@@ -4545,15 +4545,15 @@ brls::View *SettingPage::buildDisplayTab()
     }
 
     // ── 遮罩设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("遮罩设置"));
-    box->addView(makeHint("以下设置会在导入新游戏时自动套用"));
+    box->addView(makeHeader(L("遮罩设置")));
+    box->addView(makeHint(L("以下设置会在导入新游戏时自动套用")));
 
     auto makeOverlayPathCell = [&](const std::string &cfgKey, const std::string &labelText) {
         auto *cell = new brls::DetailCell();
         cell->setText(labelText);
         std::string cur = cfgGetStr(cfgKey, "");
-        cell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
-        cell->registerAction(" 选择", brls::BUTTON_A,
+        cell->setDetailText(cur.empty() ? L("未设置") : beiklive::tools::getFileName(cur));
+        cell->registerAction(L(" 选择"), brls::BUTTON_A,
             [cell, cfgKey](brls::View *) {
                 std::filesystem::path currentPath(cfgGetStr(cfgKey, ""));
                 openFilePicker({"png"}, [cell, cfgKey](const std::string &path) {
@@ -4576,15 +4576,15 @@ brls::View *SettingPage::buildDisplayTab()
     box->addView(makeOverlayPathCell(beiklive::SettingKey::KEY_DISPLAY_OVERLAY_PSP_PATH, "PSP 遮罩"));
 
     // ── 着色器设置 ────────────────────────────────────────────────────────────
-    box->addView(makeHeader("着色器设置"));
-    box->addView(makeHint("以下设置会在导入新游戏时自动套用"));
+    box->addView(makeHeader(L("着色器设置")));
+    box->addView(makeHint(L("以下设置会在导入新游戏时自动套用")));
 
     auto makeShaderPathCell = [&](const std::string &cfgKey, const std::string &labelText) {
         auto *cell = new brls::DetailCell();
         cell->setText(labelText);
         std::string cur = cfgGetStr(cfgKey, "");
-        cell->setDetailText(cur.empty() ? "未设置" : beiklive::tools::getFileName(cur));
-        cell->registerAction("选择", brls::BUTTON_A,
+        cell->setDetailText(cur.empty() ? L("未设置") : beiklive::tools::getFileName(cur));
+        cell->registerAction(L("选择"), brls::BUTTON_A,
             [cell, cfgKey](brls::View *) {
                 std::filesystem::path currentPath(cfgGetStr(cfgKey, ""));
                 openFilePicker({"glslp", "glsl"}, [cell, cfgKey](const std::string &path) {
@@ -4624,7 +4624,7 @@ brls::View *SettingPage::buildAudioTab()
     auto *box    = makeContentBox();
 
     // ── 音频设置 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("音频设置"));
+    box->addView(makeHeader(L("音频设置")));
 
     auto *sfxCell = new brls::BooleanCell();
     sfxCell->init("按钮音效", cfgGetBool("audio.buttonSfx", true),
@@ -4638,10 +4638,10 @@ brls::View *SettingPage::buildAudioTab()
         int idx = 1;
         for (int i = 0; i < 4; ++i) if (vals[i] == cur) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("目标缓冲延迟", opts, idx,
+        cell->init(L("目标缓冲延迟"), opts, idx,
                    [](int i) { if (i >= 0 && i < 4) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_TARGET_LATENCY_MS, vals[i]); });
         box->addView(cell);
-        box->addView(makeHint("越低操作反馈越快，越高越不容易断音"));
+        box->addView(makeHint(L("越低操作反馈越快，越高越不容易断音")));
     }
 
     {
@@ -4651,14 +4651,14 @@ brls::View *SettingPage::buildAudioTab()
         int idx = 1;
         for (int i = 0; i < 4; ++i) if (vals[i] == cur) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("最大缓冲延迟", opts, idx,
+        cell->init(L("最大缓冲延迟"), opts, idx,
                    [](int i) { if (i >= 0 && i < 4) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_MAX_LATENCY_MS, vals[i]); });
         box->addView(cell);
-        box->addView(makeHint("超过该延迟会丢弃旧音频，避免声音落后画面"));
+        box->addView(makeHint(L("超过该延迟会丢弃旧音频，避免声音落后画面")));
     }
 
     {
-        std::vector<std::string> opts = {"关闭", "柔和", "标准", "强"};
+        std::vector<std::string> opts = {L("关闭"), L("柔和"), L("标准"), "强"};
         static const float vals[] = {0.0f, 0.008f, 0.015f, 0.025f};
         float cur = GET_SETTING_KEY_FLOAT(beiklive::SettingKey::KEY_AUDIO_SYNC_STRENGTH, 0.015f);
         int idx = 2;
@@ -4668,33 +4668,33 @@ brls::View *SettingPage::buildAudioTab()
             if (diff < best) { best = diff; idx = i; }
         }
         auto *cell = new brls::SelectorCell();
-        cell->init("音画同步修正", opts, idx,
+        cell->init(L("音画同步修正"), opts, idx,
                    [](int i) { if (i >= 0 && i < 4) SET_SETTING_KEY_FLOAT(beiklive::SettingKey::KEY_AUDIO_SYNC_STRENGTH, vals[i]); });
         box->addView(cell);
-        box->addView(makeHint("根据音频缓冲量微调模拟节奏，减少爆音和长期漂移"));
+        box->addView(makeHint(L("根据音频缓冲量微调模拟节奏，减少爆音和长期漂移")));
     }
 
     {
-        std::vector<std::string> opts = {"关闭", "4 ms", "6 ms", "10 ms"};
+        std::vector<std::string> opts = {L("关闭"), "4 ms", "6 ms", "10 ms"};
         static const int vals[] = {0, 4, 6, 10};
         int cur = cfgGetInt(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, 6);
         int idx = 2;
         for (int i = 0; i < 4; ++i) if (vals[i] == cur) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("切换淡入淡出", opts, idx,
+        cell->init(L("切换淡入淡出"), opts, idx,
                    [](int i) { if (i >= 0 && i < 4) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_TRANSITION_FADE_MS, vals[i]); });
         box->addView(cell);
-        box->addView(makeHint("暂停、静音、读档等状态切换时降低咔哒声"));
+        box->addView(makeHint(L("暂停、静音、读档等状态切换时降低咔哒声")));
     }
 
     {
-        std::vector<std::string> lpfOpts = {"关闭", "开启"};
+        std::vector<std::string> lpfOpts = {L("关闭"), L("开启")};
         std::string curLpf = cfgGetStr("core.mgba_audio_low_pass_filter", "disabled");
         auto *cell = new brls::SelectorCell();
-        cell->init("低通滤波器", lpfOpts, curLpf == "enabled" ? 1 : 0,
+        cell->init(L("低通滤波器"), lpfOpts, curLpf == "enabled" ? 1 : 0,
                    [](int idx) { cfgSetStr("core.mgba_audio_low_pass_filter", idx == 1 ? "enabled" : "disabled"); });
         box->addView(cell);
-        box->addView(makeHint("模拟 GBA 硬件低通滤波，降低高频噪音"));
+        box->addView(makeHint(L("模拟 GBA 硬件低通滤波，降低高频噪音")));
     }
 
     {
@@ -4704,10 +4704,10 @@ brls::View *SettingPage::buildAudioTab()
         int idx = 2;
         for (int i = 0; i < 5; ++i) if (rangeVals[i] == curRange) { idx = i; break; }
         auto *cell = new brls::SelectorCell();
-        cell->init("低通滤波截止频率", rangeOpts, idx,
+        cell->init(L("低通滤波截止频率"), rangeOpts, idx,
                    [](int i) { if (i >= 0 && i < 5) cfgSetStr("core.mgba_audio_low_pass_range", rangeVals[i]); });
         box->addView(cell);
-        box->addView(makeHint("数值越低高频削减越多，音色越沉闷"));
+        box->addView(makeHint(L("数值越低高频削减越多，音色越沉闷")));
     }
 
     scroll->setContentView(box);
@@ -4722,7 +4722,7 @@ namespace
 {
     void registerKeyBindActions(beiklive::DetailCell* cell, const std::string& cfgKey)
     {
-        cell->registerAction("确认"_i18n, brls::BUTTON_A,
+        cell->registerAction(L("确认"), brls::BUTTON_A,
             [cell, cfgKey](brls::View*) {
                 openKeyCapture([cell, cfgKey](const std::string& r) {
                     if (r.empty()) return;
@@ -4743,7 +4743,7 @@ namespace
                 });
                 return true;
             }, false, false, brls::SOUND_CLICK);
-        cell->registerAction("清除绑定", brls::BUTTON_X,
+        cell->registerAction(L("清除绑定"), brls::BUTTON_X,
             [cell, cfgKey](brls::View*) {
                 cfgSetStr(cfgKey, "none");
                 cell->setRightText("none");
@@ -4767,7 +4767,7 @@ namespace
         auto* box = makeContentBox();
         const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
 
-        box->addView(makeHeader("游戏按键映射（手柄）"));
+        box->addView(makeHeader(L("游戏按键映射（手柄）")));
         auto* mapcontainer = makeKeyBindListContainer();
         for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
         {
@@ -4786,7 +4786,7 @@ namespace
         }
         box->addView(mapcontainer);
 
-        box->addView(makeHeader("功能热键绑定"));
+        box->addView(makeHeader(L("功能热键绑定")));
         for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
         {
             if ((nds && entry.hiddenOnNds) ||
@@ -4814,15 +4814,15 @@ namespace
                 registerKeyBindActions(cell, cfgKey);
                 box->addView(cell);
             }
-            box->addView(makeHint("切换为指针模式后使用右摇杆控制指针"));
-            box->addView(makeHint("模拟麦克风输入：按下热键后持续输入静态噪声，再按一次取消"));
+            box->addView(makeHint(L("切换为指针模式后使用右摇杆控制指针")));
+            box->addView(makeHint(L("模拟麦克风输入：按下热键后持续输入静态噪声，再按一次取消")));
         }
 
-        box->addView(makeHeader("连发按键绑定"));
+        box->addView(makeHeader(L("连发按键绑定")));
         {
             std::string cfgKey = beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey);
             auto* cell = new beiklive::DetailCell();
-            cell->setLeftText("A 连发");
+            cell->setLeftText(L("A 连发"));
             cell->setRightText(cfgGetStr(cfgKey, beiklive::input_mapping::kTurboADefault));
             registerKeyBindActions(cell, cfgKey);
             box->addView(cell);
@@ -4830,26 +4830,26 @@ namespace
         {
             std::string cfgKey = beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey);
             auto* cell = new beiklive::DetailCell();
-            cell->setLeftText("B 连发");
+            cell->setLeftText(L("B 连发"));
             cell->setRightText(cfgGetStr(cfgKey, beiklive::input_mapping::kTurboBDefault));
             registerKeyBindActions(cell, cfgKey);
             box->addView(cell);
         }
         {
-            std::vector<std::string> rates = {"每秒1次", "每秒5次", "每秒10次", "每秒15次", "每秒30次"};
+            std::vector<std::string> rates = {L("每秒1次"), L("每秒5次"), L("每秒10次"), L("每秒15次"), L("每秒30次")};
             static const float rateVals[] = {1.0f, 5.0f, 10.0f, 15.0f, 30.0f};
             float curRate = GET_SETTING_KEY_FLOAT("turbo.rate", 10.0f);
             int idx = 2;
             for (int i = 0; i < 5; ++i)
                 if (rateVals[i] == curRate) { idx = i; break; }
             auto* rateCell = new brls::SelectorCell();
-            rateCell->init("连发速度", rates, idx,
+            rateCell->init(L("连发速度"), rates, idx,
                            [](int i) {
                                if (i >= 0 && i < 5)
                                    SET_SETTING_KEY_FLOAT("turbo.rate", rateVals[i]);
                            });
             box->addView(rateCell);
-            box->addView(makeHint("按住连发按键时每秒触发的次数，次数越高反应越快"));
+            box->addView(makeHint(L("按住连发按键时每秒触发的次数，次数越高反应越快")));
         }
 
         scroll->setContentView(box);
@@ -4866,7 +4866,7 @@ namespace
         page->showHeader(true);
         page->getHeader()->setTitle(title);
         page->showFooter(true);
-        page->registerAction("返回", brls::BUTTON_B, [page](brls::View*) {
+        page->registerAction(L("返回"), brls::BUTTON_B, [page](brls::View*) {
             beiklive::popActivity(page);
             return true;
         });
@@ -4884,21 +4884,21 @@ brls::View *SettingPage::buildKeyBindTab()
 
     struct PlatformEntry
     {
-        const char* label;
-        const char* prefix;
+        std::string label;
+        std::string prefix;
         bool nds;
     };
     static const PlatformEntry platforms[] = {
-        {"映射GBA游戏", "", false},
-        {"映射GBC游戏", "gbc.", false},
-        {"映射GB游戏", "gb.", false},
-        {"映射NES游戏", "nes.", false},
-        {"映射SFC游戏", "sfc.", false},
-        {"映射NDS游戏", "nds.", true},
-        {"映射MD游戏", "md.", false},
-        {"映射Arcade游戏", "arcade.", false},
-        {"映射DC游戏", "dc.", false},
-        {"映射PSP游戏", "psp.", false},
+        {L("映射GBA游戏"), "", false},
+        {L("映射GBC游戏"), "gbc.", false},
+        {L("映射GB游戏"), "gb.", false},
+        {L("映射NES游戏"), "nes.", false},
+        {L("映射SFC游戏"), "sfc.", false},
+        {L("映射NDS游戏"), "nds.", true},
+        {L("映射MD游戏"), "md.", false},
+        {L("映射Arcade游戏"), "arcade.", false},
+        {L("映射DC游戏"), "dc.", false},
+        {L("映射PSP游戏"), "psp.", false},
     };
 
     for (const auto& platform : platforms)
@@ -4931,18 +4931,18 @@ brls::View *SettingPage::buildDebugTab()
     auto *box    = makeContentBox();
 
     // ── 日志 ──────────────────────────────────────────────────────────────────
-    box->addView(makeHeader("日志"));
+    box->addView(makeHeader(L("日志")));
 
     {
         static const char *logLevelIds[]        = {"debug", "info", "warning", "error"};
         std::vector<std::string> logLevels      = {
-            "调试 (debug)", "信息 (info)", "警告 (warning)", "错误 (error)"};
+            L("调试 (debug)"), L("信息 (info)"), L("警告 (warning)"), L("错误 (error)")};
         std::string curLevel                     = cfgGetStr(KEY_DEBUG_LOG_LEVEL, "info");
         int levelIdx                             = 1;
         for (int i = 0; i < 4; ++i)
             if (curLevel == logLevelIds[i]) { levelIdx = i; break; }
         auto *logLevelCell = new brls::SelectorCell();
-        logLevelCell->init("日志级别", logLevels, levelIdx,
+        logLevelCell->init(L("日志级别"), logLevels, levelIdx,
                            [](int idx)
                            {
                                if (idx >= 0 && idx < 4)
@@ -4961,7 +4961,7 @@ brls::View *SettingPage::buildDebugTab()
     }
 
     auto *logFileCell = new brls::BooleanCell();
-    logFileCell->init("输出日志到文件",
+    logFileCell->init(L("输出日志到文件"),
                       cfgGetBool(KEY_DEBUG_LOG_FILE, false),
                       [](bool v)
                       {
@@ -4983,7 +4983,7 @@ brls::View *SettingPage::buildDebugTab()
     box->addView(logFileCell);
 
     auto *logOverlayCell = new brls::BooleanCell();
-    logOverlayCell->init("显示调试信息覆盖层",
+    logOverlayCell->init(L("显示调试信息覆盖层"),
                          cfgGetBool(KEY_DEBUG_LOG_OVERLAY, false),
                          [](bool v)
                          {
@@ -4991,35 +4991,35 @@ brls::View *SettingPage::buildDebugTab()
                              brls::Application::enableDebuggingView(v);
                          });
     box->addView(logOverlayCell);
-    box->addView(makeHint("在屏幕上方叠加显示帧率、帧时间等性能数据"));
+    box->addView(makeHint(L("在屏幕上方叠加显示帧率、帧时间等性能数据")));
 
     // ── 核心调试 ──────────────────────────────────────────────────────────────
-    box->addView(makeHeader("核心调试选项"));
+    box->addView(makeHeader(L("核心调试选项")));
 
     {
         std::vector<std::string> idleOpts = {"Remove Known", "Detect and Remove", "Don't Remove"};
         std::string curIdle = cfgGetStr("core.mgba_idle_optimization", "Remove Known");
         auto *idleCell = new brls::SelectorCell();
-        idleCell->init("空闲优化", idleOpts, findIndex(idleOpts, curIdle),
+        idleCell->init(L("空闲优化"), idleOpts, findIndex(idleOpts, curIdle),
                        [idleOpts](int idx) { if (idx >= 0 && idx < 3) cfgSetStr("core.mgba_idle_optimization", idleOpts[idx]); });
         box->addView(idleCell);
-        box->addView(makeHint("减少无意义循环的 CPU 占用，大部分情况下使用 Remove Known"));
+        box->addView(makeHint(L("减少无意义循环的 CPU 占用，大部分情况下使用 Remove Known")));
     }
 
     {
         auto *cell = new brls::BooleanCell();
-        cell->init("允许同时按下反方向", cfgGetStr("core.mgba_allow_opposing_directions", "no") == "yes",
+        cell->init(L("允许同时按下反方向"), cfgGetStr("core.mgba_allow_opposing_directions", "no") == "yes",
                    [](bool v) { cfgSetStr("core.mgba_allow_opposing_directions", v ? "yes" : "no"); });
         box->addView(cell);
-        box->addView(makeHint("允许同时按下左+右或上+下方向键"));
+        box->addView(makeHint(L("允许同时按下左+右或上+下方向键")));
     }
 
     {
         auto *cell = new brls::BooleanCell();
-        cell->init("强制 GBP 振动", cfgGetStr("core.mgba_force_gbp", "OFF") == "ON",
+        cell->init(L("强制 GBP 振动"), cfgGetStr("core.mgba_force_gbp", "OFF") == "ON",
                    [](bool v) { cfgSetStr("core.mgba_force_gbp", v ? "ON" : "OFF"); });
         box->addView(cell);
-        box->addView(makeHint("强制模拟 Game Boy Player 振动外设效果"));
+        box->addView(makeHint(L("强制模拟 Game Boy Player 振动外设效果")));
     }
 
 

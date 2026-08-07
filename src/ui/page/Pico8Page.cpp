@@ -1,4 +1,5 @@
 #include "Pico8Page.hpp"
+#include "core/Translation.hpp"
 
 #include "core/common.h"
 #include "ui/utils/Pico8Transition.hpp"
@@ -267,7 +268,7 @@ namespace beiklive
             if (m_coreReady)
                 _applyRuntimeSettings();
             else
-                m_errorText = "FAKE-08 Runtime 初始化失败";
+                m_errorText = L("FAKE-08 Runtime 初始化失败");
         }
     }
 
@@ -370,7 +371,7 @@ namespace beiklive
             static_cast<size_t>(m_selectedIndex) >= m_games.size())
             return;
         if (m_coreFinished && !m_coreReady) {
-            m_errorText = "FAKE-08 Runtime 初始化失败，请查看 pico.log";
+            m_errorText = L("FAKE-08 Runtime 初始化失败，请查看 pico.log");
             return;
         }
         m_launchUsesRuntime = _selectedIsLoadedGame();
@@ -577,7 +578,7 @@ namespace beiklive
         if (!m_core.isGameLoaded())
             return;
         if (!m_core.Reset()) {
-            brls::Application::notify("PICO-8 游戏重启失败，已返回游戏列表");
+            brls::Application::notify(L("PICO-8 游戏重启失败，已返回游戏列表"));
             _returnToGameList();
             return;
         }
@@ -585,7 +586,7 @@ namespace beiklive
         m_frameDirty = true;
         m_input.reset();
         _closeMenu();
-        brls::Application::notify("PICO-8 游戏已重启");
+        brls::Application::notify(L("PICO-8 游戏已重启"));
     }
 
     void Pico8Page::_returnToGameList()
@@ -645,10 +646,10 @@ namespace beiklive
             _writeQuickState(m_loadedGamePath, state)) {
             m_quickState = std::move(state);
             m_quickStateGamePath = m_loadedGamePath;
-            brls::Application::notify("PICO-8 保存状态完成");
+            brls::Application::notify(L("PICO-8 保存状态完成"));
             return true;
         } else {
-            brls::Application::notify("PICO-8 保存状态失败，请查看 pico.log");
+            brls::Application::notify(L("PICO-8 保存状态失败，请查看 pico.log"));
             return false;
         }
     }
@@ -665,7 +666,7 @@ namespace beiklive
                 m_quickStateGamePath = m_loadedGamePath;
         }
         if (m_quickState.empty()) {
-            brls::Application::notify("没有可读取的 PICO-8 状态");
+            brls::Application::notify(L("没有可读取的 PICO-8 状态"));
             return false;
         }
         if (m_core.LoadState(m_quickState.data(), m_quickState.size())) {
@@ -675,10 +676,10 @@ namespace beiklive
             m_frameDirty = true;
             _captureInputState();
             _captureTraceInput();
-            brls::Application::notify("PICO-8 读取状态完成");
+            brls::Application::notify(L("PICO-8 读取状态完成"));
             return true;
         } else {
-            brls::Application::notify("PICO-8 读取状态失败，请查看 pico.log");
+            brls::Application::notify(L("PICO-8 读取状态失败，请查看 pico.log"));
             return false;
         }
     }
@@ -915,7 +916,7 @@ namespace beiklive
                     }
                 } else if (m_stateTime >= LAUNCH_DURATION &&
                            m_coreFinished && !m_coreReady) {
-                    m_errorText = "FAKE-08 Runtime 初始化失败，请查看 pico.log";
+                    m_errorText = L("FAKE-08 Runtime 初始化失败，请查看 pico.log");
                     m_state = m_core.isGameLoaded()
                         ? State::PausedLibrary : State::Library;
                     m_stateTime = 0.f;
@@ -1342,18 +1343,18 @@ namespace beiklive
         nvgFillColor(vg, nvgRGBA(255, 241, 232,
             alphaByte(menuAlpha)));
         nvgText(vg, panelX + 20.f, panelY + headerHeight * 0.5f,
-                settings ? "设置" : "游戏菜单", nullptr);
+                settings ? L("设置").c_str() : L("游戏菜单").c_str(), nullptr);
 
-        const std::array<const char*, 6> mainItems{
-            "继续游戏", "重启游戏", "保存状态", "读取状态", "设置", "退出游戏"};
-        const std::array<const char*, 3> filterNames{"无", "点阵", "CRT"};
+        const std::array<std::string, 6> mainItems{
+            L("继续游戏"), L("重启游戏"), L("保存状态"), L("读取状态"), L("设置"), L("退出游戏")};
+        const std::array<std::string, 3> filterNames{"无", L("点阵"), "CRT"};
         std::array<std::string, 5> settingItems{
-            "返回",
-            std::string("画面滤镜  ") +
+            L("返回"),
+            std::string(L("画面滤镜  ")) +
                 filterNames[static_cast<size_t>(m_videoFilter)],
-            "音效音量  " + std::to_string(m_sfxVolume),
-            "音乐音量  " + std::to_string(m_musicVolume),
-            std::string("按键反转  ") + (m_invertButtons ? "是" : "否"),
+            L("音效音量  ") + std::to_string(m_sfxVolume),
+            L("音乐音量  ") + std::to_string(m_musicVolume),
+            std::string(L("按键反转  ")) + (m_invertButtons ? "是" : "否"),
         };
 
         const float listY = panelY + headerHeight + padding;
@@ -1465,12 +1466,12 @@ namespace beiklive
         struct HintItem
         {
             brls::ControllerButton button;
-            const char* label;
+            std::string label;
         };
         const HintItem hints[] = {
-            {brls::BUTTON_START, "关闭P8"},
-            {brls::BUTTON_A, "选择游戏"},
-            {brls::BUTTON_B, "返回游戏"},
+            {brls::BUTTON_START, L("关闭P8")},
+            {brls::BUTTON_A, L("选择游戏")},
+            {brls::BUTTON_B, L("返回游戏")},
         };
         const size_t count = m_core.isGameLoaded() ? 3u : 2u;
         float cursor = x + width - 35.f;
@@ -1478,10 +1479,10 @@ namespace beiklive
         nvgFontSize(vg, 21.f);
         for (size_t index = count; index-- > 0;) {
             float bounds[4]{};
-            nvgTextBounds(vg, 0.f, 0.f, hints[index].label, nullptr, bounds);
+            nvgTextBounds(vg, 0.f, 0.f, hints[index].label.c_str(), nullptr, bounds);
             const float itemWidth = 42.f + bounds[2] - bounds[0];
             cursor -= itemWidth;
-            _drawHint(vg, hints[index].button, hints[index].label,
+            _drawHint(vg, hints[index].button, hints[index].label.c_str(),
                       cursor + 14.f, y + height - 31.f, alpha);
             cursor -= 18.f;
         }
@@ -1497,8 +1498,8 @@ namespace beiklive
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
         nvgFillColor(vg, nvgRGBA(225, 229, 237, alphaByte(alpha * 0.9f)));
         nvgText(vg, x + width * 0.5f, logo.y + logo.height + 28.f,
-                "没有找到 p8 游戏，请去更新界面中下载。", nullptr);
-        _drawHint(vg, brls::BUTTON_START, "关闭P8",
+                L("没有找到 p8 游戏，请去更新界面中下载。").c_str(), nullptr);
+        _drawHint(vg, brls::BUTTON_START, L("关闭P8").c_str(),
                   x + width - 126.f, y + height - 31.f, alpha);
     }
 
@@ -1512,13 +1513,13 @@ namespace beiklive
         _drawGameControls(vg, x, y, width, height, alpha * 0.9f);
 
         const float right = x + width - 35.f;
-        const char* label = "打开菜单";
+        const std::string label = L("打开菜单");
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 21.f);
         float bounds[4]{};
-        nvgTextBounds(vg, 0.f, 0.f, label, nullptr, bounds);
+        nvgTextBounds(vg, 0.f, 0.f, label.c_str(), nullptr, bounds);
         const float labelWidth = bounds[2] - bounds[0];
-        _drawHint(vg, brls::BUTTON_START, label,
+        _drawHint(vg, brls::BUTTON_START, label.c_str(),
                   right - labelWidth - 22.f, y + height - 31.f,
                   alpha * 0.9f);
     }

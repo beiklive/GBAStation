@@ -1,4 +1,5 @@
 #include "RewindSelectorView.hpp"
+#include "core/Translation.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -74,12 +75,12 @@ namespace beiklive
         m_font = brls::Application::getDefaultFont();
         m_lastFrameTime = std::chrono::steady_clock::now();
 
-        registerAction("读取", brls::BUTTON_A, [this](brls::View*) -> bool {
+        registerAction(L("读取"), brls::BUTTON_A, [this](brls::View*) -> bool {
             _selectCurrent();
             return true;
         }, false, false, brls::SOUND_CLICK);
 
-        registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+        registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
             _close();
             return true;
         }, false, false, brls::SOUND_BACK);
@@ -133,7 +134,7 @@ namespace beiklive
 
         if (frames.empty())
         {
-            brls::Application::notify("暂无倒带记录");
+            brls::Application::notify(L("暂无倒带记录"));
             if (m_onClose)
                 m_onClose();
             return;
@@ -352,18 +353,18 @@ namespace beiklive
         nvgFill(vg);
 
         _drawText(vg, x + 32.0f, panelY + 20.0f, 18.0f,
-                  rgba(219, 237, 255, 235, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, "倒带");
+                  rgba(219, 237, 255, 235, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, L("倒带").c_str());
         _drawText(vg, x + panelW - 324.0f, panelY + 21.0f, 15.0f,
-                  rgba(184, 209, 235, 210, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, "← → 选择");
+                  rgba(184, 209, 235, 210, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, L("← → 选择").c_str());
         _drawText(vg, x + panelW - 194.0f, panelY + 21.0f, 15.0f,
-                  rgba(184, 209, 235, 210, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, "A 读取");
+                  rgba(184, 209, 235, 210, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, L("A 读取").c_str());
         _drawText(vg, x + panelW - 96.0f, panelY + 21.0f, 15.0f,
-                  rgba(184, 209, 235, 210, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, "B 返回");
+                  rgba(184, 209, 235, 210, alpha), NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, L("B 返回").c_str());
 
         if (m_items.empty())
         {
             _drawText(vg, x + panelW * 0.5f, panelY + panelH * 0.58f, 24.0f,
-                      rgba(204, 224, 245, 158, alpha), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, "暂无倒带缓存");
+                      rgba(204, 224, 245, 158, alpha), NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, L("暂无倒带缓存").c_str());
             nvgRestore(vg);
             return;
         }
@@ -441,7 +442,7 @@ namespace beiklive
             }
 
             char timeText[32] = {};
-            std::snprintf(timeText, sizeof(timeText), "-%d秒", std::max(1, item.secondsAgo));
+            std::snprintf(timeText, sizeof(timeText), L("-%d秒").c_str(), std::max(1, item.secondsAgo));
             _drawText(vg, itemX + kItemW * 0.5f, itemY + 146.0f, 16.0f,
                       rgba(209, 230, 255, focused ? 230 : 190, alpha),
                       NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, timeText);

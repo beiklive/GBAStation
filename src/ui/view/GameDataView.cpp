@@ -1,4 +1,5 @@
 #include "GameDataView.hpp"
+#include "core/Translation.hpp"
 
 #include "core/Tools.hpp"
 #include "core/common.h"
@@ -90,22 +91,22 @@ namespace beiklive
             _activate();
             return true;
         });
-        registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+        registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
             if (m_previewActive)
                 _closeImagePreview();
             else if (onBack)
                 onBack();
             return true;
         });
-        registerAction("上一分类", brls::BUTTON_LB, [this](brls::View*) -> bool {
+        registerAction(L("上一分类"), brls::BUTTON_LB, [this](brls::View*) -> bool {
             _switchSection(-1);
             return true;
         });
-        registerAction("下一分类", brls::BUTTON_RB, [this](brls::View*) -> bool {
+        registerAction(L("下一分类"), brls::BUTTON_RB, [this](brls::View*) -> bool {
             _switchSection(1);
             return true;
         });
-        registerAction("管理金手指", brls::BUTTON_START, [this](brls::View*) -> bool {
+        registerAction(L("管理金手指"), brls::BUTTON_START, [this](brls::View*) -> bool {
             if (m_section == Section::CHEATS && m_cheatPane == 1 &&
                 m_cheatIndex >= 0 && m_cheatIndex < static_cast<int>(m_cheats.size()) &&
                 onCheatOptions) {
@@ -114,15 +115,15 @@ namespace beiklive
             }
             return false;
         });
-        registerAction("次要操作", brls::BUTTON_X, [this](brls::View*) -> bool {
+        registerAction(L("次要操作"), brls::BUTTON_X, [this](brls::View*) -> bool {
             _secondaryAction();
             return true;
         });
-        registerAction("设置封面", brls::BUTTON_Y, [this](brls::View*) -> bool {
+        registerAction(L("设置封面"), brls::BUTTON_Y, [this](brls::View*) -> bool {
             _tertiaryAction();
             return true;
         });
-        registerAction("切换渲染模式", brls::BUTTON_LT, [this](brls::View*) -> bool {
+        registerAction(L("切换渲染模式"), brls::BUTTON_LT, [this](brls::View*) -> bool {
             if (!m_previewActive || m_previewClosing)
                 return false;
             m_previewNearest = !m_previewNearest;
@@ -846,7 +847,7 @@ namespace beiklive
         nvgFontSize(vg, 27.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(247, 248, 252, 255));
-        nvgText(vg, x + 30.f, y + 35.f, "游戏数据", nullptr);
+        nvgText(vg, x + 30.f, y + 35.f, L("游戏数据").c_str(), nullptr);
 
         const bool isThreeDs = _isThreeDs();
         const float centerX = x + w * 0.5f;
@@ -854,8 +855,8 @@ namespace beiklive
         if (isThreeDs) {
             constexpr std::array<Section, 4> sections{
                 Section::BATTERY, Section::CHEATS, Section::LOAD_CONTENT, Section::ADDONS};
-            constexpr const char* labels[] = {
-                "游戏存档", "金手指管理", "纹理和MOD", "DLC与更新"};
+            static const std::string labels[] = {
+                L("游戏存档"), L("金手指管理"), L("纹理和MOD"), L("DLC与更新")};
             auto selectedIt = std::find(sections.begin(), sections.end(), m_section);
             const int selected = selectedIt == sections.end()
                 ? 0 : static_cast<int>(std::distance(sections.begin(), selectedIt));
@@ -875,10 +876,10 @@ namespace beiklive
                 nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, nvgRGBA(255, 255, 255,
                     static_cast<unsigned char>(255.f * prominence)));
-                nvgText(vg, itemX, centerY, labels[index], nullptr);
+                nvgText(vg, itemX, centerY, labels[index].c_str(), nullptr);
             }
         } else {
-            const char* labels[] = {"即时存档", "游戏图片", "电池存档"};
+            const std::string labels[] = {L("即时存档"), L("游戏图片"), L("电池存档")};
             const int selected = static_cast<int>(m_section);
             _drawSwitchButton(vg, brls::BUTTON_LB, centerX - 260.f, centerY,
                               22.f, nvgRGBA(255, 255, 255, 218));
@@ -897,7 +898,7 @@ namespace beiklive
                 nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, nvgRGBA(255, 255, 255,
                     static_cast<unsigned char>(255.f * prominence)));
-                nvgText(vg, itemX, centerY, labels[index], nullptr);
+                nvgText(vg, itemX, centerY, labels[index].c_str(), nullptr);
             }
         }
 
@@ -989,17 +990,17 @@ namespace beiklive
                     return item.enabledExists || item.disabledExists;
                 }));
             summary = {
-                {"游戏存档", m_batterySaveExists ? "存在" : "不存在"},
-                {"备份数量", std::to_string(m_backups.size())},
-                {"金手指", std::to_string(m_cheats.size()) + " 个"},
-                {"纹理 / MOD", std::to_string(loadCount) + " / 2"},
+                {L("游戏存档"), m_batterySaveExists ? L("存在") : L("不存在")},
+                {L("备份数量"), std::to_string(m_backups.size())},
+                {L("金手指"), std::to_string(m_cheats.size()) + L(" 个")},
+                {L("纹理 / MOD"), std::to_string(loadCount) + " / 2"},
             };
         } else {
             summary = {
-                {"即时存档", std::to_string(stateCount) + " / 10"},
-                {"游戏图片", std::to_string(m_screenshots.size())},
-                {"电池存档", m_batterySaveExists ? "存在" : "不存在"},
-                {"备份数量", std::to_string(m_backups.size())},
+                {L("即时存档"), std::to_string(stateCount) + " / 10"},
+                {L("游戏图片"), std::to_string(m_screenshots.size())},
+                {L("电池存档"), m_batterySaveExists ? L("存在") : L("不存在")},
+                {L("备份数量"), std::to_string(m_backups.size())},
             };
         }
         const float startY = coverY + coverH + 126.f;
@@ -1065,7 +1066,7 @@ namespace beiklive
             nvgFontSize(vg, 22.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 135));
-            nvgText(vg, x + w * 0.5f, y + h * 0.60f, "暂无游戏图片", nullptr);
+            nvgText(vg, x + w * 0.5f, y + h * 0.60f, L("暂无游戏图片").c_str(), nullptr);
             return;
         }
 
@@ -1112,8 +1113,8 @@ namespace beiklive
         const float gap = 24.f;
         const float listX = x + actionW + gap;
         const float listW = w - actionW - gap;
-        const char* labels[] = {
-            "导出存档", "导入存档", "删除存档", "创建备份", "清除着色器缓存"};
+        const std::string labels[] = {
+            L("导出存档"), L("导入存档"), L("删除存档"), L("创建备份"), L("清除着色器缓存")};
         const char32_t icons[] = {
             beiklive::material::CLOUD_UPLOAD,
             beiklive::material::CLOUD_DOWNLOAD,
@@ -1135,7 +1136,7 @@ namespace beiklive
             nvgFontSize(vg, i == 4 ? 22.f : 23.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
-            nvgText(vg, x + 82.f, buttonY + buttonH * 0.5f, labels[i], nullptr);
+            nvgText(vg, x + 82.f, buttonY + buttonH * 0.5f, labels[i].c_str(), nullptr);
             if (m_batteryPane == 0 && i == m_actionIndex)
                 _drawFocus(vg, x, buttonY, actionW, buttonH, 8.f);
         }
@@ -1146,11 +1147,11 @@ namespace beiklive
         nvgFontSize(vg, 22.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 238));
-        nvgText(vg, listX + listPadding, y + 30.f, "备份记录", nullptr);
+        nvgText(vg, listX + listPadding, y + 30.f, L("备份记录").c_str(), nullptr);
         nvgFontSize(vg, 15.f);
         nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 135));
-        const std::string count = std::to_string(m_backups.size()) + " 个";
+        const std::string count = std::to_string(m_backups.size()) + L(" 个");
         nvgText(vg, listX + listW - listPadding, y + 30.f, count.c_str(), nullptr);
 
         nvgBeginPath(vg);
@@ -1170,7 +1171,7 @@ namespace beiklive
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 120));
             nvgText(vg, listX + listW * 0.5f, y + h * 0.60f,
                     m_entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)
-                        ? "暂无游戏存档备份" : "暂无电池存档备份",
+                        ? L("暂无游戏存档备份").c_str() : L("暂无电池存档备份").c_str(),
                     nullptr);
             return;
         }
@@ -1227,10 +1228,10 @@ namespace beiklive
         nvgFontSize(vg, 22.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 238));
-        nvgText(vg, x + actionW * 0.5f, addY + 82.f, "新增金手指", nullptr);
+        nvgText(vg, x + actionW * 0.5f, addY + 82.f, L("新增金手指").c_str(), nullptr);
         nvgFontSize(vg, 14.f);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 130));
-        nvgText(vg, x + actionW * 0.5f, addY + 107.f, "名称与代码分步输入", nullptr);
+        nvgText(vg, x + actionW * 0.5f, addY + 107.f, L("名称与代码分步输入").c_str(), nullptr);
         if (m_cheatPane == 0)
             _drawFocus(vg, x, addY, actionW, addH, 8.f);
 
@@ -1239,8 +1240,8 @@ namespace beiklive
         nvgFontSize(vg, 22.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 238));
-        nvgText(vg, listX + 26.f, y + 30.f, "金手指列表", nullptr);
-        const std::string count = std::to_string(m_cheats.size()) + " 个";
+        nvgText(vg, listX + 26.f, y + 30.f, L("金手指列表").c_str(), nullptr);
+        const std::string count = std::to_string(m_cheats.size()) + L(" 个");
         nvgFontSize(vg, 15.f);
         nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 135));
@@ -1261,7 +1262,7 @@ namespace beiklive
             nvgFontSize(vg, 20.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 125));
-            nvgText(vg, listX + listW * 0.5f, y + h * 0.59f, "为空", nullptr);
+            nvgText(vg, listX + listW * 0.5f, y + h * 0.59f, L("为空").c_str(), nullptr);
             return;
         }
 
@@ -1313,9 +1314,9 @@ namespace beiklive
             const bool present = item.enabledExists || item.disabledExists;
             const std::size_t fileCount = item.enabledExists
                 ? item.enabledFileCount : item.disabledFileCount;
-            const std::string status = conflict ? "状态冲突"
-                : item.enabledExists ? "已启用"
-                : item.disabledExists ? "已停用" : item.emptyText;
+            const std::string status = conflict ? L("状态冲突")
+                : item.enabledExists ? L("已启用")
+                : item.disabledExists ? L("已停用") : item.emptyText;
             const std::string path = item.enabledExists ? item.enabledPath
                 : item.disabledExists ? item.disabledPath : item.enabledPath;
 
@@ -1325,7 +1326,7 @@ namespace beiklive
             nvgFillColor(vg, nvgRGBA(255, 255, 255, 242));
             nvgText(vg, x + 26.f, panelY + 31.f, item.label.c_str(), nullptr);
             if (present) {
-                const std::string countText = std::to_string(fileCount) + " 个文件";
+                const std::string countText = std::to_string(fileCount) + L(" 个文件");
                 nvgFontSize(vg, 15.f);
                 nvgFillColor(vg, nvgRGBA(255, 255, 255, 140));
                 nvgText(vg, x + 112.f, panelY + 31.f, countText.c_str(), nullptr);
@@ -1371,11 +1372,11 @@ namespace beiklive
             }
             nvgRestore(vg);
 
-            std::string toggleLabel = conflict ? "状态冲突"
-                : item.enabledExists ? "停用" + item.label
-                : item.disabledExists ? "启用" + item.label : item.emptyText;
+            std::string toggleLabel = conflict ? L("状态冲突")
+                : item.enabledExists ? L("停用") + item.label
+                : item.disabledExists ? L("启用") + item.label : item.emptyText;
             const std::array<std::string, 2> labels{
-                std::move(toggleLabel), "删除" + item.label};
+                std::move(toggleLabel), L("删除") + item.label};
             for (int action = 0; action < 2; ++action) {
                 const float buttonX = buttonsX + action * (buttonW + buttonGap);
                 _drawPanel(vg, buttonX, buttonY, buttonW, 46.f, 7.f,
@@ -1431,24 +1432,24 @@ namespace beiklive
         }
         nvgRestore(vg);
 
-        struct HintItem { brls::ControllerButton button; const char* label; };
+        struct HintItem { brls::ControllerButton button; std::string label; };
         std::vector<HintItem> hints;
-        hints.push_back({brls::BUTTON_B, "返回"});
+        hints.push_back({brls::BUTTON_B, L("返回")});
         if (m_section == Section::STATES) {
-            hints.push_back({brls::BUTTON_A, "删除"});
+            hints.push_back({brls::BUTTON_A, L("删除")});
         } else if (m_section == Section::SCREENSHOTS) {
-            hints.push_back({brls::BUTTON_Y, "设为封面"});
-            hints.push_back({brls::BUTTON_X, "删除"});
-            hints.push_back({brls::BUTTON_A, "查看"});
+            hints.push_back({brls::BUTTON_Y, L("设为封面")});
+            hints.push_back({brls::BUTTON_X, L("删除")});
+            hints.push_back({brls::BUTTON_A, L("查看")});
         } else if (m_section == Section::BATTERY && m_batteryPane == 1) {
-            hints.push_back({brls::BUTTON_X, "删除"});
-            hints.push_back({brls::BUTTON_A, "还原"});
+            hints.push_back({brls::BUTTON_X, L("删除")});
+            hints.push_back({brls::BUTTON_A, L("还原")});
         } else if (m_section == Section::CHEATS) {
             if (m_cheatPane == 1)
-                hints.push_back({brls::BUTTON_START, "管理"});
-            hints.push_back({brls::BUTTON_A, m_cheatPane == 0 ? "新增" : "确认"});
+                hints.push_back({brls::BUTTON_START, L("管理")});
+            hints.push_back({brls::BUTTON_A, m_cheatPane == 0 ? L("新增") : L("确认")});
         } else {
-            hints.push_back({brls::BUTTON_A, "确认"});
+            hints.push_back({brls::BUTTON_A, L("确认")});
         }
 
         float cursor = x + w - 28.f;
@@ -1456,10 +1457,10 @@ namespace beiklive
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 21.f);
             float bounds[4]{};
-            nvgTextBounds(vg, 0.f, 0.f, hint.label, nullptr, bounds);
+            nvgTextBounds(vg, 0.f, 0.f, hint.label.c_str(), nullptr, bounds);
             const float width = 38.f + bounds[2] - bounds[0];
             cursor -= width;
-            _drawHint(vg, cursor, cy, hint.button, hint.label);
+            _drawHint(vg, cursor, cy, hint.button, hint.label.c_str());
             cursor -= 34.f;
         }
     }
@@ -1532,20 +1533,20 @@ namespace beiklive
         nvgRestore(vg);
 
         const float hintY = y + h - 34.f;
-        struct PreviewHint { brls::ControllerButton button; const char* label; };
+        struct PreviewHint { brls::ControllerButton button; std::string label; };
         const PreviewHint hints[] = {
-            {brls::BUTTON_B, "关闭"},
-            {brls::BUTTON_Y, "复位"},
-            {brls::BUTTON_LT, m_previewNearest ? "最近邻" : "线性"},
-            {brls::BUTTON_RB, "放大"},
-            {brls::BUTTON_LB, "缩小"},
+            {brls::BUTTON_B, L("关闭")},
+            {brls::BUTTON_Y, L("复位")},
+            {brls::BUTTON_LT, m_previewNearest ? L("最近邻") : L("线性")},
+            {brls::BUTTON_RB, L("放大")},
+            {brls::BUTTON_LB, L("缩小")},
         };
         float cursor = x + w - 32.f;
         for (const auto& hint : hints) {
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 21.f);
             float bounds[4]{};
-            nvgTextBounds(vg, 0.f, 0.f, hint.label, nullptr, bounds);
+            nvgTextBounds(vg, 0.f, 0.f, hint.label.c_str(), nullptr, bounds);
             const float hintWidth = 37.f + bounds[2] - bounds[0];
             cursor -= hintWidth;
             _drawHint(vg, cursor, hintY, hint.button, hint.label);

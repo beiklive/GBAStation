@@ -1,4 +1,5 @@
 #include "GameLibraryPage.hpp"
+#include "core/Translation.hpp"
 #include "GameDataPage.hpp"
 #include "SteamGridDbPage.hpp"
 #include "core/SteamGridDb.hpp"
@@ -327,7 +328,7 @@ namespace beiklive
 
             void _initLayout()
             {
-                registerAction("返回", brls::BUTTON_B, [this](brls::View*) -> bool {
+                registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
                     beiklive::popActivity(this);
                     return true;
                 });
@@ -339,17 +340,17 @@ namespace beiklive
                 auto* shots = _createScreenshotPanel();
                 auto* battery = _createBatteryPanel();
 
-                m_tabs->addTab("即时存档管理", BK_RES("img/ui/menu/save.png"), nullptr,
+                m_tabs->addTab(L("即时存档管理"), BK_RES("img/ui/menu/save.png"), nullptr,
                     [this]() {
                         _refreshStateList();
                     }, nullptr, states,
                     m_stateGrid ? m_stateGrid->getItemView(0) : states);
-                m_tabs->addTab("游戏图片管理", BK_RES("img/ui/setting/display.png"), nullptr,
+                m_tabs->addTab(L("游戏图片管理"), BK_RES("img/ui/setting/display.png"), nullptr,
                     [this]() {
                         _refreshScreenshotList();
                     }, nullptr, shots,
                     m_screenshotGrid ? m_screenshotGrid->getItemView(0) : shots);
-                m_tabs->addTab("电池存档管理", BK_RES("img/ui/menu/save.png"), nullptr,
+                m_tabs->addTab(L("电池存档管理"), BK_RES("img/ui/menu/save.png"), nullptr,
                     [this]() { _refreshBackupList(); }, nullptr, battery, battery);
                 m_tabs->addFinish();
 
@@ -424,21 +425,21 @@ namespace beiklive
                 listBox->setGrow(1.f);
                 listBox->setFocusable(false);
 
-                m_exportSavBtn = _makeButton("导出存档", BK_RES("img/ui/menu/save.png"));
+                m_exportSavBtn = _makeButton(L("导出存档"), BK_RES("img/ui/menu/save.png"));
                 m_exportSavBtn->registerClickAction([this](brls::View*) -> bool {
                     _exportSav();
                     return true;
                 });
                 m_batteryActionsBox->addView(m_exportSavBtn);
 
-                auto* importBtn = _makeButton("导入存档", BK_RES("img/ui/light/wenjian.png"));
+                auto* importBtn = _makeButton(L("导入存档"), BK_RES("img/ui/light/wenjian.png"));
                 importBtn->registerClickAction([this](brls::View*) -> bool {
                     _importSav();
                     return true;
                 });
                 m_batteryActionsBox->addView(importBtn);
 
-                auto* backupBtn = _makeButton("存档备份", BK_RES("img/ui/menu/save.png"));
+                auto* backupBtn = _makeButton(L("存档备份"), BK_RES("img/ui/menu/save.png"));
                 backupBtn->registerClickAction([this](brls::View*) -> bool {
                     _backupSav();
                     return true;
@@ -446,7 +447,7 @@ namespace beiklive
                 m_batteryActionsBox->addView(backupBtn);
 
                 auto* header = new brls::Header();
-                header->setTitle("备份列表");
+                header->setTitle(L("备份列表"));
                 listBox->addView(header);
 
                 m_backupContainer = new brls::Box(brls::Axis::COLUMN);
@@ -485,13 +486,13 @@ namespace beiklive
                 std::error_code ec;
                 if (!fs::exists(_statePath(slot), ec))
                     return;
-                auto* dlg = new brls::Dialog("确认删除" + beiklive::tools::slotName(slot) + "？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("删除", [this, slot]() {
+                auto* dlg = new brls::Dialog(L("确认删除") + beiklive::tools::slotName(slot) + "？");
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("删除"), [this, slot]() {
                     std::error_code removeEc;
                     fs::remove(_statePath(slot), removeEc);
                     fs::remove(_stateThumbPath(slot), removeEc);
-                    brls::Application::notify(removeEc ? "删除失败" : "已删除存档");
+                    brls::Application::notify(removeEc ? L("删除失败") : L("已删除存档"));
                     _refreshStateList();
                 });
                 dlg->open();
@@ -539,11 +540,11 @@ namespace beiklive
                 page->setFocusable(false);
                 auto* imageView = new beiklive::ImageView(m_screenshotPaths[index].string());
                 page->getContentBox()->addView(imageView);
-                page->registerAction("关闭", brls::BUTTON_B, [page](brls::View*) -> bool {
+                page->registerAction(L("关闭"), brls::BUTTON_B, [page](brls::View*) -> bool {
                     beiklive::popActivity(page);
                     return true;
                 });
-                page->registerAction("关闭", brls::BUTTON_A, [page](brls::View*) -> bool {
+                page->registerAction(L("关闭"), brls::BUTTON_A, [page](brls::View*) -> bool {
                     beiklive::popActivity(page);
                     return true;
                 });
@@ -558,12 +559,12 @@ namespace beiklive
                 if (index < 0 || index >= static_cast<int>(m_screenshotPaths.size()))
                     return;
                 const fs::path path = m_screenshotPaths[index];
-                auto* dlg = new brls::Dialog("确认删除截图\n" + path.filename().string() + "？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("删除", [this, path]() {
+                auto* dlg = new brls::Dialog(L("确认删除截图\n") + path.filename().string() + "？");
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("删除"), [this, path]() {
                     std::error_code ec;
                     fs::remove(path, ec);
-                    brls::Application::notify(ec ? "删除失败" : "已删除截图");
+                    brls::Application::notify(ec ? L("删除失败") : L("已删除截图"));
                     _refreshScreenshotList(true);
                 });
                 dlg->open();
@@ -574,16 +575,16 @@ namespace beiklive
                 if (index < 0 || index >= static_cast<int>(m_screenshotPaths.size()))
                     return;
                 const std::string cover = m_screenshotPaths[index].string();
-                auto* dlg = new brls::Dialog("确认将该截图设置为封面？\n" +
+                auto* dlg = new brls::Dialog(L("确认将该截图设置为封面？\n") +
                                              m_screenshotPaths[index].filename().string());
-                dlg->addButton("取消", []() {});
-                dlg->addButton("确认", [this, cover]() {
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("确认"), [this, cover]() {
                     if (!beiklive::GameDB)
                         return;
                     beiklive::GameDB->set(m_entry.path, "logoPath", nlohmann::json(cover));
                     beiklive::GameDB->flush();
                     m_entry.logoPath = cover;
-                    brls::Application::notify("已设置为封面图片");
+                    brls::Application::notify(L("已设置为封面图片"));
                 });
                 dlg->open();
             }
@@ -593,39 +594,39 @@ namespace beiklive
                 const std::string src = _savPath();
                 std::error_code ec;
                 if (!fs::exists(src, ec)) {
-                    brls::Application::notify("未找到电池存档");
+                    brls::Application::notify(L("未找到电池存档"));
                     return;
                 }
-                auto* dlg = new brls::Dialog("确认导出当前电池存档？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("导出", [src]() {
+                auto* dlg = new brls::Dialog(L("确认导出当前电池存档？"));
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("导出"), [src]() {
                     fs::path exportDir("sdmc:/GBAStation/export");
                     std::string error;
                     if (!copyBinaryFile(src, exportDir / fs::path(src).filename(), &error)) {
                         brls::Logger::warning("导出电池存档失败: {} -> {}, error={}",
                             src, (exportDir / fs::path(src).filename()).string(), error);
-                        brls::Application::notify("导出失败");
+                        brls::Application::notify(L("导出失败"));
                         return;
                     }
-                    brls::Application::notify("已导出存档");
+                    brls::Application::notify(L("已导出存档"));
                 });
                 dlg->open();
             }
 
             void _importSav()
             {
-                auto* dlg = new brls::Dialog("确认导入外部 .sav 并覆盖当前电池存档？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("选择文件", [this]() {
+                auto* dlg = new brls::Dialog(L("确认导入外部 .sav 并覆盖当前电池存档？"));
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("选择文件"), [this]() {
                     beiklive::openFilePicker({"sav"}, [this](const std::string& selected) {
                         std::string error;
                         if (!copyBinaryFile(selected, _savPath(), &error)) {
                             brls::Logger::warning("导入电池存档失败: {} -> {}, error={}",
                                 selected, _savPath(), error);
-                            brls::Application::notify("导入失败");
+                            brls::Application::notify(L("导入失败"));
                             return;
                         }
-                        brls::Application::notify("已导入存档");
+                        brls::Application::notify(L("已导入存档"));
                         _refreshBackupList();
                     }, beiklive::path::GetRootPath());
                 });
@@ -637,12 +638,12 @@ namespace beiklive
                 const std::string src = _savPath();
                 std::error_code ec;
                 if (!fs::exists(src, ec)) {
-                    brls::Application::notify("未找到电池存档");
+                    brls::Application::notify(L("未找到电池存档"));
                     return;
                 }
-                auto* dlg = new brls::Dialog("确认为当前电池存档创建备份？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("备份", [this, src]() {
+                auto* dlg = new brls::Dialog(L("确认为当前电池存档创建备份？"));
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("备份"), [this, src]() {
                     fs::path backup = fs::path(src).string() + ".bak_" + timestampForFile();
                     std::string error;
                     if (!copyBinaryFile(src, backup, &error)) {
@@ -650,10 +651,10 @@ namespace beiklive
                         fs::remove(backup, removeEc);
                         brls::Logger::warning("备份电池存档失败: {} -> {}, error={}",
                             src, backup.string(), error);
-                        brls::Application::notify("备份失败");
+                        brls::Application::notify(L("备份失败"));
                         return;
                     }
-                    brls::Application::notify("已创建备份");
+                    brls::Application::notify(L("已创建备份"));
                     _refreshBackupList();
                 });
                 dlg->open();
@@ -710,11 +711,11 @@ namespace beiklive
                     label->setSingleLine(true);
                     label->setAnimated(true);
                     label->setAutoAnimate(true);
-                    label->registerAction("还原", brls::BUTTON_A, [this, index = static_cast<int>(i)](brls::View*) -> bool {
+                    label->registerAction(L("还原"), brls::BUTTON_A, [this, index = static_cast<int>(i)](brls::View*) -> bool {
                         _confirmRestoreBackup(index);
                         return true;
                     });
-                    label->registerAction("删除", brls::BUTTON_X, [this, index = static_cast<int>(i)](brls::View*) -> bool {
+                    label->registerAction(L("删除"), brls::BUTTON_X, [this, index = static_cast<int>(i)](brls::View*) -> bool {
                         _confirmDeleteBackup(index);
                         return true;
                     });
@@ -732,17 +733,17 @@ namespace beiklive
                 if (index < 0 || index >= static_cast<int>(m_backupPaths.size()))
                     return;
                 const fs::path backup = m_backupPaths[index];
-                auto* dlg = new brls::Dialog("确认还原备份\n" + backup.filename().string() + "？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("还原", [this, backup]() {
+                auto* dlg = new brls::Dialog(L("确认还原备份\n") + backup.filename().string() + "？");
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("还原"), [this, backup]() {
                     std::string error;
                     if (!copyBinaryFile(backup, _savPath(), &error)) {
                         brls::Logger::warning("还原电池存档失败: {} -> {}, error={}",
                             backup.string(), _savPath(), error);
-                        brls::Application::notify("还原失败");
+                        brls::Application::notify(L("还原失败"));
                         return;
                     }
-                    brls::Application::notify("已还原存档");
+                    brls::Application::notify(L("已还原存档"));
                 });
                 dlg->open();
             }
@@ -752,12 +753,12 @@ namespace beiklive
                 if (index < 0 || index >= static_cast<int>(m_backupPaths.size()))
                     return;
                 const fs::path backup = m_backupPaths[index];
-                auto* dlg = new brls::Dialog("确认删除备份\n" + backup.filename().string() + "？");
-                dlg->addButton("取消", []() {});
-                dlg->addButton("删除", [this, backup]() {
+                auto* dlg = new brls::Dialog(L("确认删除备份\n") + backup.filename().string() + "？");
+                dlg->addButton(L("取消"), []() {});
+                dlg->addButton(L("删除"), [this, backup]() {
                     std::error_code ec;
                     fs::remove(backup, ec);
-                    brls::Application::notify(ec ? "删除失败" : "已删除备份");
+                    brls::Application::notify(ec ? L("删除失败") : L("已删除备份"));
                     _refreshBackupList(true);
                 });
                 dlg->open();
@@ -774,7 +775,7 @@ namespace beiklive
     {
         this->showHeader(false);
         this->showFooter(false);
-        this->getHeader()->setTitle("游戏库");
+        this->getHeader()->setTitle(L("游戏库"));
         this->setFocusable(false);
         this->getContentBox()->setMargins(0.f, 0.f, 0.f, 0.f);
 
@@ -803,12 +804,12 @@ namespace beiklive
         };
         this->getContentBox()->addView(m_searchOverlay);
 
-        m_libraryView->registerAction("退出游戏库", brls::BUTTON_B, [this](brls::View*) -> bool {
+        m_libraryView->registerAction(L("退出游戏库"), brls::BUTTON_B, [this](brls::View*) -> bool {
             if (m_libraryView->isDeleteAnimationRunning())
                 return true;
             if (m_libraryView->isMultiSelectMode()) {
                 m_libraryView->clearDeleteSelection();
-                brls::Application::notify("已退出多选模式");
+                brls::Application::notify(L("已退出多选模式"));
                 return true;
             }
             if (m_isClosing)
@@ -829,7 +830,7 @@ namespace beiklive
 
 
 
-        m_libraryView->registerAction("切换视图", brls::BUTTON_Y, [this](brls::View*) -> bool {
+        m_libraryView->registerAction(L("切换视图"), brls::BUTTON_Y, [this](brls::View*) -> bool {
             if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             m_libraryView->toggleViewMode();
             SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_LIBRARY_VIEW_MODE,
@@ -838,39 +839,39 @@ namespace beiklive
             return true;
         });
 
-        m_libraryView->registerAction("上一平台", brls::BUTTON_LB, [this](brls::View*) -> bool {
+        m_libraryView->registerAction(L("上一平台"), brls::BUTTON_LB, [this](brls::View*) -> bool {
             if (m_libraryView->isDeleteAnimationRunning()) return true;
             _cyclePlatformFilter(-1);
             return true;
         });
 
-        m_libraryView->registerAction("下一平台", brls::BUTTON_RB, [this](brls::View*) -> bool {
+        m_libraryView->registerAction(L("下一平台"), brls::BUTTON_RB, [this](brls::View*) -> bool {
             if (m_libraryView->isDeleteAnimationRunning()) return true;
             _cyclePlatformFilter(1);
             return true;
         });
 
-        m_libraryView->registerAction("分类", brls::BUTTON_LSB, [this](brls::View*) -> bool {
+        m_libraryView->registerAction(L("分类"), brls::BUTTON_LSB, [this](brls::View*) -> bool {
             if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             _showFilterDropdown();
             return true;
         });
 
-        m_libraryView->registerAction("多选", brls::BUTTON_X, [this](brls::View*) -> bool {
+        m_libraryView->registerAction(L("多选"), brls::BUTTON_X, [this](brls::View*) -> bool {
             if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             if (m_libraryView->isMultiSelectMode()) {
                 if (m_libraryView->getDeleteSelection().empty())
-                    brls::Application::notify("请先勾选至少一款游戏");
+                    brls::Application::notify(L("请先勾选至少一款游戏"));
                 else
                     _showMultiSelectSidebar();
                 return true;
             }
             m_libraryView->setMultiSelectMode(true);
-            brls::Application::notify("已进入多选模式");
+            brls::Application::notify(L("已进入多选模式"));
             return true;
         });
 
-        m_libraryView->registerAction("全选", brls::BUTTON_START, [this](brls::View*) -> bool {
+        m_libraryView->registerAction(L("全选"), brls::BUTTON_START, [this](brls::View*) -> bool {
             if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             if (!m_libraryView->isMultiSelectMode())
                 return false;
@@ -881,7 +882,7 @@ namespace beiklive
             return true;
         });
 
-        m_libraryView->registerAction("搜索", brls::BUTTON_RT, [this](brls::View*) -> bool {
+        m_libraryView->registerAction(L("搜索"), brls::BUTTON_RT, [this](brls::View*) -> bool {
             if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             if (!m_searchOverlay || m_searchOverlay->isOpen()) return true;
             m_libraryView->setInteractionDisabled(true);
@@ -895,7 +896,7 @@ namespace beiklive
             return true;
         });
 
-        m_libraryView->registerAction("排序", brls::BUTTON_LT, [this](brls::View*) -> bool {
+        m_libraryView->registerAction(L("排序"), brls::BUTTON_LT, [this](brls::View*) -> bool {
             if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
             _showSortSelector();
             return true;
@@ -1198,8 +1199,8 @@ namespace beiklive
                 if (!alive->load()) return;
                 std::vector<std::string> opts;
                 std::vector<PlatformFilter> map;
-                opts.push_back("所有"); map.push_back(PlatformFilter::ALL);
-                if (favCount > 0) { opts.push_back("收藏 (" + std::to_string(favCount) + ")"); map.push_back(PlatformFilter::FAVORITE); }
+                opts.push_back(L("所有")); map.push_back(PlatformFilter::ALL);
+                if (favCount > 0) { opts.push_back(L("收藏 (") + std::to_string(favCount) + ")"); map.push_back(PlatformFilter::FAVORITE); }
                 if (hG) { opts.push_back("GBA"); map.push_back(PlatformFilter::GBA); }
                 if (hC) { opts.push_back("GBC"); map.push_back(PlatformFilter::GBC); }
                 if (hB) { opts.push_back("GB");  map.push_back(PlatformFilter::GB);  }
@@ -1214,7 +1215,7 @@ namespace beiklive
                 int cur = 0;
                 for (size_t i = 0; i < map.size(); i++)
                     if (map[i] == m_platformFilter) { cur = (int)i; break; }
-                auto* dd = new brls::Dropdown("游戏分类", opts,
+                auto* dd = new brls::Dropdown(L("游戏分类"), opts,
                     [this, map, alive, cur](int sel) {
                         if (sel < 0 || sel >= (int)map.size()) return;
                         if (map[sel] == m_platformFilter) return;
@@ -1232,13 +1233,13 @@ namespace beiklive
     {
         std::string detail;
         if (m_isSearching)
-            detail = "搜索 \"" + m_searchTerm + "\" · " + std::to_string(m_entries.size()) + " 款";
+            detail = L("搜索 \"") + m_searchTerm + L("\" · ") + std::to_string(m_entries.size()) + L(" 款");
         else
-            detail = "共 " + std::to_string(m_entries.size()) + " 款游戏";
+            detail = "共 " + std::to_string(m_entries.size()) + L(" 款游戏");
         this->getHeader()->setInfo(detail);
         std::string fs;
         switch (m_platformFilter) {
-            case PlatformFilter::ALL:      fs = "所有"; break;
+            case PlatformFilter::ALL:      fs = L("所有"); break;
             case PlatformFilter::GBA:      fs = "GBA";  break;
             case PlatformFilter::GBC:      fs = "GBC";  break;
             case PlatformFilter::GB:       fs = "GB";   break;
@@ -1250,15 +1251,15 @@ namespace beiklive
             case PlatformFilter::ARCADE:   fs = "Arcade"; break;
             case PlatformFilter::DREAMCAST: fs = "DC"; break;
             case PlatformFilter::PSP:      fs = "PSP"; break;
-            case PlatformFilter::FAVORITE: fs = "收藏"; break;
+            case PlatformFilter::FAVORITE: fs = L("收藏"); break;
         }
-        this->getHeader()->setPath((m_isSearching ? "搜索" : "分类") + (": " + fs));
+        this->getHeader()->setPath((m_isSearching ? L("搜索") : L("分类")) + (": " + fs));
         if (m_libraryView) {
             m_libraryView->setLibraryContext(fs, detail);
             auto filterName = [](PlatformFilter filter) -> std::string {
                 switch (filter) {
-                    case PlatformFilter::ALL: return "所有";
-                    case PlatformFilter::FAVORITE: return "收藏";
+                    case PlatformFilter::ALL: return L("所有");
+                    case PlatformFilter::FAVORITE: return L("收藏");
                     case PlatformFilter::GBA: return "GBA";
                     case PlatformFilter::GBC: return "GBC";
                     case PlatformFilter::GB: return "GB";
@@ -1271,7 +1272,7 @@ namespace beiklive
                     case PlatformFilter::DREAMCAST: return "DC";
                     case PlatformFilter::PSP: return "PSP";
                 }
-                return "所有";
+                return L("所有");
             };
             std::vector<std::string> labels;
             labels.reserve(m_availableFilters.size());
@@ -1295,9 +1296,9 @@ namespace beiklive
 
     void GameLibraryPage::_showSortSelector()
     {
-        std::vector<std::string> opts = {"最近游玩", "游玩时长", "首字母"};
+        std::vector<std::string> opts = {L("最近游玩"), L("游玩时长"), L("首字母")};
         int cur = static_cast<int>(m_sortMode);
-        auto* dd = new brls::Dropdown("排序方式", opts,
+        auto* dd = new brls::Dropdown(L("排序方式"), opts,
             [this](int sel) {
                 if (sel < 0 || sel >= 3) return;
                 auto newMode = static_cast<SortMode>(sel);
@@ -1362,7 +1363,7 @@ namespace beiklive
         m_availableFilters = std::move(filters);
         m_platformFilter = resolvedFilter;
         if (favoriteFallback)
-            brls::Application::notify("收藏列表为空，已切换至所有游戏");
+            brls::Application::notify(L("收藏列表为空，已切换至所有游戏"));
         m_visibleCount = static_cast<int>(m_entries.size());
         m_libraryView->setDefaultCellFocus(static_cast<size_t>(_savedFocusIndex()));
         m_dataSource = new GameLibraryDS(this);
@@ -1377,8 +1378,8 @@ namespace beiklive
         }
         if (isSearching && m_entries.empty()) {
             auto* dialog = new brls::Dialog(
-                "当前分类下无 \"" + searchTerm + "\"");
-            dialog->addButton("确认", []() {});
+                L("当前分类下无 \"") + searchTerm + L("\""));
+            dialog->addButton(L("确认"), []() {});
             dialog->open();
         }
     }
@@ -1472,7 +1473,7 @@ namespace beiklive
         this->getBottomBar()->setVisibility(brls::Visibility::GONE);
         std::string fn = beiklive::tools::getFileNameWithoutExtension(entry.path);
 
-        m_gameOptionsSidebar->addButton("启动游戏", beiklive::material::PLAY_ARROW,
+        m_gameOptionsSidebar->addButton(L("启动游戏"), beiklive::material::PLAY_ARROW,
             [this, entry, selectedIndex](const beiklive::GameEntry&) {
                 if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) &&
                     !beiklive::ensureNdsEnvironmentReady()) {
@@ -1491,7 +1492,7 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->addButton(
-            entry.favourite ? "取消收藏" : "加入收藏",
+            entry.favourite ? L("取消收藏") : L("加入收藏"),
             entry.favourite ? beiklive::material::FAVORITE : beiklive::material::FAVORITE_BORDER,
             [this, path, favourite = entry.favourite, selectedIndex](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated(
@@ -1513,9 +1514,9 @@ namespace beiklive
             });
 
         const int operationsMenu = m_gameOptionsSidebar->addSubmenu(
-            "游戏操作", beiklive::material::SETTINGS);
+            L("游戏操作"), beiklive::material::SETTINGS);
 
-        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "修改映射名称", beiklive::material::EDIT,
+        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, L("修改映射名称"), beiklive::material::EDIT,
             [this, path, title = entry.title, fn, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated([this, path, title, fn, idx]() {
                     auto* ime = brls::Application::getPlatform()->getImeManager();
@@ -1531,16 +1532,16 @@ namespace beiklive
                             }
                             m_libraryView->setInteractionDisabled(false);
                         },
-                        "编辑游戏名称", "", 128, title,
+                        L("编辑游戏名称"), "", 128, title,
                         brls::KeyboardKeyDisableBitmask::KEYBOARD_DISABLE_NONE);
                 });
             });
 
         const int coverMenu = m_gameOptionsSidebar->addNestedSubmenu(
-            operationsMenu, "修改封面", beiklive::material::IMAGE);
+            operationsMenu, L("修改封面"), beiklive::material::IMAGE);
 
         m_gameOptionsSidebar->addNestedSubmenuButton(
-            operationsMenu, coverMenu, "从 SteamGridDB 获取",
+            operationsMenu, coverMenu, L("从 SteamGridDB 获取"),
             beiklive::material::CLOUD_DOWNLOAD,
             [this, entry, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated([this, entry, idx]() {
@@ -1548,7 +1549,7 @@ namespace beiklive
                         m_libraryView->setInteractionDisabled(false);
                         brls::Application::giveFocus(m_libraryView);
                         brls::Application::notify(
-                            "请去设置-模拟器页面输入 SteamGridDB Api Key");
+                            L("请去设置-模拟器页面输入 SteamGridDB Api Key"));
                         return;
                     }
                     beiklive::openSteamGridDbPage(entry,
@@ -1563,7 +1564,7 @@ namespace beiklive
             });
 
         m_gameOptionsSidebar->addNestedSubmenuButton(
-            operationsMenu, coverMenu, "从本地选择", 0xE2C8,
+            operationsMenu, coverMenu, L("从本地选择"), 0xE2C8,
             [this, path, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry& entry) {
                 const auto pickerLocation = beiklive::getGameCoverPickerLocation(entry);
                 _closeGameOptionsPanelAnimated([this, path, idx, pickerLocation]() {
@@ -1581,7 +1582,7 @@ namespace beiklive
                 });
             });
 
-        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "安装到 Switch 桌面", beiklive::material::INSTALL_APP,
+        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, L("安装到 Switch 桌面"), beiklive::material::INSTALL_APP,
             [this](const beiklive::GameEntry& game) {
                 _closeGameOptionsPanelAnimated([this, game]() {
                     m_libraryView->setInteractionDisabled(false);
@@ -1589,7 +1590,7 @@ namespace beiklive
                 });
             });
 
-        m_gameOptionsSidebar->addButton("数据管理", beiklive::material::STORAGE,
+        m_gameOptionsSidebar->addButton(L("数据管理"), beiklive::material::STORAGE,
             [this, entry](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated([this, entry]() {
                     _openGameDataPage(entry);
@@ -1599,7 +1600,7 @@ namespace beiklive
 
         if (beiklive::GetCoreOptions(entry.platform).size() > 1)
         {
-            m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "核心切换", beiklive::material::MEMORY,
+            m_gameOptionsSidebar->addSubmenuButton(operationsMenu, L("核心切换"), beiklive::material::MEMORY,
                 [this, path, platform = entry.platform, core = entry.core,
                  idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry&) {
                     _closeGameOptionsPanelAnimated(
@@ -1611,7 +1612,7 @@ namespace beiklive
                                 names.push_back(option.name);
 
                             auto* dropdown = new brls::Dropdown(
-                                "核心切换",
+                                L("核心切换"),
                                 names,
                                 [this, path, idx, options](int selected) {
                                     if (selected < 0 || selected >= static_cast<int>(options.size()))
@@ -1621,7 +1622,7 @@ namespace beiklive
                                         beiklive::GameDB->flush();
                                         if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
                                             m_entries[idx].core = options[selected].id;
-                                        brls::Application::notify("已切换核心：" + options[selected].name);
+                                        brls::Application::notify(L("已切换核心：") + options[selected].name);
                                     }
                                     m_libraryView->setInteractionDisabled(false);
                                 },
@@ -1634,19 +1635,19 @@ namespace beiklive
                 });
         }
 
-        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, "删除游戏", beiklive::material::DELETE_ICON,
+        m_gameOptionsSidebar->addSubmenuButton(operationsMenu, L("删除游戏"), beiklive::material::DELETE_ICON,
             [this, selectedIndex](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated([this, selectedIndex]() {
                     auto deleteGame = [this, selectedIndex](bool deleteRomFile) {
                         _deleteEntriesAsync({selectedIndex}, deleteRomFile);
                     };
                     auto* dialog = new brls::Dialog(
-                        "请选择游戏的删除方式");
-                    dialog->addButton("仅从库中移除",
+                        L("请选择游戏的删除方式"));
+                    dialog->addButton(L("仅从库中移除"),
                         [deleteGame]() { deleteGame(false); });
-                    dialog->addButton("移除并删除文件",
+                    dialog->addButton(L("移除并删除文件"),
                         [deleteGame]() { deleteGame(true); });
-                    dialog->addButton("取消", [this]() {
+                    dialog->addButton(L("取消"), [this]() {
                         m_libraryView->setInteractionDisabled(false);
                         brls::Application::giveFocus(m_libraryView);
                     });
@@ -1787,8 +1788,8 @@ namespace beiklive
                     m_libraryView->cancelDeleteAnimation();
                     brls::Application::notify(
                         deleteRomFiles && !allFilesRemoved
-                            ? "游戏文件删除失败，记录已保留"
-                            : "删除失败");
+                            ? L("游戏文件删除失败，记录已保留")
+                            : L("删除失败"));
                     return;
                 }
                 if (removedIndices.size() != requested) {
@@ -1801,11 +1802,11 @@ namespace beiklive
                     if (!alive->load()) return;
                     m_libraryView->clearDeleteSelection();
                     if (deleteRomFiles && !allFilesRemoved)
-                        brls::Application::notify("部分游戏删除失败，失败记录已保留");
+                        brls::Application::notify(L("部分游戏删除失败，失败记录已保留"));
                     else
                         brls::Application::notify(deleteRomFiles
-                            ? "已删除 " + std::to_string(removedCount) + " 款游戏"
-                            : "已从游戏库移除 " + std::to_string(removedCount) + " 款游戏");
+                            ? L("已删除 ") + std::to_string(removedCount) + L(" 款游戏")
+                            : L("已从游戏库移除 ") + std::to_string(removedCount) + L(" 款游戏"));
                     _reloadEntries(0, true);
                 });
             });
@@ -1823,23 +1824,23 @@ namespace beiklive
         size_t count = m_libraryView->getDeleteSelection().size();
         m_gameOptionsSidebar->setNanoVgPreviewIcon(
             beiklive::material::SELECT_ALL,
-            "已选择 " + std::to_string(count) + " 款游戏");
+            L("已选择 ") + std::to_string(count) + L(" 款游戏"));
 
         m_gameOptionsSidebar->addButton(
-            "退出多选",
+            L("退出多选"),
             beiklive::material::CLOSE,
             [this](const beiklive::GameEntry&) {
                 _closeGameOptionsPanelAnimated([this]() {
                     m_libraryView->clearDeleteSelection();
                     m_libraryView->setInteractionDisabled(false);
                     brls::Application::giveFocus(m_libraryView);
-                    brls::Application::notify("已退出多选模式");
+                    brls::Application::notify(L("已退出多选模式"));
                 });
             });
 
         if (count > 0) {
             m_gameOptionsSidebar->addButton(
-                "删除已选游戏 (" + std::to_string(count) + ")",
+                L("删除已选游戏 (") + std::to_string(count) + ")",
                 beiklive::material::DELETE_SWEEP_ICON,
                 [this](const beiklive::GameEntry&) {
                     std::vector<int> sel(m_libraryView->getDeleteSelection().begin(),
@@ -1850,13 +1851,13 @@ namespace beiklive
                             _deleteEntriesAsync(sel, deleteRomFiles);
                         };
                         auto* dialog = new brls::Dialog(
-                            "请选择这 " + std::to_string(n) +
-                            " 款游戏的删除方式");
-                        dialog->addButton("仅从库中移除",
+                            L("请选择这 ") + std::to_string(n) +
+                            L(" 款游戏的删除方式"));
+                        dialog->addButton(L("仅从库中移除"),
                             [deleteSelected]() { deleteSelected(false); });
-                        dialog->addButton("移除并删除文件",
+                        dialog->addButton(L("移除并删除文件"),
                             [deleteSelected]() { deleteSelected(true); });
-                        dialog->addButton("取消", [this]() {
+                        dialog->addButton(L("取消"), [this]() {
                             m_libraryView->setInteractionDisabled(false);
                             brls::Application::giveFocus(m_libraryView);
                         });
@@ -1866,18 +1867,18 @@ namespace beiklive
                 });
 
             m_gameOptionsSidebar->addButton(
-                "收藏选中游戏 (" + std::to_string(count) + ")",
+                L("收藏选中游戏 (") + std::to_string(count) + ")",
                 beiklive::material::FAVORITE,
                 [this](const beiklive::GameEntry&) {
                     std::vector<int> sel(m_libraryView->getDeleteSelection().begin(),
                                          m_libraryView->getDeleteSelection().end());
                     _closeGameOptionsPanelAnimated([this, sel]() {
-                        auto* dlg = new brls::Dialog("确认将选中的 " +
-                            std::to_string(sel.size()) + " 款游戏添加到收藏？");
-                        dlg->addButton("取消", [this]() {
+                        auto* dlg = new brls::Dialog(L("确认将选中的 ") +
+                            std::to_string(sel.size()) + L(" 款游戏添加到收藏？"));
+                        dlg->addButton(L("取消"), [this]() {
                             m_libraryView->setInteractionDisabled(false);
                         });
-                        dlg->addButton("确认", [this, sel]() {
+                        dlg->addButton(L("确认"), [this, sel]() {
                             size_t updated = 0;
                             if (beiklive::GameDB) {
                                 for (int idx : sel) {
@@ -1893,8 +1894,8 @@ namespace beiklive
                             m_libraryView->clearDeleteSelection();
                             m_libraryView->setInteractionDisabled(false);
                             brls::Application::notify(updated > 0
-                                ? "已添加到收藏：" + std::to_string(updated) + " 款"
-                                : "未选择可收藏的游戏");
+                                ? L("已添加到收藏：") + std::to_string(updated) + L(" 款")
+                                : L("未选择可收藏的游戏"));
                             if (m_platformFilter == PlatformFilter::FAVORITE)
                                 _reloadEntries();
                         });
@@ -1903,18 +1904,18 @@ namespace beiklive
                 });
 
             m_gameOptionsSidebar->addButton(
-                "取消收藏选中游戏 (" + std::to_string(count) + ")",
+                L("取消收藏选中游戏 (") + std::to_string(count) + ")",
                 beiklive::material::FAVORITE_BORDER,
                 [this](const beiklive::GameEntry&) {
                     std::vector<int> sel(m_libraryView->getDeleteSelection().begin(),
                                          m_libraryView->getDeleteSelection().end());
                     _closeGameOptionsPanelAnimated([this, sel]() {
-                        auto* dlg = new brls::Dialog("确认取消收藏选中的 " +
-                            std::to_string(sel.size()) + " 款游戏？");
-                        dlg->addButton("取消", [this]() {
+                        auto* dlg = new brls::Dialog(L("确认取消收藏选中的 ") +
+                            std::to_string(sel.size()) + L(" 款游戏？"));
+                        dlg->addButton(L("取消"), [this]() {
                             m_libraryView->setInteractionDisabled(false);
                         });
-                        dlg->addButton("确认", [this, sel]() {
+                        dlg->addButton(L("确认"), [this, sel]() {
                             size_t updated = 0;
                             if (beiklive::GameDB) {
                                 for (int idx : sel) {
@@ -1930,8 +1931,8 @@ namespace beiklive
                             m_libraryView->clearDeleteSelection();
                             m_libraryView->setInteractionDisabled(false);
                             brls::Application::notify(updated > 0
-                                ? "已取消收藏：" + std::to_string(updated) + " 款"
-                                : "未选择可取消收藏的游戏");
+                                ? L("已取消收藏：") + std::to_string(updated) + L(" 款")
+                                : L("未选择可取消收藏的游戏"));
                             if (m_platformFilter == PlatformFilter::FAVORITE)
                                 _reloadEntries();
                         });
