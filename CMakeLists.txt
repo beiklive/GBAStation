@@ -66,7 +66,7 @@ if (TARGET mgba AND PLATFORM_SWITCH)
 endif ()
 
 add_subdirectory(third_party)
-add_subdirectory(cores/genesis)
+add_subdirectory(src/emulator/genesis)
 
 # FAKE-08 is embedded as a runtime-only static library. Platform hosts,
 # SDL frontends, libretro glue and the upstream main() are intentionally
@@ -212,6 +212,7 @@ include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/platform/switch/nds_stub/.*")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/emulator/melonds/.*")
+list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/emulator/genesis/.*")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/game/mgba/.*")
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz/miniz.c)
 list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose/mongoose.c)

@@ -2,7 +2,7 @@
 #include "emulator/CoreFceumm.hpp"
 #include "emulator/CoreSnes9x.hpp"
 #include "emulator/mgba_native/MgbaNativeCore.hpp"
-#include "cores/genesis/GenesisCore.h"
+#include "emulator/genesis/GenesisCore.h"
 
 namespace beiklive {
 
