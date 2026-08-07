@@ -92,7 +92,8 @@ namespace beiklive::enums
     enum class ThemeLayout
     {
         DEFAULT_THEME,
-        SWITCH_THEME
+        SWITCH_THEME,
+        IISU_THEME
     };
 
     // 白名单/黑名单过滤模式

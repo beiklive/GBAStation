@@ -1677,6 +1677,18 @@ private:
                     GradientTheme::SakuraPink, GradientTheme::VscodeBlack};
                 m_host.setGradientTheme(themes[i]);
             }));
+        emulator.push_back(_selector(L("主页布局(重启后生效)"), L("选择首页的布局样式，重启应用后生效"), 0xE8A1,
+            {L("Switch 布局"), L("IISU 布局")},
+            []() {
+                const int cur = cfgGetInt("theme", (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
+                if (cur == (int)beiklive::enums::ThemeLayout::IISU_THEME) return 1;
+                return 0;
+            },
+            [](int i) {
+                cfgSetInt("theme", i == 1
+                    ? (int)beiklive::enums::ThemeLayout::IISU_THEME
+                    : (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
+            }));
         emulator.push_back(_toggle(L("启用背景图片"), L("在动态背景上显示自定义 PNG 图片"), beiklive::material::IMAGE,
             []() { return cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false); },
             [this](bool v) { cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); if (m_host.showBackground) m_host.showBackground(v); }));

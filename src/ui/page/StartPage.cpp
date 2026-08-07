@@ -283,31 +283,33 @@ namespace beiklive
             const float rowY = panelY + 124.f;
             const float rowW = panelW - 56.f;
             const float rowH = 78.f;
-            const float rowScale = 1.f - m_press * 0.018f;
-            nvgSave(vg);
-            nvgTranslate(vg, rowX + rowW * 0.5f, rowY + rowH * 0.5f);
-            nvgScale(vg, rowScale, rowScale);
-            nvgTranslate(vg, -(rowX + rowW * 0.5f), -(rowY + rowH * 0.5f));
-            nvgBeginPath(vg);
-            nvgRoundedRect(vg, rowX, rowY, rowW, rowH, 12.f);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 32));
-            nvgFill(vg);
-            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 112));
-            nvgStrokeWidth(vg, 1.f);
-            nvgStroke(vg);
-            nvgFontFaceId(vg, m_materialFont);
-            nvgFontSize(vg, 30.f);
-            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(96, 195, 255, 245));
-            nvgText(vg, rowX + 24.f, rowY + rowH * 0.5f, settingsIcon.c_str(), nullptr);
-            nvgFontFaceId(vg, m_defaultFont);
-            nvgFontSize(vg, 22.f);
-            nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
-            nvgText(vg, rowX + 72.f, rowY + rowH * 0.5f,
-                    L("PICO-8入口显示").c_str(), nullptr);
-            _drawChoice(vg, rowX + rowW - 220.f, rowY + 17.f, "是", m_pico8Visible);
-            _drawChoice(vg, rowX + rowW - 112.f, rowY + 17.f, "否", !m_pico8Visible);
-            nvgRestore(vg);
+            if (m_showPico8Option) {
+                const float rowScale = 1.f - m_press * 0.018f;
+                nvgSave(vg);
+                nvgTranslate(vg, rowX + rowW * 0.5f, rowY + rowH * 0.5f);
+                nvgScale(vg, rowScale, rowScale);
+                nvgTranslate(vg, -(rowX + rowW * 0.5f), -(rowY + rowH * 0.5f));
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, rowX, rowY, rowW, rowH, 12.f);
+                nvgFillColor(vg, nvgRGBA(255, 255, 255, 32));
+                nvgFill(vg);
+                nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 112));
+                nvgStrokeWidth(vg, 1.f);
+                nvgStroke(vg);
+                nvgFontFaceId(vg, m_materialFont);
+                nvgFontSize(vg, 30.f);
+                nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(96, 195, 255, 245));
+                nvgText(vg, rowX + 24.f, rowY + rowH * 0.5f, settingsIcon.c_str(), nullptr);
+                nvgFontFaceId(vg, m_defaultFont);
+                nvgFontSize(vg, 22.f);
+                nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
+                nvgText(vg, rowX + 72.f, rowY + rowH * 0.5f,
+                        L("PICO-8入口显示").c_str(), nullptr);
+                _drawChoice(vg, rowX + rowW - 220.f, rowY + 17.f, "是", m_pico8Visible);
+                _drawChoice(vg, rowX + rowW - 112.f, rowY + 17.f, "否", !m_pico8Visible);
+                nvgRestore(vg);
+            }
 
             float cursor = panelX + panelW - 30.f;
             _drawHint(vg, brls::BUTTON_START, L("关闭").c_str(), cursor, panelY + panelH - 27.f, alpha);
@@ -317,6 +319,8 @@ namespace beiklive
 
         std::function<void(bool)> onPico8VisibleChanged;
         std::function<void()> onClosed;
+
+        void setShowPico8Option(bool show) { m_showPico8Option = show; }
 
     private:
         static float _clamp01(float value)
@@ -412,6 +416,7 @@ namespace beiklive
         bool m_open = false;
         bool m_closing = false;
         bool m_pico8Visible = true;
+        bool m_showPico8Option = true;
         float m_progress = 0.f;
         float m_press = 0.f;
         int m_defaultFont = -1;
@@ -770,7 +775,11 @@ namespace beiklive
         int theme = GET_SETTING_KEY_INT("theme", (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
         brls::Logger::debug("Current theme: " + std::to_string(theme));
 
-        if (theme == (int)beiklive::enums::ThemeLayout::SWITCH_THEME)
+        if (theme == (int)beiklive::enums::ThemeLayout::IISU_THEME)
+        {
+            _useIisuLayout();
+        }
+        else
         {
             _useSwitchLayout();
         }
@@ -787,6 +796,8 @@ namespace beiklive
     {
         if (switchLayout)
             switchLayout->playEntranceAnimation();
+        else if (iisuLayout)
+            iisuLayout->playEntranceAnimation();
         onResume();
     }
 
@@ -817,12 +828,16 @@ namespace beiklive
             switchLayout->setPico8ShortcutVisible(
                 GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE, 1) != 0);
         }
+        if (iisuLayout) {
+            iisuLayout->setPico8ShortcutVisible(
+                GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE, 1) != 0);
+        }
     }
 
     void StartPage::_requestRecentGamesRefresh(bool defer)
     {
         // 每次回到起始页时刷新游戏列表，获取最新的最近玩过的10款游戏
-        if (!switchLayout || m_homeDeletePending)
+        if ((!switchLayout && !iisuLayout) || m_homeDeletePending)
             return;
 
         int gen = ++m_recentRefreshGen;
@@ -848,14 +863,25 @@ namespace beiklive
                     m_libraryPreparedData = std::move(prepared);
                     brls::View* currentFocus = brls::Application::getCurrentFocus();
                     bool needInitialCardFocus = !currentFocus || currentFocus == this || currentFocus->isHidden();
-                    switchLayout->refreshGameList(recent);
+                    if (switchLayout)
+                        switchLayout->refreshGameList(recent);
+                    if (iisuLayout)
+                        iisuLayout->refreshGameList(recent);
                     if (m_resetCardFocusOnNextRefresh)
                     {
                         m_resetCardFocusOnNextRefresh = false;
-                        switchLayout->resetCardFocusToFirst();
+                        if (switchLayout)
+                            switchLayout->resetCardFocusToFirst();
+                        if (iisuLayout)
+                            iisuLayout->resetCardFocusToFirst();
                     }
                     else if (needInitialCardFocus)
-                        switchLayout->restoreCardFocus(false);
+                    {
+                        if (switchLayout)
+                            switchLayout->restoreCardFocus(false);
+                        if (iisuLayout)
+                            iisuLayout->restoreCardFocus(false);
+                    }
                 });
             });
         };
@@ -1109,6 +1135,7 @@ namespace beiklive
             false, false, brls::SOUND_CLICK);
         this->getContentBox()->addView(switchLayout);
         m_shortcutSettingsOverlay = new HomeShortcutSettingsOverlay();
+        m_shortcutSettingsOverlay->setShowPico8Option(true);
         m_shortcutSettingsOverlay->onPico8VisibleChanged = [this](bool visible) {
             SET_SETTING_KEY_INT(
                 beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE,
@@ -1121,6 +1148,108 @@ namespace beiklive
         m_shortcutSettingsOverlay->onClosed = [this]() {
             if (switchLayout)
                 brls::Application::giveFocus(switchLayout);
+        };
+        this->getContentBox()->addView(m_shortcutSettingsOverlay);
+        _requestRecentGamesRefresh(true);
+    }
+
+    void StartPage::_useIisuLayout()
+    {
+        brls::Logger::debug("Using IISU theme layout");
+        iisuLayout = new beiklive::IisuLayout();
+        iisuLayout->setGrow(1.f);
+        iisuLayout->setPico8ShortcutVisible(
+            GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE, 1) != 0);
+        iisuLayout->onGameActivated = [this](const beiklive::GameEntry &entry)
+        {
+            m_resetCardFocusOnNextRefresh = true;
+            auto fresh = beiklive::GameDB
+                ? beiklive::GameDB->findByPath(entry.path)
+                : std::optional<beiklive::GameEntry>{};
+            const auto& e = fresh.has_value() ? *fresh : entry;
+            brls::Logger::info("Game activated: " + e.title);
+            if (!_pushGameActivity(e, this)) {
+                m_gameLaunchPending = false;
+                if (iisuLayout) {
+                    iisuLayout->playEntranceAnimation();
+                    iisuLayout->restoreCardFocus(false);
+                }
+            }
+        };
+        iisuLayout->onGameOptions = [this](const beiklive::GameEntry &entry)
+        {
+            brls::Logger::info("Game options opened: " + entry.title);
+            _showGameOptionsPanel(entry);
+        };
+
+        iisuLayout->onGameLibraryOpened = [this]()
+        {
+            brls::Logger::info("Game Library opened");
+            _openGameLibrary();
+        };
+
+        iisuLayout->onFileBrowserOpened = [this]()
+        {
+            brls::Logger::info("File Browser opened");
+            _openFileList();
+        };
+
+        iisuLayout->onDataManagementOpened = [this]()
+        {
+            brls::Logger::info("Data Management opened");
+            _openDataManagement();
+        };
+
+        iisuLayout->onSettingsOpened = [this]()
+        {
+            brls::Logger::info("Settings opened");
+            _openSettings();
+        };
+
+        iisuLayout->onAboutOpened = [this]()
+        {
+            brls::Logger::info("About opened");
+            _openAbout();
+        };
+
+        iisuLayout->onPico8Opened = [this]()
+        {
+            brls::Logger::info("PICO-8 shortcut opened (iisu layout)");
+            brls::Application::notify(L("iisu 布局暂不支持 PICO-8 入口"));
+        };
+
+        iisuLayout->onExitRequested = [this]()
+        {
+            brls::Logger::info("Exit requested");
+            if (iisuLayout) {
+                iisuLayout->playExitAnimation([]() {
+                    brls::Application::quit();
+                });
+            } else {
+                brls::Application::quit();
+            }
+        };
+        iisuLayout->registerAction(L("设置主页"), brls::BUTTON_START,
+            [this](brls::View*) -> bool {
+                _showShortcutSettings();
+                return true;
+            },
+            false, false, brls::SOUND_CLICK);
+        this->getContentBox()->addView(iisuLayout);
+        m_shortcutSettingsOverlay = new HomeShortcutSettingsOverlay();
+        m_shortcutSettingsOverlay->setShowPico8Option(false);
+        m_shortcutSettingsOverlay->onPico8VisibleChanged = [this](bool visible) {
+            SET_SETTING_KEY_INT(
+                beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE,
+                visible ? 1 : 0);
+            if (iisuLayout)
+                iisuLayout->setPico8ShortcutVisible(visible);
+            brls::Application::notify(
+                visible ? L("已显示 PICO-8 入口") : L("已隐藏 PICO-8 入口"));
+        };
+        m_shortcutSettingsOverlay->onClosed = [this]() {
+            if (iisuLayout)
+                brls::Application::giveFocus(iisuLayout);
         };
         this->getContentBox()->addView(m_shortcutSettingsOverlay);
         _requestRecentGamesRefresh(true);

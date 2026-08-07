@@ -5,6 +5,7 @@
 #include <memory>
 #include "core/common.h"
 #include "ui/view/SwitchLayout.hpp"
+#include "ui/view/IisuLayout.hpp"
 #include "ui/page/FileListPage.hpp"
 #include "ui/page/GamePage.hpp"
 #include "ui/page/SettingPage.hpp"
@@ -32,6 +33,7 @@ namespace beiklive
 
     private:
         void _useSwitchLayout();
+        void _useIisuLayout();
         void _openGameLibrary();
         void _openFileList();
         void _openSettings();
@@ -54,6 +56,7 @@ namespace beiklive
 
         beiklive::FileListPage* m_fileListPage = nullptr;
         beiklive::SwitchLayout* switchLayout = nullptr;
+        beiklive::IisuLayout* iisuLayout = nullptr;
         beiklive::HomeShortcutSettingsOverlay* m_shortcutSettingsOverlay = nullptr;
         beiklive::Box* m_gamePage = nullptr;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
