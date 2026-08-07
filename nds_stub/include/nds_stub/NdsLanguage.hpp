@@ -79,6 +79,9 @@ private:
                 std::string value = line.substr(eq + 1);
                 if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
                     value = value.substr(1, value.size() - 2);
+                // Launcher config.cfg stores strings with an "s|" type prefix.
+                if (value.size() >= 2 && value[0] == 's' && value[1] == '|')
+                    value = value.substr(2);
                 language = value;
                 break;
             }
