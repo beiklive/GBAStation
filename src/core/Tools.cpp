@@ -498,13 +498,13 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
         case beiklive::enums::EmuPlatform::Emu3DS:
             return BK_RES(path_prefix + "3ds.png");
         case beiklive::enums::EmuPlatform::EmuGenesis:
-            return BK_RES(path_prefix + "gba.png");
+            return BK_RES(path_prefix + "md.png");
         case beiklive::enums::EmuPlatform::EmuArcade:
-            return BK_RES(path_prefix + "gba.png");
+            return BK_RES(path_prefix + "fbneo.png");
         case beiklive::enums::EmuPlatform::EmuDreamcast:
-            return BK_RES(path_prefix + "gba.png");
+            return BK_RES(path_prefix + "dreamcast.png");
         case beiklive::enums::EmuPlatform::EmuPSP:
-            return BK_RES(path_prefix + "gba.png");
+            return BK_RES(path_prefix + "psp.png");
         default:
             return BK_RES(path_prefix + "gba.png");
     }
