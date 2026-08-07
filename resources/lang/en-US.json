@@ -56,5 +56,20 @@
     "当前绑定会在倒计时结束后确认": "The binding is confirmed when the countdown ends",
     "未绑定": "Unbound",
     "或": "or",
-    "模拟器、画面、声音与输入配置": "Emulator, display, audio and input settings"
+    "模拟器、画面、声音与输入配置": "Emulator, display, audio and input settings",
+    "更新": "Update",
+    "核心切换": "Core Switch",
+    "修改金手指代码": "Edit Cheat Code",
+    "容量": "Capacity",
+    "确认删除": "Confirm Delete",
+    "档位0": "Slot 0",
+    "档位1": "Slot 1",
+    "档位2": "Slot 2",
+    "档位3": "Slot 3",
+    "档位4": "Slot 4",
+    "档位5": "Slot 5",
+    "档位6": "Slot 6",
+    "档位7": "Slot 7",
+    "档位8": "Slot 8",
+    "档位9": "Slot 9"
 }
