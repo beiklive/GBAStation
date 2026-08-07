@@ -1,4 +1,5 @@
 #include "nds_stub/ui/UiComponents.hpp"
+#include "nds_stub/NdsLanguage.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -96,13 +97,13 @@ std::size_t utf8SafePrefix(const std::string& text, std::size_t bytes);
 
 const char* layoutLabel(int index)
 {
-    static const char* labels[] = {"纵向对称", "横向对称", "上屏优先", "下屏优先", "混合横向", "单上屏", "单下屏", "自定义"};
+    static const char* labels[] = {NDS_L("纵向对称"), NDS_L("横向对称"), NDS_L("上屏优先"), NDS_L("下屏优先"), NDS_L("混合横向"), NDS_L("单上屏"), NDS_L("单下屏"), NDS_L("自定义")};
     return labels[std::clamp(index, 0, 7)];
 }
 
 const char* orientationLabel(int index)
 {
-    static const char* labels[] = {"0度", "90度", "180度", "270度"};
+    static const char* labels[] = {NDS_L("0度"), NDS_L("90度"), NDS_L("180度"), NDS_L("270度")};
     return labels[std::clamp(index, 0, 3)];
 }
 
@@ -116,7 +117,7 @@ const char* shaderTypeLabel(const std::string& type)
 std::string filenameFromPath(const std::string& path)
 {
     if (path.empty())
-        return "未选择";
+        return NDS_L("未选择");
     std::string name = std::filesystem::path(path).filename().string();
     return name.empty() ? path : name;
 }
@@ -414,7 +415,7 @@ void drawNumberAdjusterRow(Vector2f pos,
     char metaText[48];
     std::snprintf(metaText,
                   sizeof(metaText),
-                  value == defaultValue ? "默认 / 步长 %d" : "默认 %d / 步长 %d",
+                  value == defaultValue ? NDS_L("默认 / 步长 %d") : NDS_L("默认 %d / 步长 %d"),
                   value == defaultValue ? step : defaultValue,
                   step);
 
@@ -462,9 +463,9 @@ void drawFloatAdjusterRow(Vector2f pos,
 
     char metaText[56];
     if (decimals <= 0)
-        std::snprintf(metaText, sizeof(metaText), "默认 %.0f / 步长 %.0f", defaultValue, step);
+        std::snprintf(metaText, sizeof(metaText), NDS_L("默认 %.0f / 步长 %.0f"), defaultValue, step);
     else
-        std::snprintf(metaText, sizeof(metaText), "默认 %.*f / 步长 %.*f", decimals, defaultValue, decimals, step);
+        std::snprintf(metaText, sizeof(metaText), NDS_L("默认 %.*f / 步长 %.*f"), decimals, defaultValue, decimals, step);
 
     const float valueCenterX = rowW - 102.0f;
     Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 184.0f, kUiCenterY}, kUiIconFont,
@@ -598,7 +599,7 @@ void drawCheatRow(Vector2f pos,
 
     const float textX = 40.0f + indent + (category ? 16.0f : 0.0f);
     const float maxTextW = rowW - textX - 146.0f;
-    const std::string sourceLabel = item.name.empty() ? (category ? "未命名目录" : "未命名金手指") : item.name;
+    const std::string sourceLabel = item.name.empty() ? std::string(category ? NDS_L("未命名目录") : NDS_L("未命名金手指")) : item.name;
     const float labelW = Gfx::MeasureText(Gfx::SystemFontChinese, kUiValueFont, sourceLabel.c_str()).X;
     const bool labelTruncated = labelW > maxTextW;
     const std::string label = (!focused || !labelTruncated)
@@ -636,7 +637,7 @@ void drawCheatRow(Vector2f pos,
                       {0.44f, 0.78f, 1.0f, 0.88f * opacity},
                       Gfx::align_Right,
                       Gfx::align_Left,
-                      item.expanded ? "收起" : "展开");
+                      item.expanded ? NDS_L("收起") : NDS_L("展开"));
     }
     else
     {
@@ -802,9 +803,9 @@ void drawPanelFloatAdjusterRow(Vector2f pos,
 
     char metaText[72];
     if (decimals <= 0)
-        std::snprintf(metaText, sizeof(metaText), "默认 %.0f / 步长 %.0f", param.defaultValue, param.step);
+        std::snprintf(metaText, sizeof(metaText), NDS_L("默认 %.0f / 步长 %.0f"), param.defaultValue, param.step);
     else
-        std::snprintf(metaText, sizeof(metaText), "默认 %.*f / 步长 %.*f", decimals, param.defaultValue, decimals, param.step);
+        std::snprintf(metaText, sizeof(metaText), NDS_L("默认 %.*f / 步长 %.*f"), decimals, param.defaultValue, decimals, param.step);
 
     const float valueCenterX = rowW - 102.0f;
     Gfx::DrawText(Gfx::SystemFontNintendoExt, pos + Vector2f{rowW - 184.0f, kUiCenterY}, kUiIconFont,
@@ -838,13 +839,13 @@ const char* itemLabel(NdsMenuLayer::Item item)
 {
     switch (item)
     {
-    case NdsMenuLayer::Item::Resume: return "返回游戏";
-    case NdsMenuLayer::Item::SaveState: return "保存状态";
-    case NdsMenuLayer::Item::LoadState: return "读取状态";
-    case NdsMenuLayer::Item::Cheats: return "金手指设置";
-    case NdsMenuLayer::Item::Display: return "画面设置";
-    case NdsMenuLayer::Item::Reset: return "重置游戏";
-    case NdsMenuLayer::Item::Exit: return "退出游戏";
+    case NdsMenuLayer::Item::Resume: return NDS_L("返回游戏");
+    case NdsMenuLayer::Item::SaveState: return NDS_L("保存状态");
+    case NdsMenuLayer::Item::LoadState: return NDS_L("读取状态");
+    case NdsMenuLayer::Item::Cheats: return NDS_L("金手指设置");
+    case NdsMenuLayer::Item::Display: return NDS_L("画面设置");
+    case NdsMenuLayer::Item::Reset: return NDS_L("重置游戏");
+    case NdsMenuLayer::Item::Exit: return NDS_L("退出游戏");
     default: return "";
     }
 }
@@ -879,7 +880,7 @@ void drawHeader(float offsetY)
 {
     const float padX = (kScreenW <= 720.0f) ? 36.0f : 64.0f;
     Gfx::DrawText(Gfx::SystemFontChinese, {padX, 30.0f + offsetY}, 26.0f,
-                  {1.0f, 1.0f, 1.0f, 1.0f}, "游戏菜单");
+                  {1.0f, 1.0f, 1.0f, 1.0f}, NDS_L("游戏菜单"));
     drawLine({padX - 8.0f, 92.0f + offsetY}, {kScreenW - (padX - 8.0f) * 2.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.18f});
 }
 
@@ -995,10 +996,10 @@ void drawFooter(bool contentFocused, bool canDelete, float offsetY)
         right = x - groupGap;
     };
 
-    drawHint(NDS_STUB_KEYICON_A, "确定");
-    drawHint(NDS_STUB_KEYICON_B, contentFocused ? "返回列表" : "返回");
+    drawHint(NDS_STUB_KEYICON_A, NDS_L("确定"));
+    drawHint(NDS_STUB_KEYICON_B, contentFocused ? NDS_L("返回列表") : NDS_L("返回"));
     if (canDelete)
-        drawHint(NDS_STUB_KEYICON_X, "删除");
+        drawHint(NDS_STUB_KEYICON_X, NDS_L("删除"));
 }
 
 void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotInfo& info, float offsetY)
@@ -1046,15 +1047,15 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
     drawBorder(thumbPos, thumbSize, 1.0f, {1.0f, 1.0f, 1.0f, info.exists ? 0.12f : 0.16f});
 
     char title[32];
-    std::snprintf(title, sizeof(title), "槽位 %d", slot);
+    std::snprintf(title, sizeof(title), NDS_L("槽位 %d"), slot);
     if (info.exists)
     {
         const float textX = 112.0f;
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 24.0f}, 24.0f,
                       {1.0f, 1.0f, 1.0f, 0.96f}, "%s", title);
-        const char* stateText = !info.stateFileAvailable ? "残留截图" :
-            (!info.loadable ? "无效状态" :
-             (info.modifiedTime.empty() ? "已有状态" : info.modifiedTime.c_str()));
+        const char* stateText = !info.stateFileAvailable ? NDS_L("残留截图") :
+            (!info.loadable ? NDS_L("无效状态") :
+             (info.modifiedTime.empty() ? NDS_L("已有状态") : info.modifiedTime.c_str()));
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 64.0f}, 17.0f,
                       {1.0f, 1.0f, 1.0f, 0.55f}, "%s", stateText);
         if (info.thumbnailTexture == 0)
@@ -1071,7 +1072,7 @@ void drawSaveSlotCard(int slot, Vector2f pos, bool focused, const NdsStateSlotIn
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 24.0f}, 24.0f,
                       {1.0f, 1.0f, 1.0f, 0.88f}, "%s", title);
         Gfx::DrawText(Gfx::SystemFontChinese, drawPos + Vector2f{textX, 64.0f}, 17.0f,
-                      {1.0f, 1.0f, 1.0f, 0.48f}, "空存档槽");
+                      {1.0f, 1.0f, 1.0f, 0.48f}, NDS_L("空存档槽"));
     }
 }
 
@@ -1162,7 +1163,7 @@ void drawStateSlotPage(const char* title,
                            : Color{0.24f, 0.24f, 0.24f, 0.50f * opacity});
 
         char slotName[32];
-        std::snprintf(slotName, sizeof(slotName), "档位 %d", i);
+        std::snprintf(slotName, sizeof(slotName), NDS_L("档位 %d"), i);
         Gfx::DrawText(Gfx::SystemFontChinese,
                       rowPos + Vector2f{16.0f, rowH * 0.5f - 10.0f},
                       20.0f,
@@ -1171,9 +1172,9 @@ void drawStateSlotPage(const char* title,
                       slotName);
         if (slot.exists)
         {
-            const char* stateText = !slot.stateFileAvailable ? "残留截图" :
-                (!slot.loadable ? "无效状态" :
-                 (slot.modifiedTime.empty() ? "已有状态" : slot.modifiedTime.c_str()));
+            const char* stateText = !slot.stateFileAvailable ? NDS_L("残留截图") :
+                (!slot.loadable ? NDS_L("无效状态") :
+                 (slot.modifiedTime.empty() ? NDS_L("已有状态") : slot.modifiedTime.c_str()));
             const std::string timeText = ellipsizeText(stateText, listW - 146.0f, 16.0f);
             Gfx::DrawText(Gfx::SystemFontChinese,
                           rowPos + Vector2f{listW - 16.0f, rowH * 0.5f - 8.0f},
@@ -1256,7 +1257,7 @@ void drawDisplayPage(bool linearFiltering,
                      float scrollY)
 {
     const Vector2f base{kContentX + offsetX, kContentY + offsetY};
-    Gfx::DrawText(Gfx::SystemFontChinese, base, 24.0f, {1.0f, 1.0f, 1.0f, opacity}, "画面设置");
+    Gfx::DrawText(Gfx::SystemFontChinese, base, 24.0f, {1.0f, 1.0f, 1.0f, opacity}, NDS_L("画面设置"));
     drawLine({base.X, base.Y + 50.0f}, {kContentW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.10f * opacity});
 
     char ffValue[24];
@@ -1270,29 +1271,29 @@ void drawDisplayPage(bool linearFiltering,
 
     float y = kContentBodyTop - scrollY;
     auto rowPos = [&](float rowY) { return base + Vector2f{0.0f, rowY}; };
-    drawLrSelectorRow(rowPos(y), "快进倍率", ffValue, contentFocused && focusedRow == 0, true, opacity); y += kSettingStepY;
-    drawLrSelectorRow(rowPos(y), "画面过滤", filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), NDS_L("快进倍率"), ffValue, contentFocused && focusedRow == 0, true, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), NDS_L("画面过滤"), filterLabel(linearFiltering), contentFocused && focusedRow == 1, true, opacity); y += kSettingStepY;
     char renderScaleValue[16];
     std::snprintf(renderScaleValue, sizeof(renderScaleValue), "%dx", std::clamp(renderScale, 1, 4));
-    drawLrSelectorRow(rowPos(y), "3D分辨率", renderScaleValue, contentFocused && focusedRow == 2, true, opacity);
+    drawLrSelectorRow(rowPos(y), NDS_L("3D分辨率"), renderScaleValue, contentFocused && focusedRow == 2, true, opacity);
     Gfx::DrawText(Gfx::SystemFontChinese,
                   rowPos(y) + Vector2f{0.0f, 56.0f},
                   15.0f,
                   {1.0f, 0.22f, 0.20f, 0.95f * opacity},
-                  "  注意：1-3倍为安全分辨率，4倍可能导致卡顿、内存不足或崩溃，请酌情使用");
+                  NDS_L("  注意：1-3倍为安全分辨率，4倍可能导致卡顿、内存不足或崩溃，请酌情使用"));
     y += kSettingStepY + 34.0f;
-    drawSwitchRow(rowPos(y), "整数倍缩放", integerScale, contentFocused && focusedRow == 3, opacity); y += kSettingStepY;
-    drawLrSelectorRow(rowPos(y), "画面布局", layoutLabel(layout), contentFocused && focusedRow == 4, true, opacity); y += kSettingStepY;
-    drawSubPageRow(rowPos(y), "自定义画面布局", contentFocused && focusedRow == 5, layout == 7, opacity); y += kSettingStepY;
-    drawLrSelectorRow(rowPos(y), "画面方向", orientationLabel(orientation), contentFocused && focusedRow == 6, true, opacity); y += kSettingStepY;
-    drawNumberAdjusterRow(rowPos(y), "屏幕间距", screenGap, "px", 0, 1, contentFocused && focusedRow == 7, true, opacity); y += 65.0f;
-    drawSectionLabel(rowPos(y + 2.0f), "个性化设置", opacity); y += 36.0f;
-    drawSubPageRow(rowPos(y), "遮罩选择", contentFocused && focusedRow == 8, true, opacity); y += kSettingStepY;
-    drawSubPageRow(rowPos(y), "滤镜选择", contentFocused && focusedRow == 9, true, opacity); y += 65.0f;
-    drawSectionLabel(rowPos(y + 2.0f), "同步设置", opacity); y += 36.0f;
-    drawButtonRow(rowPos(y), "同步画面设置", contentFocused && focusedRow == 10, opacity); y += kSettingStepY;
-    drawButtonRow(rowPos(y), "同步遮罩设置", contentFocused && focusedRow == 11, opacity); y += kSettingStepY;
-    drawButtonRow(rowPos(y), "同步滤镜设置", contentFocused && focusedRow == 12, opacity);
+    drawSwitchRow(rowPos(y), NDS_L("整数倍缩放"), integerScale, contentFocused && focusedRow == 3, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), NDS_L("画面布局"), layoutLabel(layout), contentFocused && focusedRow == 4, true, opacity); y += kSettingStepY;
+    drawSubPageRow(rowPos(y), NDS_L("自定义画面布局"), contentFocused && focusedRow == 5, layout == 7, opacity); y += kSettingStepY;
+    drawLrSelectorRow(rowPos(y), NDS_L("画面方向"), orientationLabel(orientation), contentFocused && focusedRow == 6, true, opacity); y += kSettingStepY;
+    drawNumberAdjusterRow(rowPos(y), NDS_L("屏幕间距"), screenGap, "px", 0, 1, contentFocused && focusedRow == 7, true, opacity); y += 65.0f;
+    drawSectionLabel(rowPos(y + 2.0f), NDS_L("个性化设置"), opacity); y += 36.0f;
+    drawSubPageRow(rowPos(y), NDS_L("遮罩选择"), contentFocused && focusedRow == 8, true, opacity); y += kSettingStepY;
+    drawSubPageRow(rowPos(y), NDS_L("滤镜选择"), contentFocused && focusedRow == 9, true, opacity); y += 65.0f;
+    drawSectionLabel(rowPos(y + 2.0f), NDS_L("同步设置"), opacity); y += 36.0f;
+    drawButtonRow(rowPos(y), NDS_L("同步画面设置"), contentFocused && focusedRow == 10, opacity); y += kSettingStepY;
+    drawButtonRow(rowPos(y), NDS_L("同步遮罩设置"), contentFocused && focusedRow == 11, opacity); y += kSettingStepY;
+    drawButtonRow(rowPos(y), NDS_L("同步滤镜设置"), contentFocused && focusedRow == 12, opacity);
 
     if (opacity > 0.5f && scrollY > 1.0f)
         drawRect({kContentX + kContentW - 4.0f, kContentY + kContentBodyTop + offsetY},
@@ -1312,7 +1313,7 @@ void drawCheatPage(const std::vector<NdsCheatItem>& cheats,
 {
     const Vector2f base{kContentX + offsetX, kContentY + offsetY};
     Gfx::DrawText(Gfx::SystemFontChinese, base, 24.0f,
-                  {1.0f, 1.0f, 1.0f, opacity}, "金手指设置");
+                  {1.0f, 1.0f, 1.0f, opacity}, NDS_L("金手指设置"));
     drawLine({base.X, base.Y + 50.0f}, {kContentW, 1.0f},
              {1.0f, 1.0f, 1.0f, 0.10f * opacity});
 
@@ -1322,7 +1323,7 @@ void drawCheatPage(const std::vector<NdsCheatItem>& cheats,
                       base + Vector2f{0.0f, 96.0f},
                       23.0f,
                       {0.80f, 0.90f, 0.98f, 0.72f * opacity},
-                      "未找到当前游戏的 usrcheat.dat 金手指");
+                      NDS_L("未找到当前游戏的 usrcheat.dat 金手指"));
         return;
     }
 
@@ -1363,20 +1364,20 @@ void drawDeleteDialog(int slot, float opacity)
     drawRect(pos, size, {0.04f, 0.055f, 0.075f, 0.96f * opacity}, true);
     drawBorder(pos, size, 1.0f, {1.0f, 1.0f, 1.0f, 0.16f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 26.0f}, 29.0f,
-                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "删除即时存档");
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, NDS_L("删除即时存档"));
     Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{34.0f, 88.0f}, 22.0f,
-                  {1.0f, 1.0f, 1.0f, 0.72f * opacity}, "确认删除 ss%d 及对应截图？", slot);
+                  {1.0f, 1.0f, 1.0f, 0.72f * opacity}, NDS_L("确认删除 ss%d 及对应截图？"), slot);
     const float y = pos.Y + 162.0f;
     Gfx::DrawText(Gfx::SystemFontNintendoExt, {pos.X + 316.0f, y}, 34.0f,
                   {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
                   NDS_STUB_KEYICON_B);
     Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 342.0f, y - 11.0f}, 22.0f,
-                  {1.0f, 1.0f, 1.0f, 0.76f * opacity}, "取消");
+                  {1.0f, 1.0f, 1.0f, 0.76f * opacity}, NDS_L("取消"));
     Gfx::DrawText(Gfx::SystemFontNintendoExt, {pos.X + 424.0f, y}, 34.0f,
                   {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
                   NDS_STUB_KEYICON_A);
     Gfx::DrawText(Gfx::SystemFontChinese, {pos.X + 450.0f, y - 11.0f}, 22.0f,
-                  {0.38f, 0.78f, 1.0f, 0.92f * opacity}, "删除");
+                  {0.38f, 0.78f, 1.0f, 0.92f * opacity}, NDS_L("删除"));
 }
 
 void drawSyncDialogFrame(const char* title,
@@ -1415,7 +1416,7 @@ void drawSyncDialogFrame(const char* title,
                       {1.0f, 1.0f, 1.0f, 0.92f * opacity}, Gfx::align_Center, Gfx::align_Center,
                       NDS_STUB_KEYICON_B);
         Gfx::DrawText(Gfx::SystemFontChinese, {x + 26.0f, y - 11.0f}, 22.0f,
-                      {1.0f, 1.0f, 1.0f, 0.76f * opacity}, "取消");
+                      {1.0f, 1.0f, 1.0f, 0.76f * opacity}, NDS_L("取消"));
     }
 }
 
@@ -1423,14 +1424,14 @@ void drawSyncConfirmDialog(NdsMenuAction action, float opacity)
 {
     const bool display = action == NdsMenuAction::SyncDisplaySettings;
     const bool overlay = action == NdsMenuAction::SyncOverlaySettings;
-    drawSyncDialogFrame(display ? "同步画面设置" : (overlay ? "同步遮罩设置" : "同步滤镜设置"),
+    drawSyncDialogFrame(display ? NDS_L("同步画面设置") : (overlay ? NDS_L("同步遮罩设置") : NDS_L("同步滤镜设置")),
                         display
-                            ? "同步当前游戏的布局、缩放到其他NDS游戏。"
+                            ? NDS_L("同步当前游戏的布局、缩放到其他NDS游戏。")
                             : (overlay
-                                ? "将当前游戏的遮罩数据同步到其他NDS游戏。"
-                                : "将当前游戏的滤镜开关和滤镜名称同步到其他NDS游戏。"),
-                        "确认后会立即开始同步。",
-                        "确定",
+                                ? NDS_L("将当前游戏的遮罩数据同步到其他NDS游戏。")
+                                : NDS_L("将当前游戏的滤镜开关和滤镜名称同步到其他NDS游戏。")),
+                        NDS_L("确认后会立即开始同步。"),
+                        NDS_L("确定"),
                         true,
                         opacity);
 }
@@ -1440,11 +1441,11 @@ void drawSyncResultDialog(NdsMenuAction action, int count, float opacity)
     const bool display = action == NdsMenuAction::SyncDisplaySettings;
     const bool overlay = action == NdsMenuAction::SyncOverlaySettings;
     char body[128];
-    std::snprintf(body, sizeof(body), "已同步到 %d 个游戏。", std::max(0, count));
-    drawSyncDialogFrame(display ? "同步画面设置完成" : (overlay ? "同步遮罩设置完成" : "同步滤镜设置完成"),
+    std::snprintf(body, sizeof(body), NDS_L("已同步到 %d 个游戏。"), std::max(0, count));
+    drawSyncDialogFrame(display ? NDS_L("同步画面设置完成") : (overlay ? NDS_L("同步遮罩设置完成") : NDS_L("同步滤镜设置完成")),
                         body,
                         "",
-                        "确定",
+                        NDS_L("确定"),
                         false,
                         opacity);
 }
@@ -1527,9 +1528,9 @@ void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,
     drawRect(panelPos, {panelW, kScreenH}, {0.015f, 0.020f, 0.030f, 0.94f * opacity}, true);
     drawLine({panelX, 0.0f}, {1.0f, kScreenH}, {1.0f, 1.0f, 1.0f, 0.14f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, headerY}, 28.0f,
-                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "自定义画面布局");
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, NDS_L("自定义画面布局"));
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, hintY}, 16.0f,
-                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   A 重置当前项");
+                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, NDS_L("B 返回   A 重置当前项"));
 
     auto section = [&](float y, const char* text) {
         drawLine({panelX + 28.0f, y + 12.0f}, {88.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 0.13f * opacity});
@@ -1539,15 +1540,15 @@ void drawCustomLayoutSidebar(const NdsCustomLayoutSettings& settings,
                  {1.0f, 1.0f, 1.0f, 0.13f * opacity});
     };
 
-    section(topSectionY, "上屏布局");
-    drawFloatAdjusterRow({panelX + 29.0f, topRowY}, rowW, "缩放", settings.topScale, "", 1.0f, 0.1f, focusedRow == 0, opacity, 1);
-    drawFloatAdjusterRow({panelX + 29.0f, topRowY + rowGap}, rowW, "X偏移", settings.topOffsetX, "px", 0.0f, 1.0f, focusedRow == 1, opacity, 0);
-    drawFloatAdjusterRow({panelX + 29.0f, topRowY + rowGap * 2.0f}, rowW, "Y偏移", settings.topOffsetY, "px", 0.0f, 1.0f, focusedRow == 2, opacity, 0);
+    section(topSectionY, NDS_L("上屏布局"));
+    drawFloatAdjusterRow({panelX + 29.0f, topRowY}, rowW, NDS_L("缩放"), settings.topScale, "", 1.0f, 0.1f, focusedRow == 0, opacity, 1);
+    drawFloatAdjusterRow({panelX + 29.0f, topRowY + rowGap}, rowW, NDS_L("X偏移"), settings.topOffsetX, "px", 0.0f, 1.0f, focusedRow == 1, opacity, 0);
+    drawFloatAdjusterRow({panelX + 29.0f, topRowY + rowGap * 2.0f}, rowW, NDS_L("Y偏移"), settings.topOffsetY, "px", 0.0f, 1.0f, focusedRow == 2, opacity, 0);
 
-    section(bottomSectionY, "下屏布局");
-    drawFloatAdjusterRow({panelX + 29.0f, bottomRowY}, rowW, "缩放", settings.bottomScale, "", 1.0f, 0.1f, focusedRow == 3, opacity, 1);
-    drawFloatAdjusterRow({panelX + 29.0f, bottomRowY + rowGap}, rowW, "X偏移", settings.bottomOffsetX, "px", 0.0f, 1.0f, focusedRow == 4, opacity, 0);
-    drawFloatAdjusterRow({panelX + 29.0f, bottomRowY + rowGap * 2.0f}, rowW, "Y偏移", settings.bottomOffsetY, "px", 0.0f, 1.0f, focusedRow == 5, opacity, 0);
+    section(bottomSectionY, NDS_L("下屏布局"));
+    drawFloatAdjusterRow({panelX + 29.0f, bottomRowY}, rowW, NDS_L("缩放"), settings.bottomScale, "", 1.0f, 0.1f, focusedRow == 3, opacity, 1);
+    drawFloatAdjusterRow({panelX + 29.0f, bottomRowY + rowGap}, rowW, NDS_L("X偏移"), settings.bottomOffsetX, "px", 0.0f, 1.0f, focusedRow == 4, opacity, 0);
+    drawFloatAdjusterRow({panelX + 29.0f, bottomRowY + rowGap * 2.0f}, rowW, NDS_L("Y偏移"), settings.bottomOffsetY, "px", 0.0f, 1.0f, focusedRow == 5, opacity, 0);
 }
 
 void drawOverlaySidebar(const NdsDisplaySettings& display,
@@ -1571,13 +1572,13 @@ void drawOverlaySidebar(const NdsDisplaySettings& display,
     drawRect({panelX, 0.0f}, {panelW, kScreenH}, {0.015f, 0.020f, 0.030f, 0.95f * opacity}, true);
     drawLine({panelX, 0.0f}, {1.0f, kScreenH}, {1.0f, 1.0f, 1.0f, 0.14f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, headerY}, 28.0f,
-                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "遮罩选择");
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, NDS_L("遮罩选择"));
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, hintY}, 16.0f,
-                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   A 确定");
+                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, NDS_L("B 返回   A 确定"));
 
-    drawPanelSection(panelX, panelW, sectionY, "遮罩设置", opacity);
-    drawPanelSwitchRow({panelX + 29.0f, rowY}, rowW, "遮罩开关", display.overlayEnabled, focusedRow == 0, opacity);
-    drawInfoRow({panelX + 29.0f, rowY + rowGap}, rowW, "遮罩路径",
+    drawPanelSection(panelX, panelW, sectionY, NDS_L("遮罩设置"), opacity);
+    drawPanelSwitchRow({panelX + 29.0f, rowY}, rowW, NDS_L("遮罩开关"), display.overlayEnabled, focusedRow == 0, opacity);
+    drawInfoRow({panelX + 29.0f, rowY + rowGap}, rowW, NDS_L("遮罩路径"),
                 filenameFromPath(display.overlayPath), focusedRow == 1, true, opacity);
 }
 
@@ -1606,20 +1607,20 @@ void drawShaderSidebar(const NdsDisplaySettings& display,
     drawRect({panelX, 0.0f}, {panelW, kScreenH}, {0.015f, 0.020f, 0.030f, 0.95f * opacity}, true);
     drawLine({panelX, 0.0f}, {1.0f, kScreenH}, {1.0f, 1.0f, 1.0f, 0.14f * opacity});
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, headerY}, 28.0f,
-                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "滤镜选择");
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, NDS_L("滤镜选择"));
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 30.0f, hintY}, 16.0f,
-                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, "B 返回   A 选择/开关   LR 调整参数");
+                  {0.78f, 0.86f, 0.94f, 0.62f * opacity}, NDS_L("B 返回   A 选择/开关   LR 调整参数"));
 
-    drawPanelSection(panelX, panelW, sectionY, "滤镜设置", opacity);
-    drawPanelSwitchRow({panelX + 29.0f, rowY}, rowW, "滤镜开关", display.shaderEnabled, focusedRow == 0, opacity);
-    drawInfoRow({panelX + 29.0f, rowY + rowGap}, rowW, "滤镜类型",
+    drawPanelSection(panelX, panelW, sectionY, NDS_L("滤镜设置"), opacity);
+    drawPanelSwitchRow({panelX + 29.0f, rowY}, rowW, NDS_L("滤镜开关"), display.shaderEnabled, focusedRow == 0, opacity);
+    drawInfoRow({panelX + 29.0f, rowY + rowGap}, rowW, NDS_L("滤镜类型"),
                 shaderTypeLabel(display.ndsShaderType), focusedRow == 1, true, opacity);
 
-    drawPanelSection(panelX, panelW, paramSectionY, "参数设置", opacity);
+    drawPanelSection(panelX, panelW, paramSectionY, NDS_L("参数设置"), opacity);
     if (display.shaderParams.empty())
     {
         Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 31.0f, paramListY + 14.0f}, 18.0f,
-                      {0.70f, 0.78f, 0.86f, 0.50f * opacity}, "当前滤镜暂无可调参数");
+                      {0.70f, 0.78f, 0.86f, 0.50f * opacity}, NDS_L("当前滤镜暂无可调参数"));
         return;
     }
 
@@ -1674,7 +1675,7 @@ void drawShaderListOverlay(const std::vector<NdsShaderListEntry>& entries,
     drawLine({panelX, panelY + panelH - footerH}, {panelW, 1.0f}, {1.0f, 1.0f, 1.0f, 0.12f * opacity});
 
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, panelY + 24.0f}, 26.0f,
-                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, "选择滤镜");
+                  {1.0f, 1.0f, 1.0f, 0.96f * opacity}, NDS_L("选择滤镜"));
     if (!path.empty())
     {
         std::string breadcrumb;
@@ -1688,7 +1689,7 @@ void drawShaderListOverlay(const std::vector<NdsShaderListEntry>& entries,
                       {0.70f, 0.80f, 0.90f, 0.72f * opacity}, "%s", breadcrumb.c_str());
     }
     Gfx::DrawText(Gfx::SystemFontChinese, {panelX + 28.0f, panelY + panelH - 36.0f}, 17.0f,
-                  {0.78f, 0.86f, 0.94f, 0.68f * opacity}, "A 确定   B 返回");
+                  {0.78f, 0.86f, 0.94f, 0.68f * opacity}, NDS_L("A 确定   B 返回"));
 
     Gfx::PushScissor(static_cast<u32>(std::max(0.0f, panelX + 18.0f)),
                      static_cast<u32>(std::max(0.0f, listBodyY - 6.0f)),
@@ -1735,13 +1736,13 @@ void drawShaderListOverlay(const std::vector<NdsShaderListEntry>& entries,
         {
             Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{rowW - 24.0f, 14.0f}, 20.0f,
                           {0.78f, 0.86f, 0.94f, 0.64f * opacity},
-                          Gfx::align_Right, Gfx::align_Left, "进入");
+                          Gfx::align_Right, Gfx::align_Left, NDS_L("进入"));
         }
         if (selected)
         {
             Gfx::DrawText(Gfx::SystemFontChinese, pos + Vector2f{rowW - 24.0f, 14.0f}, 20.0f,
                           {0.44f, 0.82f, 1.0f, 0.92f * opacity},
-                          Gfx::align_Right, Gfx::align_Left, "当前");
+                          Gfx::align_Right, Gfx::align_Left, NDS_L("当前"));
         }
     }
     Gfx::PopScissor();
@@ -1843,7 +1844,7 @@ void drawFilePicker(const std::string& directory,
                           {1.0f, 1.0f, 1.0f, focused ? 0.96f * opacity : 0.78f * opacity}, "%s", shown.c_str());
         }
         const std::string meta = entry.isDirectory
-            ? (entry.name == ".." ? "上级目录" : "文件夹")
+            ? (entry.name == ".." ? NDS_L("上级目录") : NDS_L("文件夹"))
             : (formatBytes(entry.size) + (entry.modifiedTime.empty() ? "" : "   " + entry.modifiedTime));
         const std::string shownMeta = ellipsizeText(meta, textW, 17.0f);
         Gfx::DrawText(Gfx::SystemFontChinese, {textX, y + 53.0f}, 17.0f,
@@ -1880,7 +1881,7 @@ void drawFilePicker(const std::string& directory,
                            {1.0f, 1.0f, 1.0f, opacity});
         Gfx::SetSampler(Gfx::sampler_Nearest | Gfx::sampler_ClampToEdge);
 
-        const std::string title = ellipsizeText(previewPath.empty() ? "图片预览" : std::filesystem::path(previewPath).filename().string(),
+        const std::string title = ellipsizeText(previewPath.empty() ? NDS_L("图片预览") : std::filesystem::path(previewPath).filename().string(),
                                                 kScreenW - 120.0f,
                                                 24.0f);
         Gfx::DrawText(Gfx::SystemFontChinese, {60.0f, offsetY + 34.0f}, 24.0f,
@@ -1904,10 +1905,10 @@ void drawFilePicker(const std::string& directory,
                       textColor, "%s", text);
         hintX -= 34.0f;
     };
-    drawHint(NDS_STUB_KEYICON_A, previewVisible ? "关闭" : "选择", {0.38f, 0.78f, 1.0f, 0.92f * opacity});
-    drawHint(NDS_STUB_KEYICON_B, previewVisible ? "关闭" : "返回", {1.0f, 1.0f, 1.0f, 0.76f * opacity});
+    drawHint(NDS_STUB_KEYICON_A, previewVisible ? NDS_L("关闭") : NDS_L("选择"), {0.38f, 0.78f, 1.0f, 0.92f * opacity});
+    drawHint(NDS_STUB_KEYICON_B, previewVisible ? NDS_L("关闭") : NDS_L("返回"), {1.0f, 1.0f, 1.0f, 0.76f * opacity});
     if (!previewVisible && selectedImage)
-        drawHint(NDS_STUB_KEYICON_X, "预览", {0.78f, 0.90f, 1.0f, 0.86f * opacity});
+        drawHint(NDS_STUB_KEYICON_X, NDS_L("预览"), {0.78f, 0.90f, 1.0f, 0.86f * opacity});
 }
 
 void drawTabFrame(NdsMenuLayer::Item item,
@@ -1938,7 +1939,7 @@ void drawTabFrame(NdsMenuLayer::Item item,
         switch (page)
         {
         case NdsMenuLayer::Item::SaveState:
-            drawStateSlotPage("保存状态",
+            drawStateSlotPage(NDS_L("保存状态"),
                               slots,
                               contentFocus,
                               contentFocused,
@@ -1951,7 +1952,7 @@ void drawTabFrame(NdsMenuLayer::Item item,
                               offsetY);
             break;
         case NdsMenuLayer::Item::LoadState:
-            drawStateSlotPage("读取状态",
+            drawStateSlotPage(NDS_L("读取状态"),
                               slots,
                               contentFocus,
                               contentFocused,
@@ -1989,14 +1990,14 @@ void drawTabFrame(NdsMenuLayer::Item item,
                           contentScrollY);
             break;
         case NdsMenuLayer::Item::Reset:
-            drawInfoPage("重置游戏", "按 A 将重新加载当前游戏。", offsetX, offsetY, opacity);
+            drawInfoPage(NDS_L("重置游戏"), NDS_L("按 A 将重新加载当前游戏。"), offsetX, offsetY, opacity);
             break;
         case NdsMenuLayer::Item::Exit:
-            drawInfoPage("退出游戏", "按 A 退出 NDS Stub 并返回主程序。", offsetX, offsetY, opacity);
+            drawInfoPage(NDS_L("退出游戏"), NDS_L("按 A 退出 NDS Stub 并返回主程序。"), offsetX, offsetY, opacity);
             break;
         case NdsMenuLayer::Item::Resume:
         default:
-            drawInfoPage("返回游戏", "按 A / B 返回游戏画面。", offsetX, offsetY, opacity);
+            drawInfoPage(NDS_L("返回游戏"), NDS_L("按 A / B 返回游戏画面。"), offsetX, offsetY, opacity);
             break;
         }
     };
