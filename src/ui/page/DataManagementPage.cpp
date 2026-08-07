@@ -1365,8 +1365,14 @@ void DataManagementPage::draw(
             }
             else
             {
+                int skipped = m_importSkipped.load(std::memory_order_acquire);
                 m_progressTitleLabel->setText("导入完成");
-                m_progressCountLabel->setText("共处理 " + std::to_string(total) + " 个游戏");
+                if (skipped > 0)
+                    m_progressCountLabel->setText(
+                        "共处理 " + std::to_string(total) + " 个游戏，跳过 " +
+                        std::to_string(skipped) + " 个已有游戏");
+                else
+                    m_progressCountLabel->setText("共处理 " + std::to_string(total) + " 个游戏");
             }
             hideProgressOverlay();
 
@@ -1384,7 +1390,11 @@ void DataManagementPage::draw(
                 }
                 else
                 {
-                    dialogText = "导入完成\n\n共处理 " + std::to_string(total) + " 个游戏";
+                    int skipped = m_importSkipped.load(std::memory_order_acquire);
+                    dialogText = skipped > 0
+                        ? "导入完成\n\n共处理 " + std::to_string(total) +
+                              " 个游戏，跳过 " + std::to_string(skipped) + " 个已有游戏"
+                        : "导入完成\n\n共处理 " + std::to_string(total) + " 个游戏";
                 }
                 auto* dialog = new brls::Dialog(dialogText);
                 dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
@@ -1878,6 +1888,7 @@ void DataManagementPage::resetProgressUi(const std::string& title)
 {
     m_completionShown = false;
     m_cleanupRemoved.store(0, std::memory_order_release);
+    m_importSkipped.store(0, std::memory_order_release);
     m_importDone.store(false, std::memory_order_release);
     m_importError.store(false, std::memory_order_release);
     m_progress.store(0, std::memory_order_release);
@@ -2061,6 +2072,15 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                 continue;
             }
 
+            // 游戏库中已存在该 ROM：跳过，绝不覆盖用户已有的独立配置
+            // （遮罩/着色器/显示/金手指/收藏/游玩统计等）。
+            if (beiklive::GameDB->findByPath(romPath))
+            {
+                m_importSkipped.fetch_add(1, std::memory_order_relaxed);
+                m_progress.store(i + 1, std::memory_order_release);
+                continue;
+            }
+
             updateProgressName(item.label);
             std::string romStem = stemFromPath(romPath);
 
@@ -2122,12 +2142,6 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                 entry.ndsIntegerScale = true;
                 entry.ndsScreenGap = 0;
                 entry.ndsBottomOpacity = 1.0f;
-            }
-
-            if (entry.threeDsTitleId.empty()) {
-                const auto existing = beiklive::GameDB->findByPath(romPath);
-                if (existing)
-                    entry.threeDsTitleId = existing->threeDsTitleId;
             }
 
             beiklive::GameDB->upsertByPath(entry);
@@ -2238,6 +2252,16 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
                 continue;
             }
 
+            // 游戏库中已存在该 ROM：跳过，绝不覆盖用户已有的独立配置
+            // （遮罩/着色器/显示/金手指/收藏/游玩统计等）。扫描导入只追加
+            // 新游戏。
+            if (beiklive::GameDB->findByPath(path))
+            {
+                m_importSkipped.fetch_add(1, std::memory_order_relaxed);
+                m_progress.store(i + 1, std::memory_order_release);
+                continue;
+            }
+
             std::string displayName = romStem;
             if (m_useNameMapping)
             {
@@ -2283,32 +2307,6 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
                 entry.ndsIntegerScale = true;
                 entry.ndsScreenGap = 0;
                 entry.ndsBottomOpacity = 1.0f;
-            }
-
-            auto existing = beiklive::GameDB->findByPath(path);
-            if (existing)
-            {
-                entry.playCount = existing->playCount;
-                entry.playTime = existing->playTime;
-                entry.lastPlayed = existing->lastPlayed;
-                entry.favourite = existing->favourite;
-                if (!existing->cheatPath.empty())
-                    entry.cheatPath = existing->cheatPath;
-                if (!existing->logoPath.empty()) {
-                    entry.logoPath = existing->logoPath;
-                    beiklive::tools::tryUseNdsInternalIconCover(entry);
-                }
-                if (!existing->savePath.empty())
-                    entry.savePath = existing->savePath;
-                if (entry.threeDsTitleId.empty())
-                    entry.threeDsTitleId = existing->threeDsTitleId;
-                if (!existing->ndsScreenLayout.empty())
-                    entry.ndsScreenLayout = existing->ndsScreenLayout;
-                if (!existing->ndsScreenOrientation.empty())
-                    entry.ndsScreenOrientation = existing->ndsScreenOrientation;
-                entry.ndsIntegerScale = existing->ndsIntegerScale;
-                entry.ndsScreenGap = existing->ndsScreenGap;
-                entry.ndsBottomOpacity = existing->ndsBottomOpacity;
             }
 
             beiklive::GameDB->upsertByPath(entry);

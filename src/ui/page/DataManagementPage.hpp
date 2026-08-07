@@ -64,6 +64,7 @@ namespace beiklive
         std::atomic<bool> m_importError{false};
         std::atomic<int> m_progress{0};
         std::atomic<int> m_total{0};
+        std::atomic<int> m_importSkipped{0};
         std::atomic<int> m_cleanupRemoved{0};
         std::atomic<bool> m_alive{true};
         std::mutex m_statusMutex;
