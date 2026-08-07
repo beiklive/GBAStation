@@ -1712,12 +1712,14 @@ private:
 
         emulator.push_back(_section(L("语言 / Language")));
         emulator.push_back(_selector(L("语言 / Language"), L("重启后生效 / Takes effect after restart"), 0xE873,
-            {L("简体中文"), "English"},
+            {L("简体中文"), "English", "日本語"},
             []() {
                 std::string lang = cfgGetStr(KEY_UI_LANGUAGE, "zh-CN");
-                return lang == "en-US" || lang == "en" ? 1 : 0;
+                if (lang == "en-US" || lang == "en") return 1;
+                if (lang == "ja-JP" || lang == "ja") return 2;
+                return 0;
             },
-            [](int i) { cfgSetStr(KEY_UI_LANGUAGE, i == 0 ? "zh-CN" : "en-US"); }));
+            [](int i) { cfgSetStr(KEY_UI_LANGUAGE, i == 1 ? "en-US" : i == 2 ? "ja-JP" : "zh-CN"); }));
 
         emulator.push_back(_section("SteamGridDB"));
         emulator.push_back(_action(

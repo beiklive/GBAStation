@@ -28,25 +28,31 @@ void TranslationManager::Load()
 
 void TranslationManager::Load(const std::string& locale)
 {
-    locale_ = (locale == "en-US" || locale == "en" || locale == "zh-Hans" || locale == "zh-CN") ? locale : "zh-CN";
-    if (locale_ == "en-US" || locale_ == "en")
-        locale_ = "en-US";
-    else
+    // Normalize common aliases to canonical locale ids.
+    if (locale == "zh-Hans" || locale == "zh" || locale == "zh_CN")
         locale_ = "zh-CN";
+    else if (locale == "en" || locale == "en_US")
+        locale_ = "en-US";
+    else if (locale == "ja" || locale == "ja_JP")
+        locale_ = "ja-JP";
+    else
+        locale_ = locale.empty() ? "zh-CN" : locale;
+
     table_.clear();
-    if (locale_ != "en-US")
+    if (locale_ == "zh-CN")
         return;
 
+    const std::string fileName = locale_ + ".json";
 #ifdef __SWITCH__
-    const char* path = "romfs:/lang/en-US.json";
+    const std::string path = "romfs:/lang/" + fileName;
 #else
-    const char* path = "resources/lang/en-US.json";
+    std::string path = "resources/lang/" + fileName;
 #endif
     std::ifstream in(path);
     if (!in.is_open())
     {
         in.clear();
-        in.open("lang/en-US.json");
+        in.open("lang/" + fileName);
     }
     if (!in.is_open())
         return;
@@ -69,10 +75,10 @@ void TranslationManager::Load(const std::string& locale)
 
 std::string TranslationManager::Tr(std::string_view zh) const
 {
-    if (locale_ != "en-US")
+    if (locale_ == "zh-CN")
         return std::string(zh);
     auto it = table_.find(std::string(zh));
-    if (it != table_.end())
+    if (it != table_.end() && !it->second.empty())
         return it->second;
     return std::string(zh);
 }
