@@ -5,6 +5,7 @@
 
 
 #include "core/common.h"
+#include "core/Translation.hpp"
 #include "core/AppUpdater.hpp"
 #include "core/ThreadPool.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
@@ -356,6 +357,11 @@ int main(int argc, char* argv[]) {
 		brls::Logger::error("Unable to init Borealis application");
 		return EXIT_FAILURE;
 	}
+
+	// ── 初始化翻译管理器（语言由 UI.language 配置决定）──────────────
+	static beiklive::TranslationManager s_translation;
+	beiklive::Translation = &s_translation;
+	s_translation.Load();
 
 	brls::Application::getPlatform()->forceEnableGamePlayRecording();
 

@@ -16,6 +16,7 @@
 #include <borealis/views/applet_frame.hpp>
 
 #include "core/Tools.hpp"
+#include "core/Translation.hpp"
 #include "core/SteamGridDb.hpp"
 #include "core/ThreadPool.hpp"
 #include "core/constexpr.h"
@@ -776,10 +777,10 @@ private:
         nvgFontSize(vg, 27.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
-        nvgText(vg, panelX + 34.f, panelY + 42.f, "按键捕获", nullptr);
+        nvgText(vg, panelX + 34.f, panelY + 42.f, L("按键捕获"), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(195, 204, 217, 170));
-        nvgText(vg, panelX + 34.f, panelY + 70.f, "当前绑定会在倒计时结束后确认", nullptr);
+        nvgText(vg, panelX + 34.f, panelY + 70.f, L("当前绑定会在倒计时结束后确认"), nullptr);
         nvgBeginPath(vg);
         nvgMoveTo(vg, panelX + 30.f, panelY + 92.f);
         nvgLineTo(vg, panelX + panelW - 30.f, panelY + 92.f);
@@ -1020,10 +1021,10 @@ public:
         nvgFontSize(vg, 27.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 36.f, y + 43.f, "设置", nullptr);
+        nvgText(vg, x + 36.f, y + 43.f, L("设置"), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
-        nvgText(vg, x + 36.f, y + 72.f, "模拟器、画面、声音与输入配置", nullptr);
+        nvgText(vg, x + 36.f, y + 72.f, L("模拟器、画面、声音与输入配置"), nullptr);
 
         const float centerY = y + 45.f;
         const float startX = x + 250.f;
@@ -1554,6 +1555,7 @@ private:
         item.title = title;
         item.hint = hint;
         item.icon = icon;
+        // value 保持中文原值用于 _drawItem 的开关判断；显示时由渲染层 L() 翻译。
         item.value = [get]() { return get() ? "开启" : "关闭"; };
         item.activate = [get, set]() { set(!get()); };
         return item;
@@ -1575,7 +1577,7 @@ private:
         item.value = [options = item.options, selected = item.selectedOption]() {
             const int index = selected ? selected() : 0;
             return index >= 0 && index < static_cast<int>(options.size())
-                ? options[static_cast<size_t>(index)] : std::string("未设置");
+                ? options[static_cast<size_t>(index)] : L("未设置");
         };
         return item;
     }
@@ -1695,6 +1697,15 @@ private:
             {"正常", "大", "超大"},
             []() { return std::clamp(cfgGetInt(KEY_UI_LIBRARY_TITLE_SIZE, 0), 0, 2); },
             [](int i) { cfgSetInt(KEY_UI_LIBRARY_TITLE_SIZE, i); }));
+
+        emulator.push_back(_section("语言 / Language"));
+        emulator.push_back(_selector("语言 / Language", "重启后生效 / Takes effect after restart", 0xE873,
+            {"简体中文", "English"},
+            []() {
+                std::string lang = cfgGetStr(KEY_UI_LANGUAGE, "zh-CN");
+                return lang == "en-US" || lang == "en" ? 1 : 0;
+            },
+            [](int i) { cfgSetStr(KEY_UI_LANGUAGE, i == 0 ? "zh-CN" : "en-US"); }));
 
         emulator.push_back(_section("SteamGridDB"));
         emulator.push_back(_action(
@@ -3531,7 +3542,7 @@ private:
         nvgFontSize(vg, 27.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 36.f, y + 42.f, "设置", nullptr);
+        nvgText(vg, x + 36.f, y + 42.f, L("设置"), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
         const std::string subtitle = m_inMapping ? m_mappingTitle :
@@ -3631,7 +3642,7 @@ private:
         nvgFontSize(vg, 19.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(236, 241, 248, 225));
-        nvgText(vg, x + 16.f, y + h * 0.5f, item.title.c_str(), nullptr);
+        nvgText(vg, x + 16.f, y + h * 0.5f, L(item.title).c_str(), nullptr);
         nvgBeginPath(vg);
         nvgMoveTo(vg, x + 132.f, y + h * 0.5f);
         nvgLineTo(vg, x + w, y + h * 0.5f);
@@ -3689,12 +3700,13 @@ private:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFontSize(vg, focused ? 19.f : 18.f);
         nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(230, 234, 241, 210));
-        nvgText(vg, x + 79.f, y + (item.hint.empty() ? h * 0.5f : 28.f), item.title.c_str(), nullptr);
+        nvgText(vg, x + 79.f, y + (item.hint.empty() ? h * 0.5f : 28.f),
+                L(item.title).c_str(), nullptr);
         if (!item.hint.empty())
         {
             nvgFontSize(vg, 13.5f);
             nvgFillColor(vg, nvgRGBA(190, 199, 212, focused ? 185 : 135));
-            nvgText(vg, x + 79.f, y + 51.f, item.hint.c_str(), nullptr);
+            nvgText(vg, x + 79.f, y + 51.f, L(item.hint).c_str(), nullptr);
         }
 
         const std::string value = item.value ? item.value() : std::string();
@@ -3708,7 +3720,7 @@ private:
             nvgFontSize(vg, focused ? 20.f : 18.f);
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, focused ? nvgRGBA(145, 222, 255, 255) : nvgRGBA(226, 232, 240, 215));
-            nvgText(vg, x + w - 39.f, y + h * 0.5f, value.c_str(), nullptr);
+            nvgText(vg, x + w - 39.f, y + h * 0.5f, L(value).c_str(), nullptr);
             nvgFontSize(vg, 22.f);
             nvgText(vg, x + w - 17.f, y + h * 0.5f, ">", nullptr);
         }
@@ -3779,7 +3791,7 @@ private:
             nvgFontSize(vg, 15.f);
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(190, 198, 210, 150));
-            nvgText(vg, right, centerY, "未绑定", nullptr);
+            nvgText(vg, right, centerY, L("未绑定"), nullptr);
             return;
         }
         const auto alternatives = splitSettingText(binding, '|');
@@ -3836,7 +3848,7 @@ private:
                 nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, nvgRGBA(200, 208, 220, 150));
                 cursor -= 17.f;
-                nvgText(vg, cursor + 8.f, centerY, "或", nullptr);
+                nvgText(vg, cursor + 8.f, centerY, L("或"), nullptr);
                 cursor -= 5.f;
             }
             if (cursor < right - 390.f) break;
@@ -3909,7 +3921,7 @@ private:
         nvgFontSize(vg, 23.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
-        nvgText(vg, panel.x + 28.f, panel.y + 36.f, m_selectorTitle.c_str(), nullptr);
+        nvgText(vg, panel.x + 28.f, panel.y + 36.f, L(m_selectorTitle).c_str(), nullptr);
         nvgFontSize(vg, 17.f);
         nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(226, 232, 240, 220));
@@ -3937,7 +3949,7 @@ private:
             nvgFontSize(vg, selected ? 19.f : 17.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, selected ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(215, 221, 231, 180));
-            nvgText(vg, panel.x + 40.f, rowY + 23.f, m_selectorOptions[static_cast<size_t>(index)].c_str(), nullptr);
+            nvgText(vg, panel.x + 40.f, rowY + 23.f, L(m_selectorOptions[static_cast<size_t>(index)]).c_str(), nullptr);
             if (selected)
             {
                 const std::string check = settingIconUtf8(0xE5CA);

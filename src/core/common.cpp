@@ -1,4 +1,5 @@
 #include "common.h"
+#include "Translation.hpp"
 #include "ui/widget/Box.hpp"
 #include "core/cheat/CheatSystem.hpp"
 #include "game/control/InputMappingDefaults.hpp"
@@ -357,6 +358,7 @@ namespace beiklive
         SettingManager->SetDefault(KEY_UI_PICO8_SHORTCUT_VISIBLE, ConfigValue(1));
         SettingManager->SetDefault(KEY_UI_SHOW_SHADER, ConfigValue(1));
         SettingManager->SetDefault(KEY_UI_GRADIENT_THEME, ConfigValue(std::string("VscodeBlack")));
+        SettingManager->SetDefault(KEY_UI_LANGUAGE, ConfigValue(std::string("zh-CN")));
 
         // 遮罩设置
         SettingManager->SetDefault(KEY_DISPLAY_OVERLAY_ENABLED, ConfigValue(0));
