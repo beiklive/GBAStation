@@ -17,7 +17,7 @@ namespace beiklive::input_mapping
     inline constexpr unsigned kPlatformPsp = 1u << 8;
     inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp;
     inline constexpr unsigned kPlatformExplicitRightStick =
-        kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp;
+        kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformThreeDs | kPlatformGenesis;
 
     struct GameButtonDefault
     {
@@ -38,10 +38,10 @@ namespace beiklive::input_mapping
         {"方向键右", "right", "PAD_RIGHT", kPlatformAll},
         {"L键", "l", "PAD_LB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
         {"R键", "r", "PAD_RB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
-        {"ZL键", "l2", "PAD_LT", kPlatformThreeDs | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
-        {"ZR键", "r2", "PAD_RT", kPlatformThreeDs | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
-        {"L3键", "l3", "PAD_LSB", kPlatformPsp},
-        {"R3键", "r3", "PAD_RSB", kPlatformPsp},
+        // ZL/ZR only exist on the 3DS; the external cores use these physical
+        // buttons for their own inputs (arcade button 7/8 on FBNeo).
+        {"ZL键", "l2", "PAD_LT", kPlatformThreeDs | kPlatformArcade},
+        {"ZR键", "r2", "PAD_RT", kPlatformThreeDs | kPlatformArcade},
         {"开始键", "start", "PAD_START", kPlatformAll},
         {"选择键", "select", "PAD_BACK", kPlatformAll},
         {"左摇杆上", "lstick_up", "PAD_LEFTSTICKUP", kPlatformThreeDs},
