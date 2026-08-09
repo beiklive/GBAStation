@@ -1162,24 +1162,27 @@ namespace beiklive
             : 0.f;
         const float firstLineX = x + (1.f - firstLineProgress) * 34.f;
         const float firstLineY = coverY + w + 14.f;
+        nvgFontFaceId(vg, m_fontId);
+        nvgFontSize(vg, 12.f);
+        float badgeBounds[4]{};
+        nvgTextBounds(vg, 0.f, 0.f, badgeText.c_str(), nullptr, badgeBounds);
+        const float badgeWidth = std::max(36.f, (badgeBounds[2] - badgeBounds[0]) + 16.f);
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, firstLineX, firstLineY, 36.f, 20.f, 4.f);
+        nvgRoundedRect(vg, firstLineX, firstLineY, badgeWidth, 20.f, 4.f);
         NVGcolor badgeColor = platformBadgeColor(game.entry.platform);
         badgeColor.a *= firstLineProgress;
         nvgFillColor(vg, badgeColor);
         nvgFill(vg);
-        nvgFontFaceId(vg, m_fontId);
-        nvgFontSize(vg, 12.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255,
             static_cast<unsigned char>(255.f * firstLineProgress)));
-        nvgText(vg, firstLineX + 18.f, firstLineY + 10.f,
+        nvgText(vg, firstLineX + badgeWidth * .5f, firstLineY + 10.f,
                 badgeText.c_str(), nullptr);
         nvgFontSize(vg, 16.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(211, 219, 233,
             static_cast<unsigned char>(225.f * firstLineProgress)));
-        nvgText(vg, firstLineX + 46.f, firstLineY + 10.f,
+        nvgText(vg, firstLineX + badgeWidth + 10.f, firstLineY + 10.f,
                 playTimeText.c_str(), nullptr);
 
         const float secondLineX = x + (1.f - secondLineProgress) * 34.f;

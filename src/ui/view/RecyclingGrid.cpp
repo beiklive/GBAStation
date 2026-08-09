@@ -1780,8 +1780,11 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
 
         const float titleY = y + h - 79.f;
         _drawTitle(vg, item, x + 12.f, titleY, w - 24.f, focused);
-        _drawBadge(vg, item, x + 12.f, y + h - 51.f);
-        _drawPlayTime(vg, item.playTime, x + 58.f, y + h - 49.f, w - 82.f);
+        const float lineX = x + 12.f;
+        const float badgeW = _drawBadge(vg, item, lineX, y + h - 51.f);
+        const float playTimeX = lineX + badgeW + 10.f;
+        _drawPlayTime(vg, item.playTime, playTimeX, y + h - 49.f,
+                      std::max(1.f, x + w - 12.f - playTimeX));
         _drawSubText(vg, item.subText, x + 12.f, y + h - 24.f, w - 24.f);
     } else {
         const float imageW = 54.f;
@@ -1791,10 +1794,14 @@ void GameGridView::_drawItem(NVGcontext* vg, const GridDrawItem& item, float x, 
         const float textX = x + 74.f;
         const float textW = w - 106.f;
         _drawTitle(vg, item, textX, y + 9.f, textW, focused);
-        _drawBadge(vg, item, textX, y + 37.f);
-        _drawPlayTime(vg, item.playTime, textX + 47.f, y + 39.f, 140.f);
-        _drawSubText(vg, item.subText, textX + 196.f, y + 39.f,
-                     std::max(40.f, textW - 196.f));
+        const float badgeW = _drawBadge(vg, item, textX, y + 37.f);
+        const float playTimeX = textX + badgeW + 10.f;
+        const float playTimeW = std::min(140.f,
+            std::max(60.f, textX + textW - playTimeX - 56.f));
+        _drawPlayTime(vg, item.playTime, playTimeX, y + 39.f, playTimeW);
+        const float subTextX = playTimeX + playTimeW + 10.f;
+        _drawSubText(vg, item.subText, subTextX, y + 39.f,
+                     std::max(40.f, textX + textW - subTextX));
     }
 
     if (m_multiSelectMode) {
@@ -1856,11 +1863,15 @@ void GameGridView::_drawImage(NVGcontext* vg, const GridDrawItem& item,
     nvgStroke(vg);
 }
 
-void GameGridView::_drawBadge(NVGcontext* vg, const GridDrawItem& item, float x, float y)
+float GameGridView::_drawBadge(NVGcontext* vg, const GridDrawItem& item, float x, float y)
 {
-    if (item.badgeText.empty() || item.badgeColor == PlatformBadgeColor::NONE) return;
+    if (item.badgeText.empty() || item.badgeColor == PlatformBadgeColor::NONE) return 0.f;
 
-    float badgeW = item.badgeText.size() > 3 ? 58.f : 36.f;
+    nvgFontSize(vg, 12.f);
+    nvgFontFaceId(vg, m_fontId);
+    float bounds[4]{};
+    nvgTextBounds(vg, 0.f, 0.f, item.badgeText.c_str(), nullptr, bounds);
+    const float badgeW = std::max(36.f, (bounds[2] - bounds[0]) + 16.f);
     float badgeH = 20.f;
 
     nvgBeginPath(vg);
@@ -1868,11 +1879,10 @@ void GameGridView::_drawBadge(NVGcontext* vg, const GridDrawItem& item, float x,
     nvgFillColor(vg, _getBadgeColor(item.badgeColor));
     nvgFill(vg);
 
-    nvgFontSize(vg, 12.f);
-    nvgFontFaceId(vg, m_fontId);
     nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
     nvgText(vg, x + badgeW * 0.5f, y + badgeH * 0.5f, item.badgeText.c_str(), nullptr);
+    return badgeW;
 }
 
 void GameGridView::_drawTitle(NVGcontext* vg, const GridDrawItem& item, float x, float y, float maxWidth, bool focused)
@@ -2396,8 +2406,11 @@ void GameGridView::_drawDetailsPanel(NVGcontext* vg, float x, float y,
     nvgText(vg, x + pad, infoTop + 21.f, item.title.c_str(), nullptr);
     nvgRestore(vg);
 
-    _drawBadge(vg, item, x + pad, infoTop + 49.f);
-    _drawPlayTime(vg, item.playTime, x + pad + 48.f, infoTop + 51.f, w - 94.f);
+    const float badgeX = x + pad;
+    const float badgeW = _drawBadge(vg, item, badgeX, infoTop + 49.f);
+    const float playTimeX = badgeX + badgeW + 10.f;
+    _drawPlayTime(vg, item.playTime, playTimeX, infoTop + 51.f,
+                  std::max(1.f, x + w - pad - playTimeX));
     _drawSubText(vg, item.subText, x + pad, infoTop + 81.f, w - pad * 2.f);
 
     nvgBeginPath(vg);

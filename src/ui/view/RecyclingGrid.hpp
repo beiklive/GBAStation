@@ -245,7 +245,7 @@ private:
     void _drawLaunchOverlay(NVGcontext* vg, float x, float y, float w, float h);
     void _drawImage(NVGcontext* vg, const GridDrawItem& item, float x, float y,
                     float boxW, float boxH, bool platformDefault = false);
-    void _drawBadge(NVGcontext* vg, const GridDrawItem& item, float x, float y);
+    float _drawBadge(NVGcontext* vg, const GridDrawItem& item, float x, float y);
     void _drawTitle(NVGcontext* vg, const GridDrawItem& item, float x, float y, float maxWidth, bool focused);
     void _drawSubText(NVGcontext* vg, const std::string& text, float x, float y, float maxWidth);
     void _drawPlayTime(NVGcontext* vg, const std::string& text, float x, float y, float maxWidth);
