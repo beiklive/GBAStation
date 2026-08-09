@@ -46,6 +46,7 @@ namespace beiklive
             }
         };
 
+        // NDS 这类可自动提取内置图标的 ROM 仍提取图标；其余类型返回默认图标。
         std::string resolveFileListIcon(beiklive::enums::FileType fileType,
                                         const std::string& fullPath,
                                         const std::string& fallbackIcon)
@@ -56,6 +57,7 @@ namespace beiklive
             std::string ndsIcon = beiklive::GetOrCreateNdsIconPath(fullPath);
             return ndsIcon.empty() ? fallbackIcon : ndsIcon;
         }
+
 
 
         void imageScaleFit(brls::Image* image)
@@ -523,7 +525,9 @@ namespace beiklive
         m_detailSubtitle->setText(" ");
 
         m_detailImage->setVisibility(brls::Visibility::VISIBLE);
-        m_detailImage->setImageFromFile(beiklive::tools::getIconPath(data.itemType));
+        m_detailImage->setImageFromFile(data.iconPath.empty()
+            ? beiklive::tools::getIconPath(data.itemType)
+            : data.iconPath);
 
         std::string ext = beiklive::tools::getFileExtension(data.fullPath);
         if (!ext.empty())
@@ -700,8 +704,10 @@ namespace beiklive
                 }
 
                 for (const auto& raw : files) {
+                    // 不按游戏类型区分图标：文件一律默认文件图标；
+                    // NDS 这类可自动提取内置图标的 ROM 仍提取图标。
+                    std::string ip = BK_RES(iconPrefix + "wenjian.png");
                     auto fileType = beiklive::tools::getFileType(raw.fullPath);
-                    std::string ip = beiklive::tools::getIconPathWithPrefix(fileType, iconPrefix);
                     ip = resolveFileListIcon(fileType, raw.fullPath, ip);
                     std::string sizeStr = beiklive::tools::getFileSizeString(raw.fullPath);
                     dirData.push_back({raw.name, raw.fullPath, ip, fileType, sizeStr, 0});

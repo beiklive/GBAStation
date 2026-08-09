@@ -2,7 +2,6 @@
 
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
-#include "core/rom/PspMeta.hpp"
 #include "core/common.h"
 #include "core/game_database.hpp"
 
@@ -1194,16 +1193,6 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
         entry.logoPath = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>(platform),
             session.targetPath);
-        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)) {
-            // PSP ROM 提取真实游戏标题与 ICON0 封面。
-            const std::string realTitle = beiklive::psp_meta::ExtractTitle(session.targetPath);
-            if (!realTitle.empty())
-                entry.title = realTitle;
-            const std::string icon = beiklive::psp_meta::ExtractIcon0(
-                session.targetPath, beiklive::path::cachePath());
-            if (!icon.empty())
-                entry.logoPath = icon;
-        }
         entry.savePath = beiklive::tools::defaultGameSavePath(platform, session.targetPath);
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
             entry.ndsScreenLayout = "priority_top";

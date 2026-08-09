@@ -611,6 +611,7 @@ namespace beiklive
                     entry.path);
                 changed = true;
             }
+
             if (beiklive::tools::tryUseNdsInternalIconCover(entry))
                 changed = true;
             if (entry.screenShotPath.empty()) {
