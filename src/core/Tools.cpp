@@ -41,7 +41,7 @@ beiklive::enums::FileType fileTypeFromExtension(const std::string& ext, bool arc
         return beiklive::enums::FileType::GENESIS_ROM;
     if (ext == "cdi" || ext == "gdi" || ext == "chd" || ext == "cue")
         return beiklive::enums::FileType::DREAMCAST_ROM;
-    if (ext == "iso" || ext == "cso")
+    if (ext == "iso" || ext == "cso" || ext == "pbp")
         return beiklive::enums::FileType::PSP_ROM;
     if (ext == "nds")
         return beiklive::enums::FileType::NDS_ROM;
