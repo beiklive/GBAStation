@@ -1,4 +1,5 @@
 #include "GameLibraryPage.hpp"
+#include "CoverEditorPage.hpp"
 #include "core/Translation.hpp"
 #include "GameDataPage.hpp"
 #include "SteamGridDbPage.hpp"
@@ -1565,16 +1566,22 @@ namespace beiklive
 
         m_gameOptionsSidebar->addNestedSubmenuButton(
             operationsMenu, coverMenu, L("从本地选择"), 0xE2C8,
-            [this, path, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry& entry) {
+            [this, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry& entry) {
                 const auto pickerLocation = beiklive::getGameCoverPickerLocation(entry);
-                _closeGameOptionsPanelAnimated([this, path, idx, pickerLocation]() {
+                _closeGameOptionsPanelAnimated([this, entry, idx, pickerLocation]() {
                     beiklive::openFilePicker({"png", "jpg"},
-                        [this, path, idx](const std::string& selectedPath) {
-                            if (beiklive::GameDB) {
-                                beiklive::GameDB->set(path, "logoPath", nlohmann::json(selectedPath));
-                                beiklive::GameDB->flush();
-                                m_libraryView->setItemImagePath(idx, selectedPath);
+                        [this, entry, idx](const std::string& selectedPath) {
+                            if (selectedPath.empty()) {
+                                m_libraryView->setInteractionDisabled(false);
+                                return;
                             }
+                            beiklive::openCoverEditorPage(entry, selectedPath,
+                                [this, idx](const std::string& coverPath) {
+                                    if (idx >= 0 && static_cast<size_t>(idx) < m_entries.size())
+                                        m_entries[static_cast<size_t>(idx)].logoPath = coverPath;
+                                    if (idx >= 0)
+                                        m_libraryView->setItemImagePath(idx, coverPath);
+                                });
                             m_libraryView->setInteractionDisabled(false);
                         },
                         pickerLocation.startPath,

@@ -1,6 +1,7 @@
 #include "StartPage.hpp"
 #include "core/Translation.hpp"
 #include "SteamGridDbPage.hpp"
+#include "CoverEditorPage.hpp"
 #include "core/SteamGridDb.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "core/Tools.hpp"
@@ -1531,19 +1532,19 @@ namespace beiklive
 
         m_gameOptionsSidebar->addNestedSubmenuButton(
             operationsMenu, coverMenu, L("从本地选择"), 0xE2C8,
-            [this, path](const beiklive::GameEntry& game) {
+            [this](const beiklive::GameEntry& game) {
                 const auto pickerLocation = beiklive::getGameCoverPickerLocation(game);
                 _closeGameOptionsPanelAnimated(
-                    [this, path, pickerLocation]() {
+                    [this, game, pickerLocation]() {
                         beiklive::openFilePicker(
                             {"png", "jpg"},
-                            [this, path](const std::string& selectedPath) {
-                                if (!beiklive::GameDB)
+                            [this, game](const std::string& selectedPath) {
+                                if (selectedPath.empty())
                                     return;
-                                beiklive::GameDB->set(
-                                    path, "logoPath", nlohmann::json(selectedPath));
-                                beiklive::GameDB->flush();
-                                _requestRecentGamesRefresh(false);
+                                beiklive::openCoverEditorPage(game, selectedPath,
+                                    [this](const std::string&) {
+                                        _requestRecentGamesRefresh(false);
+                                    });
                             },
                             pickerLocation.startPath,
                             pickerLocation.filename);

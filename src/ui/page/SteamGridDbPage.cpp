@@ -1,4 +1,5 @@
 #include "ui/page/SteamGridDbPage.hpp"
+#include "ui/page/CoverEditorPage.hpp"
 #include "core/Translation.hpp"
 
 #include "core/SteamGridDb.hpp"
@@ -321,17 +322,16 @@ namespace
         {
             m_press = 1.f;
             m_saving = true;
-            m_status = L("正在下载并压缩封面...");
+            m_status = L("正在准备封面编辑...");
             auto alive = m_alive;
-            const auto asset = m_asset;
-            const auto entry = m_entry;
+            auto asset = m_asset;
             ThreadPool::instance().enqueuePriority(
-                [this, alive, asset, entry]() {
-                    std::string output;
+                [this, alive, asset = std::move(asset)]() mutable {
                     std::string error;
-                    const bool ok = steamgriddb::saveAssetAsCover(
-                        asset, entry, output, &error);
-                    brls::sync([this, alive, ok, output,
+                    const bool ok = steamgriddb::ensureAssetCached(
+                        asset, false, &error);
+                    const std::string sourcePath = asset.localPath;
+                    brls::sync([this, alive, ok, sourcePath,
                                 error = std::move(error)]() {
                         if (!alive->load()) return;
                         m_saving = false;
@@ -340,14 +340,7 @@ namespace
                                 ? L("封面保存失败") : error;
                             return;
                         }
-                        if (beiklive::GameDB) {
-                            beiklive::GameDB->set(
-                                m_entry.path, "logoPath",
-                                nlohmann::json(output));
-                            beiklive::GameDB->flush();
-                        }
-                        if (m_onCoverChanged) m_onCoverChanged(output);
-                        m_status = L("封面已保存");
+                        openCoverEditorPage(m_entry, sourcePath, m_onCoverChanged);
                         _beginClose();
                     });
                 });

@@ -5,6 +5,7 @@
 #include "ui/page/FileListPage.hpp"
 
 #include <filesystem>
+#include <memory>
 
 namespace fs = std::filesystem;
 
@@ -44,6 +45,15 @@ namespace beiklive
         const std::string& startPath,
         const std::string& filename)
     {
+        struct PickerState
+        {
+            std::function<void(const std::string&)> onSelected;
+            std::string selectedPath;
+            bool hasSelection = false;
+        };
+        auto state = std::make_shared<PickerState>();
+        state->onSelected = std::move(onSelected);
+
         auto* flPage = new beiklive::FileListPage();
         flPage->setFliter(beiklive::enums::FilterMode::Whitelist, extensions);
         bool hasStartDir = false;
@@ -56,7 +66,7 @@ namespace beiklive
             if (fs::exists(fs::path(startPath) / filename, ec))
                 flPage->setInitialFocusFilename(filename);
         }
-        flPage->onFileSelected = [flPage, onSelected](beiklive::DirListData item)
+        flPage->onFileSelected = [flPage, state](beiklive::DirListData item)
         {
             if (item.itemType != beiklive::enums::FileType::DRIVE &&
                 item.itemType != beiklive::enums::FileType::DIRECTORY)
@@ -66,9 +76,20 @@ namespace beiklive
                     brls::Application::notify(L("文件不存在"));
                     return;
                 }
-                onSelected(item.fullPath);
+                // The callback can push a new Activity (for example the cover
+                // editor). Defer it until this picker has actually popped; doing
+                // it here makes the picker's closing animation pop the new page.
+                state->selectedPath = item.fullPath;
+                state->hasSelection = true;
                 flPage->requestClose();
             }
+        };
+        flPage->onRequestClose = [state]() {
+            brls::Application::popActivity(brls::TransitionAnimation::FADE,
+                [state]() {
+                    if (state->hasSelection && state->onSelected)
+                        state->onSelected(state->selectedPath);
+                });
         };
         if (hasStartDir)
             flPage->setPath(startPath);
