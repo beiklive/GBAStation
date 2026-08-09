@@ -1425,17 +1425,17 @@ void DataManagementPage::init()
         int platform;
     };
     const BundlePlatform bundlePlatforms[] = {
-        {L("导入 GBA 播放列表"), "GBA · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBA)},
-        {L("导入 GBC 播放列表"), "GBC · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBC)},
-        {L("导入 GB 播放列表"), "GB · .lpl", static_cast<int>(enums::EmuPlatform::EmuGB)},
-        {L("导入 FC 播放列表"), "FC · .lpl", static_cast<int>(enums::EmuPlatform::EmuNES)},
-        {L("导入 SFC 播放列表"), "SFC · .lpl", static_cast<int>(enums::EmuPlatform::EmuSNES)},
-        {L("导入 NDS 播放列表"), "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS)},
-        {L("导入 3DS 播放列表"), "3DS · .lpl", static_cast<int>(enums::EmuPlatform::Emu3DS)},
-        {L("导入 MD 播放列表"), "MD · .lpl", static_cast<int>(enums::EmuPlatform::EmuGenesis)},
-        {L("导入 Arcade 播放列表"), "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade)},
-        {L("导入 DC 播放列表"), "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast)},
-        {L("导入 PSP 播放列表"), "PSP · .lpl", static_cast<int>(enums::EmuPlatform::EmuPSP)},
+        {L("导入 GBA lpl文件"), "GBA · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBA)},
+        {L("导入 GBC lpl文件"), "GBC · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBC)},
+        {L("导入 GB lpl文件"), "GB · .lpl", static_cast<int>(enums::EmuPlatform::EmuGB)},
+        {L("导入 FC lpl文件"), "FC · .lpl", static_cast<int>(enums::EmuPlatform::EmuNES)},
+        {L("导入 SFC lpl文件"), "SFC · .lpl", static_cast<int>(enums::EmuPlatform::EmuSNES)},
+        {L("导入 NDS lpl文件"), "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS)},
+        {L("导入 3DS lpl文件"), "3DS · .lpl", static_cast<int>(enums::EmuPlatform::Emu3DS)},
+        {L("导入 MD lpl文件"), "MD · .lpl", static_cast<int>(enums::EmuPlatform::EmuGenesis)},
+        {L("导入 街机 lpl文件"), "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade)},
+        {L("导入 DC lpl文件"), "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast)},
+        {L("导入 PSP lpl文件"), "PSP · .lpl", static_cast<int>(enums::EmuPlatform::EmuPSP)},
     };
     for (const auto& platform : bundlePlatforms)
     {
@@ -1471,7 +1471,7 @@ void DataManagementPage::init()
         nullptr,
         false,
     });
-    scan.items.push_back({L("扫描子目录"), L("同时扫描所选目录下的所有子目录"), "",
+    scan.items.push_back({L("扫描子目录"), L("同时扫描所选目录下的所有子目录，请做好游戏目录分类，部分游戏后缀相同，可能导致导入错误"), "",
                           material::STORAGE, {}, &m_autoSubDir, false});
     scan.items.push_back({L("读取映射名称"), L("存在名称映射时使用中文或规范化标题"), "",
                           material::EDIT, {}, &m_useNameMapping, false});
@@ -1491,7 +1491,7 @@ void DataManagementPage::init()
                           material::MEMORY, {}, &m_scan3DS, false});
     scan.items.push_back({L("扫描 MD 游戏"), L("识别 .md、.gen、.bin 与 .smd 文件"), "",
                           material::MEMORY, {}, &m_scanGenesis, false});
-    scan.items.push_back({L("扫描 Arcade 游戏"), L("识别 .zip 与 .7z 文件"), "",
+    scan.items.push_back({L("扫描 Arcade街机 游戏"), L("识别 .zip 与 .7z 文件"), "",
                           material::MEMORY, {}, &m_scanArcade, false});
     scan.items.push_back({L("扫描 DC 游戏"), L("识别 .cdi、.gdi 与 .chd 文件"), "",
                           material::MEMORY, {}, &m_scanDreamcast, false});
