@@ -54,6 +54,8 @@ namespace beiklive
         void applyFocusChange(LayoutItem* oldFocus, LayoutItem* newFocus);
         /// 卡片背景：阴影 + 边缘（参考 switch 布局游戏卡片）
         void drawCard(NVGcontext* vg, const GridRect& rect, float radius);
+        /// 横向滚动网格：滚动使焦点格保持在可视区内
+        void scrollToFocus();
 
         std::vector<LayoutItem> m_items;
         GridSystem m_grid;

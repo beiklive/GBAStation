@@ -1,9 +1,22 @@
 #include "UIContext.hpp"
 
+#include <cmath>
+
 #include "WidgetFactory.hpp"
 
 namespace beiklive
 {
+    UIContext::UIContext()
+    {
+        // 浮层面板网格：3 行 N 列，向右延伸，支持横向滚动
+        auto& cfg = m_panelLayout.grid().config();
+        cfg.rows = 3;
+        cfg.cellWidth = 160.f;
+        cfg.cellHeight = 160.f;
+        cfg.gap = 14.f;
+        m_panelLayout.grid().setScrollable(true);
+    }
+
     void UIContext::injectServices(const LayoutItem& item)
     {
         if (!item.widget)
@@ -53,48 +66,41 @@ namespace beiklive
         return item;
     }
 
-    void UIContext::rebuildCurrentPage()
-    {
-        m_layout.clear();
-
-        std::vector<FolderItemDescriptor> items;
-        if (m_folderStack.empty())
-            items = m_mainItems;
-        else
-            items = m_folderProvider.getFolderItems(m_folderStack.back());
-
-        for (const auto& desc : items)
-            addItem(descriptorToItem(desc));
-
-        m_layout.resetFocusToFirst();
-    }
-
     void UIContext::setMainPage(const std::vector<FolderItemDescriptor>& items)
     {
-        m_mainItems = items;
-        m_folderStack.clear();
-        rebuildCurrentPage();
+        closeFolder();
+        m_layout.clear();
+        for (const auto& desc : items)
+            addItem(descriptorToItem(desc));
+        m_layout.resetFocusToFirst();
     }
 
     void UIContext::openFolder(const std::string& id)
     {
         if (!m_folderProvider.getFolder(id))
             return;
-        m_folderStack.push_back(id);
-        rebuildCurrentPage();
+        m_folderId = id;
+        m_folderOpen = true;
+        m_panelLayout.clear();
+        const auto items = m_folderProvider.getFolderItems(id);
+        for (const auto& desc : items) {
+            m_panelLayout.addItem(descriptorToItem(desc));
+            injectServices(m_panelLayout.items().back());
+        }
+        // 列数按条目数计算（3 行，向右延伸）
+        auto& cfg = m_panelLayout.grid().config();
+        cfg.columns = std::max(1, static_cast<int>(
+            std::ceil(static_cast<double>(items.size()) / 3.0)));
+        m_panelLayout.grid().setScrollX(0.f);
+        m_panelLayout.resetFocusToFirst();
     }
 
     void UIContext::closeFolder()
     {
-        if (m_folderStack.empty())
+        if (!m_folderOpen)
             return;
-        m_folderStack.pop_back();
-        rebuildCurrentPage();
-    }
-
-    const std::string& UIContext::currentFolderId() const
-    {
-        static const std::string kRoot;
-        return m_folderStack.empty() ? kRoot : m_folderStack.back();
+        m_folderOpen = false;
+        m_folderId.clear();
+        m_panelLayout.clear();
     }
 } // namespace beiklive

@@ -2,6 +2,7 @@
 
 #include "core/Translation.hpp"
 #include "ui/utils/GradientFocus.hpp"
+#include "ui/utils/MaterialIcons.hpp"
 #include "WidgetFactory.hpp"
 
 #include <algorithm>
@@ -11,6 +12,22 @@ namespace
 {
     constexpr float HOLD_DELAY = 0.30f;
     constexpr float HOLD_REPEAT = 0.085f;
+
+    std::string encodeUtf8(char32_t codepoint)
+    {
+        std::string out;
+        if (codepoint <= 0x7F) {
+            out.push_back(static_cast<char>(codepoint));
+        } else if (codepoint <= 0x7FF) {
+            out.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+            out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+        } else {
+            out.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+            out.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+        }
+        return out;
+    }
 } // namespace
 
 namespace beiklive
@@ -215,7 +232,9 @@ namespace beiklive
             }
         }
 
-        _layout().update(dt);
+        m_uiContext.layout().update(dt);
+        if (m_uiContext.isFolderOpen())
+            m_uiContext.panelLayout().update(dt);
         _handleInput(dt);
         invalidate();
     }
@@ -328,10 +347,17 @@ namespace beiklive
         m_prevB = b;
     }
 
+    LayoutManager& IisuLayout::_activeLayout()
+    {
+        return m_uiContext.isFolderOpen()
+            ? m_uiContext.panelLayout()
+            : m_uiContext.layout();
+    }
+
     void IisuLayout::_moveLeft()
     {
         if (m_focusArea == FocusArea::GRID) {
-            _layout().moveFocus(UIAction::Left);
+            _activeLayout().moveFocus(UIAction::Left);
         } else {
             _moveFunctionHorizontal(-1);
         }
@@ -341,7 +367,7 @@ namespace beiklive
     void IisuLayout::_moveRight()
     {
         if (m_focusArea == FocusArea::GRID) {
-            _layout().moveFocus(UIAction::Right);
+            _activeLayout().moveFocus(UIAction::Right);
         } else {
             _moveFunctionHorizontal(1);
         }
@@ -355,8 +381,8 @@ namespace beiklive
             brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
         } else if (m_focusArea == FocusArea::GRID) {
             // 网格内先逐行上移
-            if (_layout().focus().cellY() > 0) {
-                _layout().moveFocus(UIAction::Up);
+            if (_activeLayout().focus().cellY() > 0) {
+                _activeLayout().moveFocus(UIAction::Up);
                 brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
             }
         }
@@ -365,11 +391,11 @@ namespace beiklive
     void IisuLayout::_moveDown()
     {
         if (m_focusArea == FocusArea::GRID) {
-            // 网格内先逐行下移，到最底行后才切到底部功能区
-            const int rows = _layout().grid().config().rows;
-            if (_layout().focus().cellY() < rows - 1) {
-                _layout().moveFocus(UIAction::Down);
-            } else {
+            // 网格内先逐行下移；浮层打开时禁止切到功能区
+            const int rows = _activeLayout().grid().config().rows;
+            if (_activeLayout().focus().cellY() < rows - 1) {
+                _activeLayout().moveFocus(UIAction::Down);
+            } else if (!m_uiContext.isFolderOpen()) {
                 m_focusArea = FocusArea::FUNCTIONS;
             }
             brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
@@ -397,8 +423,8 @@ namespace beiklive
     {
         brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
         if (m_focusArea == FocusArea::GRID) {
-            // 交由 Widget 处理（FolderWidget 展开子布局）
-            if (auto* current = _layout().currentItem()) {
+            // 交由 Widget 处理（FolderWidget 展开浮层）
+            if (auto* current = _activeLayout().currentItem()) {
                 if (current->widget)
                     current->widget->onActivate();
             }
@@ -469,7 +495,7 @@ namespace beiklive
                 if (folder)
                     focusInfo = "[" + folder->title + "] ";
             }
-            if (auto* current = _layout().currentItem()) {
+            if (auto* current = _activeLayout().currentItem()) {
                 focusInfo += "#" + std::to_string(current->id) + " " +
                     std::to_string(current->w) + "x" +
                     std::to_string(current->h) + "@" +
@@ -478,8 +504,8 @@ namespace beiklive
             } else {
                 // 空白格：显示单元格坐标
                 focusInfo += L("空格 ") + "(" +
-                    std::to_string(_layout().focus().cellX()) + "," +
-                    std::to_string(_layout().focus().cellY()) + ")";
+                    std::to_string(_activeLayout().focus().cellX()) + "," +
+                    std::to_string(_activeLayout().focus().cellY()) + ")";
             }
         } else if (!m_functions.empty()) {
             focusInfo =
@@ -504,11 +530,98 @@ namespace beiklive
         const float bodyH = h - 2.f * barMargin - topBarH - bottomBarH;
         _layout().setArea(bodyX, bodyY, bodyW, bodyH);
         GridDebugRenderer::draw(vg, _layout().grid(), _layout().items());
-        // 焦点切到底部功能区时隐藏网格焦点框
-        _layout().setFocusVisible(m_focusArea == FocusArea::GRID);
+        // 焦点切到底部功能区或浮层打开时隐藏主界面焦点框
+        _layout().setFocusVisible(m_focusArea == FocusArea::GRID &&
+                                  !m_uiContext.isFolderOpen());
         _layout().draw(vg, m_time);
 
-        _drawFunctions(vg, x, y, w, h);
+        // ── 文件夹浮层：悬浮在当前界面上 ────────────────────────────────
+        if (m_uiContext.isFolderOpen()) {
+            // 遮罩
+            nvgBeginPath(vg);
+            nvgRect(vg, x, y, w, h);
+            nvgFillColor(vg, nvgRGBA(0, 0, 0, 120));
+            nvgFill(vg);
+
+            // 面板：上下边距 20，左右边距 40
+            const float panelX = x + 40.f;
+            const float panelY = y + 20.f;
+            const float panelW = w - 80.f;
+            const float panelH = h - 40.f;
+            constexpr float headerH = 100.f;
+            constexpr float panelRadius = 18.f;
+
+            // 面板阴影
+            NVGpaint panelShadow = nvgBoxGradient(
+                vg, panelX + 6.f, panelY + 8.f, panelW, panelH,
+                panelRadius, 8.f, nvgRGBA(0, 0, 0, 150), nvgRGBA(0, 0, 0, 0));
+            nvgBeginPath(vg);
+            nvgRect(vg, panelX - 2.f, panelY, panelW + 14.f, panelH + 18.f);
+            nvgRoundedRect(vg, panelX, panelY, panelW, panelH, panelRadius);
+            nvgPathWinding(vg, NVG_HOLE);
+            nvgFillPaint(vg, panelShadow);
+            nvgFill(vg);
+
+            // 面板背景
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, panelX, panelY, panelW, panelH, panelRadius);
+            nvgFillColor(vg, nvgRGBA(28, 32, 44, 240));
+            nvgFill(vg);
+            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 80));
+            nvgStrokeWidth(vg, 1.f);
+            nvgStroke(vg);
+
+            // Header：文件夹图标 + 名称 + 分隔线
+            const auto folder = m_uiContext.folderProvider().getFolder(
+                m_uiContext.currentFolderId());
+            const std::string panelTitle =
+                folder ? folder->title : L("文件夹");
+            const float headerCenterY = panelY + headerH * 0.5f;
+
+            const int materialFontId =
+                brls::Application::getFont(brls::FONT_MATERIAL_ICONS);
+            if (materialFontId >= 0) {
+                const std::string glyph =
+                    encodeUtf8(beiklive::material::FOLDER);
+                nvgFontFaceId(vg, materialFontId);
+                nvgFontSize(vg, 34.f);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(235, 242, 255, 235));
+                nvgText(vg, panelX + 28.f, headerCenterY,
+                        glyph.c_str(), nullptr);
+            }
+
+            nvgFontFaceId(vg, m_fontId);
+            nvgFontSize(vg, 26.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(242, 245, 251, 235));
+            nvgText(vg, panelX + 56.f, headerCenterY,
+                    panelTitle.c_str(), nullptr);
+
+            nvgFontSize(vg, 14.f);
+            nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(190, 200, 218, 180));
+            nvgText(vg, panelX + panelW - 16.f, headerCenterY,
+                    L("B 返回").c_str(), nullptr);
+
+            // 分隔线
+            nvgBeginPath(vg);
+            nvgMoveTo(vg, panelX, panelY + headerH);
+            nvgLineTo(vg, panelX + panelW, panelY + headerH);
+            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 40));
+            nvgStrokeWidth(vg, 1.f);
+            nvgStroke(vg);
+
+            // 主体：3 行 N 列，向右延伸，横向滚动
+            auto& panel = m_uiContext.panelLayout();
+            panel.setArea(panelX, panelY + headerH,
+                          panelW, panelH - headerH);
+            panel.setFocusVisible(true);
+            panel.draw(vg, m_time);
+        }
+
+        if (!m_uiContext.isFolderOpen())
+            _drawFunctions(vg, x, y, w, h);
 
         nvgResetScissor(vg);
         nvgRestore(vg);

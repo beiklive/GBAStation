@@ -2,6 +2,8 @@
 
 #include <borealis.hpp>
 
+#include <algorithm>
+
 #include "LayoutItem.hpp"
 
 namespace beiklive
@@ -45,7 +47,18 @@ namespace beiklive
         GridConfig& config() { return m_config; }
         const GridConfig& config() const { return m_config; }
 
+        /// 横向滚动支持（悬浮面板：3 行 N 列向右延伸）
+        void setScrollable(bool scrollable) { m_scrollable = scrollable; }
+        bool scrollable() const { return m_scrollable; }
+        void setScrollX(float offset) { m_scrollX = offset; }
+        float scrollX() const { return m_scrollX; }
+        float viewWidth() const { return m_viewWidth; }
+        float maxScrollX() const;
+
     private:
         GridConfig m_config;
+        float m_scrollX = 0.f;
+        float m_viewWidth = 0.f;
+        bool m_scrollable = false;
     };
 } // namespace beiklive

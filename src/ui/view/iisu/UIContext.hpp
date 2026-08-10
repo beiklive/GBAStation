@@ -17,11 +17,17 @@ namespace beiklive
     class UIContext
     {
     public:
+        UIContext();
+
         TextureManager& textures() { return m_textures; }
         const TextureManager& textures() const { return m_textures; }
 
         LayoutManager& layout() { return m_layout; }
         const LayoutManager& layout() const { return m_layout; }
+
+        /// 文件夹浮层子布局（悬浮在当前界面上，不覆盖整区）
+        LayoutManager& panelLayout() { return m_panelLayout; }
+        const LayoutManager& panelLayout() const { return m_panelLayout; }
 
         GameDbProvider& gameProvider() { return m_gameProvider; }
         const GameDbProvider& gameProvider() const { return m_gameProvider; }
@@ -33,23 +39,23 @@ namespace beiklive
 
         /// 主页面布局（根页面）
         void setMainPage(const std::vector<FolderItemDescriptor>& items);
-        /// 展开文件夹子布局（支持嵌套，栈式记录）
+        /// 打开文件夹浮层（悬浮显示子布局）
         void openFolder(const std::string& id);
-        /// 返回上一级布局
+        /// 关闭文件夹浮层
         void closeFolder();
-        bool isFolderOpen() const { return !m_folderStack.empty(); }
-        const std::string& currentFolderId() const;
+        bool isFolderOpen() const { return m_folderOpen; }
+        const std::string& currentFolderId() const { return m_folderId; }
 
     private:
         LayoutItem descriptorToItem(const FolderItemDescriptor& desc) const;
-        void rebuildCurrentPage();
         void injectServices(const LayoutItem& item);
 
         TextureManager m_textures;
         GameDbProvider m_gameProvider;
         GameDbFolderProvider m_folderProvider;
         LayoutManager m_layout;
-        std::vector<FolderItemDescriptor> m_mainItems;
-        std::vector<std::string> m_folderStack;
+        LayoutManager m_panelLayout;
+        bool m_folderOpen = false;
+        std::string m_folderId;
     };
 } // namespace beiklive

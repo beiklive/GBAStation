@@ -1,5 +1,7 @@
 #include "LayoutManager.hpp"
 
+#include <algorithm>
+
 #include "ui/utils/GradientFocus.hpp"
 #include "Widget.hpp"
 
@@ -54,7 +56,12 @@ namespace beiklive
                     targetX = oldItem->x - 1;
                 else
                     targetX -= 1;
-                targetX = (targetX % cfg.columns + cfg.columns) % cfg.columns;
+                if (m_grid.scrollable()) {
+                    if (targetX < 0)
+                        targetX = 0; // 滚动网格不换行
+                } else {
+                    targetX = (targetX % cfg.columns + cfg.columns) % cfg.columns;
+                }
                 break;
             }
             case UIAction::Right: {
@@ -62,7 +69,12 @@ namespace beiklive
                     targetX = oldItem->x + oldItem->w;
                 else
                     targetX += 1;
-                targetX = (targetX % cfg.columns + cfg.columns) % cfg.columns;
+                if (m_grid.scrollable()) {
+                    if (targetX >= cfg.columns)
+                        targetX = cfg.columns - 1; // 滚动网格不换行
+                } else {
+                    targetX = (targetX % cfg.columns + cfg.columns) % cfg.columns;
+                }
                 break;
             }
             case UIAction::Up: {
@@ -88,6 +100,7 @@ namespace beiklive
         }
 
         m_focus.setCell(targetX, targetY, cfg.columns, cfg.rows);
+        scrollToFocus();
         applyFocusChange(oldItem, currentItem());
     }
 
@@ -95,7 +108,26 @@ namespace beiklive
     {
         LayoutItem* oldItem = currentItem();
         m_focus.resetToFirst();
+        scrollToFocus();
         applyFocusChange(oldItem, currentItem());
+    }
+
+    void LayoutManager::scrollToFocus()
+    {
+        if (!m_grid.scrollable())
+            return;
+        const float viewW = m_grid.viewWidth();
+        if (viewW <= 0.f)
+            return;
+        const GridRect rect = m_grid.getItemRect(
+            m_focus.cellX(), m_focus.cellY(), 1, 1);
+        float target = m_grid.scrollX();
+        if (rect.left < 0.f)
+            target += rect.left; // 焦点露出左边界
+        else if (rect.left + rect.width > viewW)
+            target += rect.left + rect.width - viewW; // 焦点露出右边界
+        target = std::max(0.f, std::min(target, m_grid.maxScrollX()));
+        m_grid.setScrollX(target);
     }
 
     LayoutItem* LayoutManager::currentItem()

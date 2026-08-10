@@ -75,6 +75,8 @@ namespace beiklive
         };
 
         LayoutManager& _layout() { return m_uiContext.layout(); }
+        /// 当前可交互布局：文件夹浮层打开时导向浮层，否则主界面
+        LayoutManager& _activeLayout();
         beiklive::GameList m_games;
         bool m_pico8ShortcutVisible = true;
         int m_fontId = -1;
