@@ -1542,11 +1542,6 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
             false, false, brls::SOUND_CLICK);
         this->getContentBox()->addView(switchLayout);
         m_shortcutSettingsOverlay = new HomeShortcutSettingsOverlay();
-        if (!m_platformPicker)
-        {
-            m_platformPicker = new PlatformPickerOverlay();
-            this->getContentBox()->addView(m_platformPicker);
-        }
         m_shortcutSettingsOverlay->setShowPico8Option(true);
         m_shortcutSettingsOverlay->onPico8VisibleChanged = [this](bool visible) {
             SET_SETTING_KEY_INT(
@@ -1649,11 +1644,6 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
             false, false, brls::SOUND_CLICK);
         this->getContentBox()->addView(iisuLayout);
         m_shortcutSettingsOverlay = new HomeShortcutSettingsOverlay();
-        if (!m_platformPicker)
-        {
-            m_platformPicker = new PlatformPickerOverlay();
-            this->getContentBox()->addView(m_platformPicker);
-        }
         m_shortcutSettingsOverlay->setShowPico8Option(false);
         m_shortcutSettingsOverlay->onPico8VisibleChanged = [this](bool visible) {
             SET_SETTING_KEY_INT(
@@ -1733,6 +1723,8 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
     {
         brls::Logger::debug("Opening File List Page");
         m_fileListPage = new beiklive::FileListPage();
+        m_platformPicker = new PlatformPickerOverlay();
+        m_fileListPage->addView(m_platformPicker);
         m_fileListPage->onRequestClose = [this]() {
             beiklive::popActivity(m_fileListPage);
         };
@@ -1751,6 +1743,16 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
 
         m_fileListPage->onFileSelected = [this](beiklive::DirListData dirItem)
         {
+            // 歧义后缀（iso/bin/cue/zip/7z 等）：多机种可运行，弹出机种选择
+            const std::vector<int> candidates =
+                beiklive::tools::candidatePlatformsForExtension(
+                    beiklive::tools::getFileExtension(dirItem.fullPath));
+            if (candidates.size() > 1)
+            {
+                _showPlatformPicker(dirItem, this, candidates, 0);
+                return;
+            }
+
             switch (dirItem.itemType)
             {
             case beiklive::enums::FileType::IMAGE_FILE:
