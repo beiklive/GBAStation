@@ -1,7 +1,6 @@
 #include "FileListPage.hpp"
 #include "core/Translation.hpp"
 #include "ui/utils/AnimationHelper.hpp"
-#include "ui/widget/HintsBar.hpp"
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
@@ -140,7 +139,6 @@ namespace beiklive
 
         this->getContentBox()->setPadding(104.f, 32.f, 62.f, 32.f);
         this->getContentBox()->addView(mainRow);
-        this->getContentBox()->addView(new beiklive::HintsBar());
 
         this->showHeader(false);
         this->showFooter(false);
@@ -784,6 +782,12 @@ namespace beiklive
         fileListView->setInteractionDisabled(disabled);
     }
 
+    void FileListPage::setPickerActive(bool active)
+    {
+        m_pickerActive = active;
+        invalidate();
+    }
+
     void FileListPage::draw(NVGcontext* vg, float x, float y, float w, float h,
                             brls::Style style, brls::FrameContext* ctx)
     {
@@ -863,19 +867,27 @@ namespace beiklive
         nvgGlobalAlpha(vg, alpha);
         const float hintY = y + h - 27.f + (1.f - eased) * 44.f;
         float cursor = x + w - 30.f;
-        const bool atRoot = m_isAtDriveList || m_currentPath.empty()
-            || fs::path(m_currentPath).parent_path().string() == m_currentPath;
-        drawHint(brls::BUTTON_B,
-                 fileListView->hasActiveFilter() ? L("关闭搜索").c_str()
-                     : (atRoot ? L("返回").c_str() : L("上一级").c_str()),
-                 cursor, hintY);
-        drawHint(brls::BUTTON_A, L("打开/选择").c_str(), cursor, hintY);
-        if (m_dirSelectionMode)
-            drawHint(brls::BUTTON_Y, L("选择目录").c_str(), cursor, hintY);
-        drawHint(brls::BUTTON_X, L("映射名称").c_str(), cursor, hintY);
-        drawHint(brls::BUTTON_RT, L("搜索").c_str(), cursor, hintY);
-        drawHint(brls::BUTTON_RB, m_panelVisible ? L("隐藏详情").c_str() : L("显示详情").c_str(),
-                 cursor, hintY);
+        if (m_pickerActive)
+        {
+            drawHint(brls::BUTTON_B, L("取消").c_str(), cursor, hintY);
+            drawHint(brls::BUTTON_A, L("选择").c_str(), cursor, hintY);
+        }
+        else
+        {
+            const bool atRoot = m_isAtDriveList || m_currentPath.empty()
+                || fs::path(m_currentPath).parent_path().string() == m_currentPath;
+            drawHint(brls::BUTTON_B,
+                     fileListView->hasActiveFilter() ? L("关闭搜索").c_str()
+                         : (atRoot ? L("返回").c_str() : L("上一级").c_str()),
+                     cursor, hintY);
+            drawHint(brls::BUTTON_A, L("打开/选择").c_str(), cursor, hintY);
+            if (m_dirSelectionMode)
+                drawHint(brls::BUTTON_Y, L("选择目录").c_str(), cursor, hintY);
+            drawHint(brls::BUTTON_X, L("映射名称").c_str(), cursor, hintY);
+            drawHint(brls::BUTTON_RT, L("搜索").c_str(), cursor, hintY);
+            drawHint(brls::BUTTON_RB, m_panelVisible ? L("隐藏详情").c_str() : L("显示详情").c_str(),
+                     cursor, hintY);
+        }
         nvgRestore(vg);
     }
 

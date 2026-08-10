@@ -176,13 +176,11 @@ beiklive::enums::FileType platformToFileType(int platform)
             auto moveUp = [this](brls::View*) -> bool {
                 if (!m_open || m_closing)
                     return false;
-                _move(-1);
                 return true;
             };
             auto moveDown = [this](brls::View*) -> bool {
                 if (!m_open || m_closing)
                     return false;
-                _move(1);
                 return true;
             };
             auto confirm = [this](brls::View*) -> bool {
@@ -221,6 +219,8 @@ beiklive::enums::FileType platformToFileType(int platform)
             m_closing = false;
             m_progress = 0.f;
             m_lastFrame = std::chrono::steady_clock::now();
+            m_prevUp = m_prevDown = m_prevLeft = m_prevRight = false;
+            m_prevA = m_prevB = m_prevStart = false;
             setVisibility(brls::Visibility::VISIBLE);
             brls::Application::giveFocus(this);
         }
@@ -248,6 +248,10 @@ beiklive::enums::FileType platformToFileType(int platform)
                 m_progress = std::max(0.f, m_progress - dt * 8.f);
                 if (m_progress <= 0.f)
                     close();
+            }
+            else if (m_open)
+            {
+                _pollInput();
             }
             invalidate();
         }
@@ -418,6 +422,43 @@ beiklive::enums::FileType platformToFileType(int platform)
             return handle;
         }
 
+        void _pollInput()
+        {
+            auto& st = brls::Application::getControllerState();
+            const bool up = st.buttons[brls::BUTTON_UP] ||
+                            st.buttons[brls::BUTTON_NAV_UP];
+            const bool down = st.buttons[brls::BUTTON_DOWN] ||
+                              st.buttons[brls::BUTTON_NAV_DOWN];
+            const bool left = st.buttons[brls::BUTTON_LEFT] ||
+                              st.buttons[brls::BUTTON_NAV_LEFT];
+            const bool right = st.buttons[brls::BUTTON_RIGHT] ||
+                               st.buttons[brls::BUTTON_NAV_RIGHT];
+            const bool a = st.buttons[brls::BUTTON_A];
+            const bool b = st.buttons[brls::BUTTON_B];
+            const bool start = st.buttons[brls::BUTTON_START];
+
+            if (up && !m_prevUp)
+                _move(-1);
+            if (down && !m_prevDown)
+                _move(1);
+            if (left && !m_prevLeft)
+                _move(-1);
+            if (right && !m_prevRight)
+                _move(1);
+            if (a && !m_prevA)
+                _finish(m_selected);
+            if ((b && !m_prevB) || (start && !m_prevStart))
+                _finish(-1);
+
+            m_prevUp = up;
+            m_prevDown = down;
+            m_prevLeft = left;
+            m_prevRight = right;
+            m_prevA = a;
+            m_prevB = b;
+            m_prevStart = start;
+        }
+
         void _move(int dir)
         {
             if (m_candidates.empty())
@@ -453,6 +494,13 @@ beiklive::enums::FileType platformToFileType(int platform)
         int m_defaultFont = -1;
         int m_materialFont = -1;
         int m_switchFont = -1;
+        bool m_prevUp = false;
+        bool m_prevDown = false;
+        bool m_prevLeft = false;
+        bool m_prevRight = false;
+        bool m_prevA = false;
+        bool m_prevB = false;
+        bool m_prevStart = false;
         std::unordered_map<std::string, int> m_iconCache;
     };
 
@@ -1447,7 +1495,10 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
         return;
     m_platformPicker->onPicked = [this, dirItem, previousPage](int platform) {
         if (m_fileListPage)
+        {
             m_fileListPage->setInteractionDisabled(false);
+            m_fileListPage->setPickerActive(false);
+        }
         if (platform < 0)
             return; // 取消
         beiklive::DirListData forced = dirItem;
@@ -1455,7 +1506,10 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
         _launchDirItem(forced, previousPage);
     };
     if (m_fileListPage)
+    {
         m_fileListPage->setInteractionDisabled(true);
+        m_fileListPage->setPickerActive(true);
+    }
     m_platformPicker->open(candidates, defaultIndex, dirItem.fileName);
 }
 
