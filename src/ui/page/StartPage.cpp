@@ -1542,6 +1542,11 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
             false, false, brls::SOUND_CLICK);
         this->getContentBox()->addView(switchLayout);
         m_shortcutSettingsOverlay = new HomeShortcutSettingsOverlay();
+        if (!m_platformPicker)
+        {
+            m_platformPicker = new PlatformPickerOverlay();
+            this->getContentBox()->addView(m_platformPicker);
+        }
         m_shortcutSettingsOverlay->setShowPico8Option(true);
         m_shortcutSettingsOverlay->onPico8VisibleChanged = [this](bool visible) {
             SET_SETTING_KEY_INT(
