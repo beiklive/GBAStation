@@ -135,6 +135,14 @@ namespace beiklive
         bool m_functionClickAnimating = false;
         int m_functionClickIndex = -1;
         float m_functionClickTime = 0.f;
+        // 触摸 / 鼠标指针交互（功能栏点击、卡片点击与拖动翻页）。
+        bool m_touchActive = false;
+        bool m_touchDragging = false;
+        int m_dragTouchFinger = -1;
+        float m_dragStartX = 0.f;
+        float m_dragStartScrollX = 0.f;
+        int m_dragStartGame = 0;
+        bool m_dragFromCards = false;
         bool m_deleteWaiting = false;
         bool m_deleteCollapsing = false;
         bool m_deleteBackendFinished = false;
@@ -179,6 +187,7 @@ namespace beiklive
         void _updateStatusIndicators(float dt);
         void _updatePico8ShortcutInput(float dt);
         void _handleInput(float dt);
+        void _handlePointerInput(float dt);
         void _moveHorizontal(int direction);
         void _moveVertical(int direction);
         void _activateCurrent();

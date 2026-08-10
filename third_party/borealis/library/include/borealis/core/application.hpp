@@ -59,6 +59,16 @@ class Application
   public:
     friend class EditTextDialog;
 
+    /// 公开访问当前帧的触摸 / 鼠标指针状态（供自绘视图处理点击与拖动）。
+    inline static const std::vector<TouchState>& getTouchState()
+    {
+        return currentTouchState;
+    }
+    inline static const MouseState& getMouseState()
+    {
+        return currentMouseState;
+    }
+
     static inline uint32_t ORIGINAL_WINDOW_WIDTH  = 1280;
     static inline uint32_t ORIGINAL_WINDOW_HEIGHT = 720;
 

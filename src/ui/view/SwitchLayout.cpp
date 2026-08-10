@@ -632,6 +632,7 @@ namespace beiklive
         }
 
         _updatePico8ShortcutInput(dt);
+        _handlePointerInput(dt);
         _handleInput(dt);
         _requestTexturesByPriority();
         invalidate();
@@ -754,6 +755,170 @@ namespace beiklive
              platform->hasEthernetConnection());
     }
 
+    // 触摸 / 鼠标指针交互：功能栏点击、游戏卡片点击与拖动翻页。
+    // 鼠标左键映射为虚拟触摸（finger = -2），与触摸统一处理。
+    void SwitchLayout::_handlePointerInput(float dt)
+    {
+        (void)dt;
+        if (m_exitAnimationRunning || m_pico8ReturnAnimationRunning ||
+            m_pico8HoldActive || m_pico8ReleaseAnimating ||
+            m_deleteWaiting || m_deleteCollapsing || m_reflowRunning ||
+            m_loading)
+            return;
+
+        struct PointerEvent
+        {
+            int id;
+            brls::TouchPhase phase;
+            float x;
+            float y;
+        };
+        std::vector<PointerEvent> events;
+
+        for (const auto& touch : brls::Application::getTouchState())
+        {
+            if (touch.phase == brls::TouchPhase::NONE)
+                continue;
+            events.push_back({touch.fingerId, touch.phase,
+                              static_cast<float>(touch.position.x),
+                              static_cast<float>(touch.position.y)});
+        }
+        {
+            const auto& mouse = brls::Application::getMouseState();
+            if (mouse.leftButton != brls::TouchPhase::NONE)
+            {
+                events.push_back({-2, mouse.leftButton,
+                                  static_cast<float>(mouse.position.x),
+                                  static_cast<float>(mouse.position.y)});
+            }
+        }
+
+        const float viewX = getX();
+        const float viewY = getY();
+        const float viewW = getWidth();
+        const float viewH = getHeight();
+
+        // 功能栏几何（与 _drawFunctions 一致）。
+        const float pitch = 100.f;
+        const float barW = pitch * static_cast<float>(m_functions.size());
+        const float barH = 95.f;
+        const float barX = viewX + viewW * 0.5f - barW * 0.5f;
+        const float finalBarY = viewY + viewH - 90.f - barH;
+
+        for (const auto& ev : events)
+        {
+            if (ev.phase == brls::TouchPhase::START)
+            {
+                m_touchActive = true;
+                m_touchDragging = false;
+                m_dragTouchFinger = ev.id;
+                m_dragStartX = ev.x;
+                m_dragStartScrollX = m_scrollX;
+                m_dragStartGame = m_selectedGame;
+                m_dragFromCards = false;
+
+                // 功能栏命中（页面入场动画未结束时用最终位置近似）。
+                const float pageEased = m_pageEntrance >= 0.999f
+                    ? 1.f : easeOutBack(m_pageEntrance);
+                const float barY = finalBarY + (1.f - pageEased) *
+                    (viewY + viewH - finalBarY + 18.f);
+                if (ev.y >= barY && ev.y <= barY + barH &&
+                    ev.x >= barX && ev.x <= barX + barW)
+                {
+                    const int index = static_cast<int>(
+                        (ev.x - barX) / pitch);
+                    if (index >= 0 &&
+                        index < static_cast<int>(m_functions.size()))
+                    {
+                        if (!m_functionClickAnimating)
+                        {
+                            m_functionClickAnimating = true;
+                            m_functionClickIndex = index;
+                            m_functionClickTime = 0.f;
+                        }
+                        m_touchActive = false;
+                        continue;
+                    }
+                }
+
+                // 游戏卡片命中：仅选中，激活推迟到 END（区分点击/拖动）。
+                const float cardY = viewY + 115.f;
+                for (int i = 0; i < HOME_CARD_SLOTS; ++i)
+                {
+                    const float ix = viewX + CARD_START_X +
+                        static_cast<float>(i) * CARD_PITCH - m_scrollX;
+                    if (ev.x >= ix && ev.x <= ix + CARD_WIDTH &&
+                        ev.y >= cardY && ev.y <= cardY + CARD_HEIGHT)
+                    {
+                        if (static_cast<size_t>(i) < m_games.size())
+                            m_selectedGame = i;
+                        m_dragFromCards = true;
+                        break;
+                    }
+                }
+                if (!m_dragFromCards)
+                    m_touchActive = false;
+                continue;
+            }
+
+            if (ev.id != m_dragTouchFinger)
+                continue;
+
+            if (ev.phase == brls::TouchPhase::STAY)
+            {
+                if (m_dragFromCards && m_touchActive)
+                {
+                    const float dx = ev.x - m_dragStartX;
+                    if (!m_touchDragging && std::abs(dx) > 12.f)
+                        m_touchDragging = true;
+                    if (m_touchDragging)
+                    {
+                        float maxScroll = 0.f;
+                        const float contentRight = CARD_START_X +
+                            static_cast<float>(HOME_CARD_SLOTS - 1) *
+                            CARD_PITCH + CARD_WIDTH * 1.5f;
+                        maxScroll = std::max(0.f, contentRight - viewW);
+                        m_targetScrollX = std::max(0.f, std::min(
+                            maxScroll, m_dragStartScrollX - dx));
+                        m_snapScroll = false;
+                    }
+                }
+                continue;
+            }
+
+            if (ev.phase == brls::TouchPhase::END)
+            {
+                const float dx = ev.x - m_dragStartX;
+                if (m_dragFromCards && m_touchActive)
+                {
+                    if (!m_touchDragging)
+                    {
+                        // 点击：与手柄 A 一致，打开游戏选项。
+                        _activateCurrent();
+                    }
+                    else
+                    {
+                        // 拖动：按实际拖动距离计算翻页数。
+                        const int cards =
+                            static_cast<int>(std::lround(dx / CARD_PITCH));
+                        int target = m_dragStartGame + cards;
+                        const int maxIndex = static_cast<int>(
+                            std::min<size_t>(m_games.size(),
+                                             HOME_CARD_SLOTS)) - 1;
+                        target = std::max(0, std::min(target, maxIndex));
+                        m_selectedGame = target;
+                        m_snapScroll = true;
+                        _updateTargetScroll(viewW);
+                    }
+                }
+                m_touchActive = false;
+                m_touchDragging = false;
+                m_dragTouchFinger = -1;
+                m_dragFromCards = false;
+            }
+        }
+    }
+
     void SwitchLayout::_handleInput(float dt)
     {
         auto& state = brls::Application::getControllerState();
@@ -774,6 +939,18 @@ namespace beiklive
             m_pico8HoldActive || m_pico8ReleaseAnimating ||
             m_functionClickAnimating ||
             m_deleteWaiting || m_deleteCollapsing || m_reflowRunning) {
+            m_holdLeft = m_holdRight = 0.f;
+            m_repeatLeft = m_repeatRight = 0.f;
+            m_prevLeft = left;
+            m_prevRight = right;
+            m_prevUp = up;
+            m_prevDown = down;
+            m_prevA = a;
+            return;
+        }
+
+        // 触摸 / 鼠标指针按下或拖动期间屏蔽手柄导航，避免双输入冲突。
+        if (m_touchActive) {
             m_holdLeft = m_holdRight = 0.f;
             m_repeatLeft = m_repeatRight = 0.f;
             m_prevLeft = left;
