@@ -1402,7 +1402,7 @@ void DataManagementPage::init()
     Canvas::Tab scan;
     scan.title = L("扫描导入");
     scan.summary = L("为每个机型设置 ROM 扫描目录，点击开始扫描批量导入游戏库。");
-    scan.detail = L("目录下存在 logos 文件夹时，自动使用 logos 中与 ROM 同名的 PNG 作为封面；NDS/3DS/PSP 入库时始终提取内置图标与标题。");
+    scan.detail = L("NDS/3DS/PSP 入库时始终提取内置图标与标题。");
     scan.icon = material::SEARCH;
     scan.items.push_back({
         L("开始扫描"),
@@ -2328,8 +2328,6 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
         return 0;
     }
 
-    const std::string logosDir = (fs::path(absDir) / "logos").string();
-
     for (int i = 0; i < static_cast<int>(roms.size()); ++i)
     {
         const auto& romPath = roms[i];
@@ -2376,12 +2374,6 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
         }
         entry.savePath = savePath;
 
-        // logos 目录：与 ROM 同名的 PNG 作为封面（优先于内置图标与默认图）。
-        const std::string logoFile = (fs::path(logosDir) / (romStem + ".png")).string();
-        std::error_code lec;
-        if (fs::is_regular_file(logoFile, lec) && !lec)
-            entry.logoPath = logoFile;
-
         // NDS / 3DS / PSP：始终提取内置元数据（图标与名称）。
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP))
         {
@@ -2392,7 +2384,7 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
                 if (!realTitle.empty())
                     entry.title = realTitle;
             }
-            // ICON0：仅当封面仍是默认图（无 logos）时作为封面；提取始终执行。
+            // ICON0：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
             const std::string icon = beiklive::psp_meta::ExtractIcon0(path, savePath);
             if (!icon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
                 static_cast<beiklive::enums::EmuPlatform>(platform), path))
@@ -2400,7 +2392,7 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
         }
         else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
         {
-            // NDS 内置图标：提取始终执行（缓存）；仅无 logos 且封面为默认图时作为封面。
+            // NDS 内置图标：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
             const std::string ndsIcon = beiklive::GetOrCreateNdsIconPath(path);
             if (!ndsIcon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
                 static_cast<beiklive::enums::EmuPlatform>(platform), path))
@@ -2412,7 +2404,7 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
         }
         else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
         {
-            // 3DS 内置图标（SMDH）：提取始终执行（缓存）；仅无 logos 且封面为默认图时作为封面。
+            // 3DS 内置图标（SMDH）：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
             const std::string icon = beiklive::GetOrCreateThreeDsIconPath(path);
             if (!icon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
                 static_cast<beiklive::enums::EmuPlatform>(platform), path))
