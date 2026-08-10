@@ -39,6 +39,10 @@ namespace beiklive
         const FocusManager& focus() const { return m_focus; }
         void moveFocus(UIAction action);
         void resetFocusToFirst();
+        /// 覆盖当前焦点格的 LayoutItem（空格返回 nullptr）
+        LayoutItem* currentItem();
+        /// 焦点框是否可见（切换到底部功能区等场景时隐藏）
+        void setFocusVisible(bool visible) { m_focusVisible = visible; }
 
         /// 更新所有 Widget
         void update(float delta);
@@ -48,9 +52,12 @@ namespace beiklive
 
     private:
         void applyFocusChange(LayoutItem* oldFocus, LayoutItem* newFocus);
+        /// 卡片背景：阴影 + 边缘（参考 switch 布局游戏卡片）
+        void drawCard(NVGcontext* vg, const GridRect& rect, float radius);
 
         std::vector<LayoutItem> m_items;
         GridSystem m_grid;
         FocusManager m_focus;
+        bool m_focusVisible = true;
     };
 } // namespace beiklive

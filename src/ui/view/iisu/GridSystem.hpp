@@ -14,7 +14,7 @@ namespace beiklive
 
         float cellWidth = 160.f;
         float cellHeight = 160.f;
-        float gap = 12.f;
+        float gap = 20.f;
         float radius = 18.f;
 
         float x = 0.f; // 网格左上角像素坐标

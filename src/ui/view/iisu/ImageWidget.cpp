@@ -1,4 +1,4 @@
-#include "ImageWidget.hpp"
+﻿#include "ImageWidget.hpp"
 
 #include <algorithm>
 
@@ -42,13 +42,12 @@ namespace beiklive
                 m_textureId = m_textures->loadTexture(vg, m_path);
         }
 
-        constexpr float radius = 18.f;
-
+        
         if (m_textureId <= 0) {
             // 加载失败占位：灰色底
             nvgBeginPath(vg);
             nvgRoundedRect(vg, rect.left, rect.top,
-                           rect.width, rect.height, radius);
+                           rect.width, rect.height, m_radius);
             nvgFillColor(vg, nvgRGBA(80, 80, 80, 130));
             nvgFill(vg);
             return;
@@ -71,7 +70,7 @@ namespace beiklive
 
         nvgBeginPath(vg);
         nvgRoundedRect(vg, rect.left, rect.top,
-                       rect.width, rect.height, radius);
+                       rect.width, rect.height, m_radius);
         NVGpaint paint = nvgImagePattern(
             vg, drawX, drawY, drawW, drawH, 0.f, m_textureId, 1.f);
         nvgFillPaint(vg, paint);

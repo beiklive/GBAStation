@@ -50,6 +50,7 @@ namespace beiklive
         // 占位阶段：吞掉所有方向键/确认键，避免焦点泄漏到其他视图
         auto consume = [](brls::View*) -> bool { return true; };
         registerAction("", brls::BUTTON_A, consume, true, false, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_B, consume, true, false, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_UP, consume, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_DOWN, consume, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_LEFT, consume, true, true, brls::SOUND_NONE);
@@ -61,16 +62,40 @@ namespace beiklive
         registerAction("", brls::BUTTON_LB, consume, true, false, brls::SOUND_NONE);
         _captureInputState();
 
-        // Debug：多 Tile 管理验证（id / 位置 / 尺寸 / Widget）
+        // 主页面：GameCover（第一条游戏）+ 图片 + 平台文件夹（有游戏数据时）
+        std::string coverGameId;
+        std::vector<int> platforms;
+        if (beiklive::GameDB) {
+            const auto all = beiklive::GameDB->getAll();
+            if (!all.empty())
+                coverGameId = all.front().path;
+            for (const auto& entry : all) {
+                if (entry.platform <= 0)
+                    continue;
+                if (std::find(platforms.begin(), platforms.end(),
+                              entry.platform) == platforms.end())
+                    platforms.push_back(entry.platform);
+            }
+        }
+
+        std::vector<beiklive::FolderItemDescriptor> mainPage;
         const std::string logoPath = BK_RES("img/pico8_logo_vector.png");
-        m_uiContext.addItem({1, 0, 0, 2, 2,
-            WidgetFactory::createImage(logoPath)});
-        m_uiContext.addItem({2, 3, 0, 1, 1,
-            WidgetFactory::createColor(nvgRGBA(90, 200, 120, 255))});
-        m_uiContext.addItem({3, 4, 2, 2, 1,
-            WidgetFactory::createImage(
-                BK_RES("img/ui/light/GameList_64.png"))});
-        _layout().resetFocusToFirst();
+        if (coverGameId.empty())
+            mainPage.push_back({WidgetType::Image, "", logoPath,
+                                0, 0, 2, 2, true});
+        else
+            mainPage.push_back({WidgetType::GameCover, coverGameId, "",
+                                0, 0, 2, 2, true});
+        mainPage.push_back({WidgetType::Image, "", logoPath,
+                            2, 0, 1, 1, true});
+        mainPage.push_back({WidgetType::Image, "",
+                            BK_RES("img/ui/light/GameList_64.png"),
+                            2, 1, 1, 1, true});
+        for (size_t i = 0; i < std::min<size_t>(2, platforms.size()); ++i)
+            mainPage.push_back({WidgetType::Folder,
+                                "platform:" + std::to_string(platforms[i]),
+                                "", 4, static_cast<int>(i), 2, 1, true});
+        m_uiContext.setMainPage(mainPage);
     }
 
     IisuLayout::~IisuLayout()
@@ -209,6 +234,7 @@ namespace beiklive
         m_prevUp = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
         m_prevDown = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
         m_prevA = state.buttons[static_cast<int>(brls::BUTTON_A)];
+        m_prevB = state.buttons[static_cast<int>(brls::BUTTON_B)];
     }
 
     void IisuLayout::_handleInput(float dt)
@@ -225,6 +251,7 @@ namespace beiklive
         const bool up = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
         const bool down = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
         const bool a = state.buttons[static_cast<int>(brls::BUTTON_A)];
+        const bool b = state.buttons[static_cast<int>(brls::BUTTON_B)];
 
         if (!isFocused() || brls::Application::isInputBlocks() ||
             m_functionClickAnimating) {
@@ -235,6 +262,7 @@ namespace beiklive
             m_prevUp = up;
             m_prevDown = down;
             m_prevA = a;
+            m_prevB = b;
             return;
         }
 
@@ -247,6 +275,17 @@ namespace beiklive
         if (down && !m_prevDown)
             _moveDown();
 
+        if (b && !m_prevB) {
+            m_prevLeft = left;
+            m_prevRight = right;
+            m_prevUp = up;
+            m_prevDown = down;
+            m_prevA = a;
+            m_prevB = b;
+            _handleBack();
+            return;
+        }
+
         const bool activate = a && !m_prevA;
         if (activate) {
             m_prevLeft = left;
@@ -254,6 +293,7 @@ namespace beiklive
             m_prevUp = up;
             m_prevDown = down;
             m_prevA = a;
+            m_prevB = b;
             _activateCurrent();
             return;
         }
@@ -285,6 +325,7 @@ namespace beiklive
         m_prevUp = up;
         m_prevDown = down;
         m_prevA = a;
+        m_prevB = b;
     }
 
     void IisuLayout::_moveLeft()
@@ -312,14 +353,35 @@ namespace beiklive
         if (m_focusArea == FocusArea::FUNCTIONS) {
             m_focusArea = FocusArea::GRID;
             brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        } else if (m_focusArea == FocusArea::GRID) {
+            // 网格内先逐行上移
+            if (_layout().focus().cellY() > 0) {
+                _layout().moveFocus(UIAction::Up);
+                brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+            }
         }
     }
 
     void IisuLayout::_moveDown()
     {
         if (m_focusArea == FocusArea::GRID) {
-            m_focusArea = FocusArea::FUNCTIONS;
+            // 网格内先逐行下移，到最底行后才切到底部功能区
+            const int rows = _layout().grid().config().rows;
+            if (_layout().focus().cellY() < rows - 1) {
+                _layout().moveFocus(UIAction::Down);
+            } else {
+                m_focusArea = FocusArea::FUNCTIONS;
+            }
             brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        }
+    }
+
+    void IisuLayout::_handleBack()
+    {
+        // 文件夹子布局中按 B 返回上一级
+        if (m_focusArea == FocusArea::GRID && m_uiContext.isFolderOpen()) {
+            m_uiContext.closeFolder();
+            brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
         }
     }
 
@@ -335,7 +397,11 @@ namespace beiklive
     {
         brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
         if (m_focusArea == FocusArea::GRID) {
-            // 空 Tile 阶段：仅确认音效，后续由 GameCover/Folder 组件接管
+            // 交由 Widget 处理（FolderWidget 展开子布局）
+            if (auto* current = _layout().currentItem()) {
+                if (current->widget)
+                    current->widget->onActivate();
+            }
             return;
         }
         if (!m_functionClickAnimating) {
@@ -372,12 +438,13 @@ namespace beiklive
 
         const float cx = x + w * 0.5f;
 
-        // ── 顶部占位区：与底部功能区同高度，主体区域在两块之间 ─────────
-        constexpr float barH = 88.f;
+        // ── 顶部占位区：主体区域在顶部占位区与底部功能区之间 ─────────
+        constexpr float topBarH = 64.f;
+        constexpr float bottomBarH = 88.f; // 与 _drawFunctions 一致
         constexpr float barMargin = 10.f;
         const float topY = y + barMargin;
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, x + 12.f, topY, w - 24.f, barH, 16.f);
+        nvgRoundedRect(vg, x + 12.f, topY, w - 24.f, topBarH, 16.f);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 10));
         nvgFill(vg);
         nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 60));
@@ -385,24 +452,34 @@ namespace beiklive
         nvgStroke(vg);
 
         nvgFontFaceId(vg, m_fontId);
-        nvgFontSize(vg, 20.f);
+        nvgFontSize(vg, 13.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(190, 200, 218, 160));
-        nvgText(vg, cx, topY + barH * 0.5f,
+        nvgFillColor(vg, nvgRGBA(190, 200, 218, 140));
+        nvgText(vg, cx, topY + topBarH * 0.68f,
                 L("顶部功能区（占位）").c_str(), nullptr);
 
         // 当前聚焦信息：顶部占位区中间偏上，随聚焦动画淡入
         std::string focusInfo;
         float focusAlpha = 1.f;
         if (m_focusArea == FocusArea::GRID) {
-            if (auto* current = _layout().focus().current()) {
-                focusInfo = "#" + std::to_string(current->id) + " " +
+            // 文件夹子布局中显示文件夹名
+            if (m_uiContext.isFolderOpen()) {
+                const auto folder = m_uiContext.folderProvider().getFolder(
+                    m_uiContext.currentFolderId());
+                if (folder)
+                    focusInfo = "[" + folder->title + "] ";
+            }
+            if (auto* current = _layout().currentItem()) {
+                focusInfo += "#" + std::to_string(current->id) + " " +
                     std::to_string(current->w) + "x" +
                     std::to_string(current->h) + "@" +
                     std::to_string(current->x) + "," +
                     std::to_string(current->y);
             } else {
-                focusInfo = L("未选中");
+                // 空白格：显示单元格坐标
+                focusInfo += L("空格 ") + "(" +
+                    std::to_string(_layout().focus().cellX()) + "," +
+                    std::to_string(_layout().focus().cellY()) + ")";
             }
         } else if (!m_functions.empty()) {
             focusInfo =
@@ -413,20 +490,22 @@ namespace beiklive
                 : 1.f;
         }
         if (!focusInfo.empty()) {
-            nvgFontSize(vg, 26.f);
+            nvgFontSize(vg, 24.f);
             nvgFillColor(vg, nvgRGBA(242, 245, 251,
                 static_cast<unsigned char>(235.f * focusAlpha)));
-            nvgText(vg, cx, topY + barH * 0.34f,
+            nvgText(vg, cx, topY + topBarH * 0.30f,
                     focusInfo.c_str(), nullptr);
         }
 
         // ── 布局主体网格：顶部占位区与底部功能区之间 ────────────────────
         const float bodyX = x + 12.f;
-        const float bodyY = y + barMargin + barH;
+        const float bodyY = y + barMargin + topBarH;
         const float bodyW = w - 24.f;
-        const float bodyH = h - 2.f * (barMargin + barH);
+        const float bodyH = h - 2.f * barMargin - topBarH - bottomBarH;
         _layout().setArea(bodyX, bodyY, bodyW, bodyH);
         GridDebugRenderer::draw(vg, _layout().grid(), _layout().items());
+        // 焦点切到底部功能区时隐藏网格焦点框
+        _layout().setFocusVisible(m_focusArea == FocusArea::GRID);
         _layout().draw(vg, m_time);
 
         _drawFunctions(vg, x, y, w, h);

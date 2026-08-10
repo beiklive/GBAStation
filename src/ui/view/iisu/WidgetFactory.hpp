@@ -4,6 +4,8 @@
 #include <string>
 
 #include "ColorWidget.hpp"
+#include "FolderWidget.hpp"
+#include "GameCoverWidget.hpp"
 #include "ImageWidget.hpp"
 #include "Widget.hpp"
 
@@ -25,6 +27,18 @@ namespace beiklive
         static std::shared_ptr<Widget> createImage(std::string path)
         {
             return std::make_shared<ImageWidget>(std::move(path));
+        }
+
+        /// 游戏封面组件（gameId = 游戏文件路径，数据由 GameDataProvider 提供）
+        static std::shared_ptr<Widget> createGameCover(std::string gameId)
+        {
+            return std::make_shared<GameCoverWidget>(std::move(gameId));
+        }
+
+        /// 文件夹组件（folderId 由 FolderDataProvider 解析子布局）
+        static std::shared_ptr<Widget> createFolder(std::string folderId)
+        {
+            return std::make_shared<FolderWidget>(std::move(folderId));
         }
     };
 } // namespace beiklive

@@ -29,4 +29,5 @@ namespace beiklive::material
     constexpr char32_t CLOUD_UPLOAD       = 0xE2C6;
     constexpr char32_t CLOUD_DOWNLOAD     = 0xE2C4;
     constexpr char32_t PHOTO_LIBRARY      = 0xE413;
+    constexpr char32_t FOLDER             = 0xE2C7;
 }

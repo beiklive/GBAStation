@@ -1,94 +1,40 @@
 ﻿#include "FocusManager.hpp"
 
-#include <cmath>
-
 namespace beiklive
 {
-    LayoutItem* FocusManager::firstFocusable(
-        std::vector<LayoutItem>& items)
+    void FocusManager::setCell(int x, int y, int columns, int rows)
     {
-        for (auto& item : items)
-            if (item.visible && item.focusable)
-                return &item;
-        return nullptr;
+        m_cellX = x < 0 ? 0 : x;
+        m_cellY = y < 0 ? 0 : y;
+        if (columns > 0 && m_cellX >= columns)
+            m_cellX = columns - 1;
+        if (rows > 0 && m_cellY >= rows)
+            m_cellY = rows - 1;
     }
 
-    LayoutItem* FocusManager::findNearest(
-        std::vector<LayoutItem>& items, const LayoutItem* current,
-        int dx, int dy)
+    void FocusManager::moveLeft(int columns, int rows)
     {
-        if (!current || items.empty())
-            return nullptr;
-
-        LayoutItem* best = nullptr;
-        float bestScore = std::numeric_limits<float>::max();
-
-        const float curCx =
-            static_cast<float>(current->x) + current->w * 0.5f;
-        const float curCy =
-            static_cast<float>(current->y) + current->h * 0.5f;
-
-        for (auto& item : items) {
-            if (&item == current || !item.visible || !item.focusable)
-                continue;
-
-            const float cx = static_cast<float>(item.x) + item.w * 0.5f;
-            const float cy = static_cast<float>(item.y) + item.h * 0.5f;
-            const float vx = cx - curCx;
-            const float vy = cy - curCy;
-
-            // 必须位于目标方向上
-            if (dx != 0 && vx * static_cast<float>(dx) <= 0.f)
-                continue;
-            if (dy != 0 && vy * static_cast<float>(dy) <= 0.f)
-                continue;
-
-            // 主方向距离优先，垂直方向偏移作为惩罚
-            const float primary = dx != 0 ? std::abs(vx) : std::abs(vy);
-            const float secondary = dx != 0 ? std::abs(vy) : std::abs(vx);
-            const float score = primary + secondary * 2.f;
-            if (score < bestScore) {
-                best = &item;
-                bestScore = score;
-            }
-        }
-        return best;
+        if (columns <= 0)
+            return;
+        m_cellX = (m_cellX + columns - 1) % columns;
     }
 
-    LayoutItem* FocusManager::move(std::vector<LayoutItem>& items,
-                                   int dx, int dy)
+    void FocusManager::moveRight(int columns, int rows)
     {
-        if (LayoutItem* target = findNearest(items, m_focused, dx, dy))
-            m_focused = target;
-        else if (!m_focused)
-            m_focused = firstFocusable(items);
-        return m_focused;
+        if (columns <= 0)
+            return;
+        m_cellX = (m_cellX + 1) % columns;
     }
 
-    LayoutItem* FocusManager::moveLeft(std::vector<LayoutItem>& items)
+    void FocusManager::moveUp(int rows)
     {
-        return move(items, -1, 0);
+        if (m_cellY > 0)
+            --m_cellY;
     }
 
-    LayoutItem* FocusManager::moveRight(std::vector<LayoutItem>& items)
+    void FocusManager::moveDown(int rows)
     {
-        return move(items, 1, 0);
-    }
-
-    LayoutItem* FocusManager::moveUp(std::vector<LayoutItem>& items)
-    {
-        return move(items, 0, -1);
-    }
-
-    LayoutItem* FocusManager::moveDown(std::vector<LayoutItem>& items)
-    {
-        return move(items, 0, 1);
-    }
-
-    LayoutItem* FocusManager::resetToFirst(
-        std::vector<LayoutItem>& items)
-    {
-        m_focused = firstFocusable(items);
-        return m_focused;
+        if (m_cellY < rows - 1)
+            ++m_cellY;
     }
 } // namespace beiklive

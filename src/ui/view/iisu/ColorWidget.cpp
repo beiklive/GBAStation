@@ -1,4 +1,4 @@
-#include "ColorWidget.hpp"
+﻿#include "ColorWidget.hpp"
 
 #include "GridSystem.hpp"
 
@@ -17,7 +17,7 @@ namespace beiklive
         fill.a *= m_focused ? 0.92f : 0.55f;
 
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, rect.left, rect.top, rect.width, rect.height, 20.f);
+        nvgRoundedRect(vg, rect.left, rect.top, rect.width, rect.height, m_radius);
         nvgFillColor(vg, fill);
         nvgFill(vg);
 

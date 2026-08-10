@@ -28,11 +28,16 @@ namespace beiklive
         virtual void draw(NVGcontext* vg, const GridRect& rect) {}
         virtual void onFocus() {}
         virtual void onBlur() {}
+        /// 确认键激活（FolderWidget 展开子布局等）
+        virtual void onActivate() {}
 
         /// 注入资源管理器（由 UIContext 统一提供）
         void setTextureManager(TextureManager* manager) { m_textures = manager; }
+        /// 内部元素圆角（默认比格子圆角小一点，由 UIContext 设置）
+        void setCornerRadius(float radius) { m_radius = radius; }
 
     protected:
         TextureManager* m_textures = nullptr;
+        float m_radius = 14.f;
     };
 } // namespace beiklive

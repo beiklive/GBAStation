@@ -97,6 +97,7 @@ namespace beiklive
         bool m_prevUp = false;
         bool m_prevDown = false;
         bool m_prevA = false;
+        bool m_prevB = false;
         float m_holdLeft = 0.f;
         float m_holdRight = 0.f;
         float m_repeatLeft = 0.f;
@@ -108,6 +109,7 @@ namespace beiklive
         void _moveRight();
         void _moveUp();
         void _moveDown();
+        void _handleBack();
         void _moveFunctionHorizontal(int direction);
         void _activateCurrent();
         void _activateFunction(int index);
