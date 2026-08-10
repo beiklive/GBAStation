@@ -270,9 +270,9 @@ beiklive::enums::FileType platformToFileType(int platform)
             nvgSave(vg);
             nvgGlobalAlpha(vg, alpha);
 
-            // 遮罩
+            // 遮罩（底部留出 hint 栏）
             nvgBeginPath(vg);
-            nvgRect(vg, x, y, w, h);
+            nvgRect(vg, x, y, w, h - 56.f);
             nvgFillColor(vg, nvgRGBA(0, 0, 0,
                 static_cast<unsigned char>(205.f * alpha)));
             nvgFill(vg);
@@ -401,14 +401,6 @@ beiklive::enums::FileType platformToFileType(int platform)
                 nvgText(vg, rowX + rowW - 14.f, rowY + (rowH - 8.f) * 0.5f,
                         focused ? L("按 A 启动").c_str() : L("选择").c_str(), nullptr);
             }
-
-            // 底部提示
-            const float hintY = panelY + panelH - 18.f;
-            nvgFontSize(vg, 14.f);
-            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(165, 173, 186, 180));
-            nvgText(vg, panelX + panelW * 0.5f, hintY,
-                    L("A 确认  ·  B / START 取消").c_str(), nullptr);
 
             nvgRestore(vg);
         }
@@ -1454,12 +1446,16 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
     if (!m_platformPicker || m_platformPicker->isOpen())
         return;
     m_platformPicker->onPicked = [this, dirItem, previousPage](int platform) {
+        if (m_fileListPage)
+            m_fileListPage->setInteractionDisabled(false);
         if (platform < 0)
             return; // 取消
         beiklive::DirListData forced = dirItem;
         forced.itemType = platformToFileType(platform);
         _launchDirItem(forced, previousPage);
     };
+    if (m_fileListPage)
+        m_fileListPage->setInteractionDisabled(true);
     m_platformPicker->open(candidates, defaultIndex, dirItem.fileName);
 }
 

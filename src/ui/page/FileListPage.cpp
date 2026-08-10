@@ -1,6 +1,7 @@
 #include "FileListPage.hpp"
 #include "core/Translation.hpp"
 #include "ui/utils/AnimationHelper.hpp"
+#include "ui/widget/HintsBar.hpp"
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
@@ -139,6 +140,7 @@ namespace beiklive
 
         this->getContentBox()->setPadding(104.f, 32.f, 62.f, 32.f);
         this->getContentBox()->addView(mainRow);
+        this->getContentBox()->addView(new beiklive::HintsBar());
 
         this->showHeader(false);
         this->showFooter(false);
@@ -775,6 +777,11 @@ namespace beiklive
         m_closing = true;
         fileListView->setInteractionDisabled(true);
         invalidate();
+    }
+
+    void FileListPage::setInteractionDisabled(bool disabled)
+    {
+        fileListView->setInteractionDisabled(disabled);
     }
 
     void FileListPage::draw(NVGcontext* vg, float x, float y, float w, float h,

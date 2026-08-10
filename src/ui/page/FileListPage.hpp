@@ -82,6 +82,7 @@ namespace beiklive
         void setInitialFocusFilename(const std::string& filename);
         void setDirSelectionMode(bool on);
         void requestClose();
+        void setInteractionDisabled(bool disabled);
 
         std::function<void(beiklive::DirListData)> onFileSelected;
         std::function<void()> onRequestClose;
