@@ -9,6 +9,7 @@
 
 #include "../Layout.hpp"
 #include "../../../core/common.h"
+#include "Editor/LayoutEditor.hpp"
 #include "GridDebugRenderer.hpp"
 #include "UIContext.hpp"
 
@@ -82,6 +83,7 @@ namespace beiklive
         int m_fontId = -1;
 
         UIContext m_uiContext;
+        LayoutEditor m_editor;
 
         std::vector<FunctionItem> m_functions;
         std::vector<float> m_functionFocus;
@@ -100,6 +102,7 @@ namespace beiklive
         bool m_prevDown = false;
         bool m_prevA = false;
         bool m_prevB = false;
+        bool m_prevMinus = false;
         float m_holdLeft = 0.f;
         float m_holdRight = 0.f;
         float m_repeatLeft = 0.f;
@@ -112,6 +115,10 @@ namespace beiklive
         void _moveUp();
         void _moveDown();
         void _handleBack();
+        void _toggleEditMode();
+        void _exitEditMode();
+        void _handleEditInput(float dt);
+        void _applyEditShake();
         void _moveFunctionHorizontal(int direction);
         void _activateCurrent();
         void _activateFunction(int index);

@@ -17,6 +17,9 @@ namespace beiklive
 
         void draw(NVGcontext* vg, const GridRect& rect) override;
 
+        std::string typeName() const override { return "image"; }
+        std::string dataId() const override { return m_path; }
+
     private:
         std::string m_path;
         int m_textureId = 0;

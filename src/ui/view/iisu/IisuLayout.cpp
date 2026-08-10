@@ -32,7 +32,7 @@ namespace
 
 namespace beiklive
 {
-    IisuLayout::IisuLayout() : Layout()
+    IisuLayout::IisuLayout() : Layout(), m_editor(&m_uiContext.layout())
     {
         setFocusable(true);
         setHideHighlightBackground(true);
@@ -77,9 +77,17 @@ namespace beiklive
         registerAction("", brls::BUTTON_LEFT, consume, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_RIGHT, consume, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_LB, consume, true, false, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_RB, consume, true, false, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_LT, consume, true, false, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_RT, consume, true, false, brls::SOUND_NONE);
+        registerAction("", brls::BUTTON_X, consume, true, false, brls::SOUND_NONE);
         _captureInputState();
 
-        // 主页面：GameCover（第一条游戏）+ 图片 + 平台文件夹（有游戏数据时）
+        // 优先加载保存的布局 JSON，失败时回退默认演示布局
+        if (m_uiContext.loadMainPageFromFile("home.json"))
+            return;
+
+        // 默认布局：GameCover（第一条游戏）+ 图片 + LiveWidget + 平台文件夹
         std::string coverGameId;
         std::vector<int> platforms;
         if (beiklive::GameDB) {
@@ -238,11 +246,38 @@ namespace beiklive
             }
         }
 
+        m_uiContext.animations().update(dt);
+        _applyEditShake();
         m_uiContext.layout().update(dt);
         if (m_uiContext.isFolderOpen())
             m_uiContext.panelLayout().update(dt);
         _handleInput(dt);
         invalidate();
+    }
+
+    void IisuLayout::_applyEditShake()
+    {
+        auto& items = m_uiContext.layout().items();
+        if (m_editor.isActive()) {
+            // 编辑模式：所有 Widget 轻微抖动（被抬起的除外）
+            LayoutItem* lifted = m_editor.lifted();
+            for (auto& item : items) {
+                if (!item.visible || &item == lifted)
+                    continue;
+                const float phase =
+                    static_cast<float>(item.x * 7 + item.y * 13);
+                item.transform.offsetX =
+                    std::sin(m_time * 7.f + phase) * 1.2f;
+                item.transform.offsetY =
+                    std::cos(m_time * 7.f + phase) * 1.2f;
+            }
+        } else {
+            // 普通模式：偏移归零
+            for (auto& item : items) {
+                item.transform.offsetX = 0.f;
+                item.transform.offsetY = 0.f;
+            }
+        }
     }
 
     void IisuLayout::_captureInputState()
@@ -260,6 +295,8 @@ namespace beiklive
         m_prevDown = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
         m_prevA = state.buttons[static_cast<int>(brls::BUTTON_A)];
         m_prevB = state.buttons[static_cast<int>(brls::BUTTON_B)];
+        // Switch 减号键（Xbox BACK）映射到 BUTTON_BACK
+        m_prevMinus = state.buttons[static_cast<int>(brls::BUTTON_BACK)];
     }
 
     void IisuLayout::_handleInput(float dt)
@@ -277,6 +314,8 @@ namespace beiklive
         const bool down = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
         const bool a = state.buttons[static_cast<int>(brls::BUTTON_A)];
         const bool b = state.buttons[static_cast<int>(brls::BUTTON_B)];
+        // Switch 减号键（Xbox BACK）
+        const bool minus = state.buttons[static_cast<int>(brls::BUTTON_BACK)];
 
         if (!isFocused() || brls::Application::isInputBlocks() ||
             m_functionClickAnimating) {
@@ -288,6 +327,33 @@ namespace beiklive
             m_prevDown = down;
             m_prevA = a;
             m_prevB = b;
+            m_prevMinus = minus;
+            return;
+        }
+
+        // 键盘 - ：切换编辑模式
+        if (minus && !m_prevMinus) {
+            m_prevLeft = left;
+            m_prevRight = right;
+            m_prevUp = up;
+            m_prevDown = down;
+            m_prevA = a;
+            m_prevB = b;
+            m_prevMinus = minus;
+            _toggleEditMode();
+            return;
+        }
+
+        // 编辑模式：方向键移动焦点/抬起项，A 抬起放下，B 退出
+        if (m_editor.isActive()) {
+            _handleEditInput(dt);
+            m_prevLeft = left;
+            m_prevRight = right;
+            m_prevUp = up;
+            m_prevDown = down;
+            m_prevA = a;
+            m_prevB = b;
+            m_prevMinus = minus;
             return;
         }
 
@@ -351,6 +417,129 @@ namespace beiklive
         m_prevDown = down;
         m_prevA = a;
         m_prevB = b;
+        m_prevMinus = minus;
+    }
+
+    void IisuLayout::_toggleEditMode()
+    {
+        if (m_editor.isActive()) {
+            _exitEditMode();
+            return;
+        }
+        // 浮层打开时不进入编辑
+        if (m_uiContext.isFolderOpen())
+            return;
+        m_focusArea = FocusArea::GRID;
+        m_editor.enter();
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+    }
+
+    void IisuLayout::_exitEditMode()
+    {
+        if (!m_editor.isActive())
+            return;
+        m_editor.exit();
+        // 退出时静默保存布局
+        m_editor.save("home.json");
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+    }
+
+    void IisuLayout::_handleEditInput(float dt)
+    {
+        auto& state = brls::Application::getControllerState();
+        const float lx = state.axes[static_cast<int>(brls::LEFT_X)];
+        const float ly = state.axes[static_cast<int>(brls::LEFT_Y)];
+        const float rx = state.axes[static_cast<int>(brls::RIGHT_X)];
+        const float ry = state.axes[static_cast<int>(brls::RIGHT_Y)];
+        const float navX = std::abs(rx) > std::abs(lx) ? rx : lx;
+        const float navY = std::abs(ry) > std::abs(ly) ? ry : ly;
+        const bool left = state.buttons[static_cast<int>(brls::BUTTON_LEFT)] || navX < -0.5f;
+        const bool right = state.buttons[static_cast<int>(brls::BUTTON_RIGHT)] || navX > 0.5f;
+        const bool up = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
+        const bool down = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
+        const bool a = state.buttons[static_cast<int>(brls::BUTTON_A)];
+        const bool b = state.buttons[static_cast<int>(brls::BUTTON_B)];
+
+        auto blockedFeedback = [this](int dx, int dy) {
+            brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
+            _layout().setFocusShake(static_cast<float>(dx),
+                                    static_cast<float>(dy));
+        };
+
+        if (m_editor.isLifted()) {
+            // 抬起状态：方向键带着 Widget 移动
+            auto tryMove = [this, &blockedFeedback](int dx, int dy,
+                                                    bool rising) {
+                if (!rising)
+                    return;
+                if (m_editor.moveItem(dx, dy))
+                    brls::Application::getAudioPlayer()->play(
+                        brls::SOUND_FOCUS_CHANGE);
+                else
+                    blockedFeedback(dx, dy);
+            };
+            tryMove(-1, 0, left && !m_prevLeft);
+            tryMove(1, 0, right && !m_prevRight);
+            tryMove(0, -1, up && !m_prevUp);
+            tryMove(0, 1, down && !m_prevDown);
+
+            // 长按连发移动
+            auto repeat = [this, dt, &blockedFeedback](bool held, float& hold,
+                                                       float& timer, int dx) {
+                if (!held) {
+                    hold = 0.f;
+                    timer = 0.f;
+                    return;
+                }
+                hold += dt;
+                if (hold < HOLD_DELAY)
+                    return;
+                timer += dt;
+                if (timer >= HOLD_REPEAT) {
+                    timer = 0.f;
+                    if (m_editor.moveItem(dx, 0))
+                        brls::Application::getAudioPlayer()->play(
+                            brls::SOUND_FOCUS_CHANGE);
+                    else
+                        blockedFeedback(dx, 0);
+                }
+            };
+            repeat(left, m_holdLeft, m_repeatLeft, -1);
+            repeat(right, m_holdRight, m_repeatRight, 1);
+        } else {
+            // 未抬起：方向键移动焦点（不切功能区）
+            auto tryFocus = [this, &blockedFeedback](
+                                UIAction action, bool rising,
+                                int dx, int dy) {
+                if (!rising)
+                    return;
+                const int bx = _layout().focus().cellX();
+                const int by = _layout().focus().cellY();
+                _layout().moveFocus(action);
+                if (_layout().focus().cellX() == bx &&
+                    _layout().focus().cellY() == by)
+                    blockedFeedback(dx, dy);
+                else
+                    brls::Application::getAudioPlayer()->play(
+                        brls::SOUND_FOCUS_CHANGE);
+            };
+            tryFocus(UIAction::Left, left && !m_prevLeft, -1, 0);
+            tryFocus(UIAction::Right, right && !m_prevRight, 1, 0);
+            tryFocus(UIAction::Up, up && !m_prevUp, 0, -1);
+            tryFocus(UIAction::Down, down && !m_prevDown, 0, 1);
+        }
+
+        // A：抬起 / 放下当前 Widget
+        if (a && !m_prevA) {
+            if (m_editor.toggleLift())
+                brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+            else
+                brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
+        }
+
+        // B：退出编辑（触发静默保存）
+        if (b && !m_prevB)
+            _exitEditMode();
     }
 
     LayoutManager& IisuLayout::_activeLayout()
@@ -410,6 +599,7 @@ namespace beiklive
 
     void IisuLayout::_handleBack()
     {
+        // 编辑模式下 B 由 _handleEditInput 处理退出
         // 文件夹子布局中按 B 返回上一级
         if (m_focusArea == FocusArea::GRID && m_uiContext.isFolderOpen()) {
             m_uiContext.closeFolder();
@@ -540,6 +730,10 @@ namespace beiklive
         _layout().setFocusVisible(m_focusArea == FocusArea::GRID &&
                                   !m_uiContext.isFolderOpen());
         _layout().draw(vg, m_time);
+
+        // 编辑模式覆盖层
+        if (m_editor.isActive())
+            m_editor.draw(vg, m_fontId);
 
         // ── 文件夹浮层：悬浮在当前界面上 ────────────────────────────────
         if (m_uiContext.isFolderOpen()) {

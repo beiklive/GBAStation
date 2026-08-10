@@ -25,6 +25,9 @@ namespace beiklive
         void onFocus() override;
         void onBlur() override;
 
+        std::string typeName() const override { return "folder"; }
+        std::string dataId() const override { return m_folderId; }
+
         /// 激活回调（由 UIContext 注入：展开文件夹子布局）
         std::function<void()> onActivated;
 

@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "AnimationManager.hpp"
 #include "FolderDataProvider.hpp"
 #include "FolderWidget.hpp"
 #include "GameCoverWidget.hpp"
@@ -35,10 +36,16 @@ namespace beiklive
         GameDbFolderProvider& folderProvider() { return m_folderProvider; }
         const GameDbFolderProvider& folderProvider() const { return m_folderProvider; }
 
+        /// 动画系统
+        AnimationManager& animations() { return m_animations; }
+        const AnimationManager& animations() const { return m_animations; }
+
         void addItem(const LayoutItem& item);
 
         /// 主页面布局（根页面）
         void setMainPage(const std::vector<FolderItemDescriptor>& items);
+        /// 从 GBAStation/theme/iisu/<fileName> 加载主页面布局，成功返回 true
+        bool loadMainPageFromFile(const std::string& fileName);
         /// 打开文件夹浮层（悬浮显示子布局）
         void openFolder(const std::string& id);
         /// 关闭文件夹浮层
@@ -53,6 +60,7 @@ namespace beiklive
         TextureManager m_textures;
         GameDbProvider m_gameProvider;
         GameDbFolderProvider m_folderProvider;
+        AnimationManager m_animations;
         LayoutManager m_layout;
         LayoutManager m_panelLayout;
         bool m_folderOpen = false;

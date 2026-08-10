@@ -23,6 +23,9 @@ namespace beiklive
         void onFocus() override;
         void onBlur() override;
 
+        std::string typeName() const override { return "game_cover"; }
+        std::string dataId() const override { return m_gameId; }
+
     private:
         bool loadCover(NVGcontext* vg);
 

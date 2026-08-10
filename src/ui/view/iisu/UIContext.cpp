@@ -1,13 +1,25 @@
 #include "UIContext.hpp"
 
 #include <cmath>
+#include <fstream>
+
+#include <nlohmann/json.hpp>
 
 #include "WidgetFactory.hpp"
 
 namespace beiklive
 {
+    namespace
+    {
+        constexpr const char* LAYOUT_DIR = "GBAStation/theme/iisu";
+    } // namespace
+
     UIContext::UIContext()
     {
+        // 注入动画管理器
+        m_layout.setAnimationManager(&m_animations);
+        m_panelLayout.setAnimationManager(&m_animations);
+
         // 浮层面板网格：3 行 N 列，向右延伸，支持横向滚动
         auto& cfg = m_panelLayout.grid().config();
         cfg.rows = 3;
@@ -76,6 +88,77 @@ namespace beiklive
         for (const auto& desc : items)
             addItem(descriptorToItem(desc));
         m_layout.resetFocusToFirst();
+    }
+
+    bool UIContext::loadMainPageFromFile(const std::string& fileName)
+    {
+        const std::string path =
+            std::string(LAYOUT_DIR) + "/" + fileName;
+
+        std::ifstream in(path);
+        if (!in)
+            return false;
+
+        nlohmann::json root;
+        try {
+            in >> root;
+        } catch (...) {
+            return false;
+        }
+        if (!root.contains("items") || !root["items"].is_array())
+            return false;
+
+        // 网格参数（可选）
+        if (root.contains("grid") && root["grid"].is_object()) {
+            const auto& grid = root["grid"];
+            auto& cfg = m_layout.grid().config();
+            if (grid.contains("columns"))
+                cfg.columns = grid.value("columns", cfg.columns);
+            if (grid.contains("rows"))
+                cfg.rows = grid.value("rows", cfg.rows);
+            if (grid.contains("cell_width"))
+                cfg.cellWidth = grid.value("cell_width", cfg.cellWidth);
+            if (grid.contains("cell_height"))
+                cfg.cellHeight = grid.value("cell_height", cfg.cellHeight);
+            if (grid.contains("gap"))
+                cfg.gap = grid.value("gap", cfg.gap);
+        }
+
+        std::vector<FolderItemDescriptor> items;
+        for (const auto& j : root["items"]) {
+            if (!j.is_object())
+                continue;
+
+            FolderItemDescriptor desc;
+            const std::string type = j.value("type", "empty");
+            if (type == "game_cover")
+                desc.type = WidgetType::GameCover;
+            else if (type == "folder")
+                desc.type = WidgetType::Folder;
+            else if (type == "image")
+                desc.type = WidgetType::Image;
+            else if (type == "live")
+                desc.type = WidgetType::Live;
+            else
+                desc.type = WidgetType::Empty;
+
+            // 保存时 data_id 对 image 记录的是图片路径
+            const std::string dataId = j.value("data_id", "");
+            desc.id = dataId;
+            desc.path = dataId;
+
+            desc.x = j.value("x", 0);
+            desc.y = j.value("y", 0);
+            desc.w = j.value("w", 1);
+            desc.h = j.value("h", 1);
+            desc.focusable = j.value("focusable", true);
+            items.push_back(std::move(desc));
+        }
+        if (items.empty())
+            return false;
+
+        setMainPage(items);
+        return true;
     }
 
     void UIContext::openFolder(const std::string& id)

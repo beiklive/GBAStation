@@ -1,7 +1,10 @@
 #include "LayoutManager.hpp"
 
 #include <algorithm>
+#include <cmath>
 
+#include "AnimationManager.hpp"
+#include "Easing.hpp"
 #include "ui/utils/GradientFocus.hpp"
 #include "Widget.hpp"
 
@@ -24,8 +27,10 @@ namespace beiklive
     void LayoutManager::clear()
     {
         m_items.clear();
-        // 指针失效，重置焦点单元格
+        // 指针失效，重置焦点单元格并终止引用旧指针的动画
         m_focus.resetToFirst();
+        if (m_animations)
+            m_animations->clear();
     }
 
     void LayoutManager::applyFocusChange(LayoutItem* oldFocus,
@@ -33,10 +38,41 @@ namespace beiklive
     {
         if (oldFocus == newFocus)
             return;
-        if (oldFocus && oldFocus->widget)
-            oldFocus->widget->onBlur();
-        if (newFocus && newFocus->widget)
-            newFocus->widget->onFocus();
+        if (oldFocus) {
+            if (oldFocus->widget)
+                oldFocus->widget->onBlur();
+            animateItemScale(oldFocus, 1.f);
+        }
+        if (newFocus) {
+            if (newFocus->widget)
+                newFocus->widget->onFocus();
+            animateItemScale(newFocus, 1.04f);
+        }
+    }
+
+    void LayoutManager::animateItemScale(LayoutItem* item,
+                                         float targetScale)
+    {
+        if (!m_animations || !item)
+            return;
+        const float from = item->transform.scale;
+        if (std::abs(from - targetScale) < 0.001f)
+            return;
+        m_animations->add(Animation{
+            0.18f, 0.f,
+            [item, from, targetScale](float t) {
+                item->transform.scale =
+                    from + (targetScale - from) * easing::easeOutCubic(t);
+            },
+            nullptr, false});
+    }
+
+    void LayoutManager::setFocusShake(float dx, float dy)
+    {
+        m_focusShakeActive = true;
+        m_focusShakeTime = 0.f;
+        m_focusShakeDirX = dx;
+        m_focusShakeDirY = dy;
     }
 
     void LayoutManager::moveFocus(UIAction action)
@@ -146,6 +182,11 @@ namespace beiklive
 
     void LayoutManager::update(float delta)
     {
+        if (m_focusShakeActive) {
+            m_focusShakeTime += delta;
+            if (m_focusShakeTime >= 0.35f)
+                m_focusShakeActive = false;
+        }
         for (auto& item : m_items) {
             if (item.widget)
                 item.widget->update(delta);
@@ -196,6 +237,9 @@ namespace beiklive
             const GridRect rect = m_grid.getItemRect(item);
 
             if (item.widget) {
+                nvgSave(vg);
+                applyItemTransform(vg, item, rect);
+
                 // 设置过的格子：卡片背景（阴影 + 边缘）
                 drawCard(vg, rect, radius);
 
@@ -207,6 +251,8 @@ namespace beiklive
                 content.width -= inset * 2.f;
                 content.height -= inset * 2.f;
                 item.widget->draw(vg, content);
+
+                nvgRestore(vg);
             }
         }
 
@@ -216,17 +262,50 @@ namespace beiklive
             const GridRect focusRect = focused
                 ? m_grid.getItemRect(*focused)
                 : m_grid.getItemRect(m_focus.cellX(), m_focus.cellY(), 1, 1);
-            const float fx = focusRect.left + inset;
-            const float fy = focusRect.top + inset;
+
+            // 移动被阻挡时向移动方向抖动
+            float shakeX = 0.f;
+            float shakeY = 0.f;
+            if (m_focusShakeActive) {
+                const float k = 1.f - m_focusShakeTime / 0.35f;
+                const float s = std::sin(m_focusShakeTime * 60.f) * k * 6.f;
+                shakeX = m_focusShakeDirX * s;
+                shakeY = m_focusShakeDirY * s;
+            }
+
+            const float fx = focusRect.left + inset + shakeX;
+            const float fy = focusRect.top + inset + shakeY;
             const float fw = focusRect.width - inset * 2.f;
             const float fh = focusRect.height - inset * 2.f;
             if (fw > 0.f && fh > 0.f) {
+                nvgSave(vg);
+                if (focused)
+                    applyItemTransform(vg, *focused, focusRect);
                 // 焦点框圆角比卡片/内容小
                 beiklive::ui::drawGradientFocusBorder(
                     vg, fx, fy, fw, fh,
                     12.f, 5.f, 1.f,
                     beiklive::ui::gradientFocusAnimationOffset(time));
+                nvgRestore(vg);
             }
         }
+    }
+
+    void LayoutManager::applyItemTransform(NVGcontext* vg,
+                                           const LayoutItem& item,
+                                           const GridRect& rect) const
+    {
+        const Transform& tf = item.transform;
+        if (tf.scale != 1.f) {
+            const float cx = rect.left + rect.width * 0.5f;
+            const float cy = rect.top + rect.height * 0.5f;
+            nvgTranslate(vg, cx, cy);
+            nvgScale(vg, tf.scale, tf.scale);
+            nvgTranslate(vg, -cx, -cy);
+        }
+        if (tf.offsetX != 0.f || tf.offsetY != 0.f)
+            nvgTranslate(vg, tf.offsetX, tf.offsetY);
+        if (tf.alpha < 1.f)
+            nvgGlobalAlpha(vg, tf.alpha);
     }
 } // namespace beiklive

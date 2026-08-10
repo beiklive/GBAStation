@@ -36,6 +36,11 @@ namespace beiklive
         /// 内部元素圆角（默认比格子圆角小一点，由 UIContext 设置）
         void setCornerRadius(float radius) { m_radius = radius; }
 
+        /// 组件类型标识（布局 JSON 用）
+        virtual std::string typeName() const { return "empty"; }
+        /// 组件数据标识（gameId / folderId / 图片路径 / live widgetId）
+        virtual std::string dataId() const { return {}; }
+
     protected:
         TextureManager* m_textures = nullptr;
         float m_radius = 14.f;

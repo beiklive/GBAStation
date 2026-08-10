@@ -14,6 +14,8 @@ namespace beiklive
         void onFocus() override;
         void onBlur() override;
 
+        std::string typeName() const override { return "color"; }
+
     private:
         NVGcolor m_color;
         bool m_focused = false;

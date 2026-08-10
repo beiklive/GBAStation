@@ -18,6 +18,9 @@ namespace beiklive
 
         void update(float delta) override;
 
+        std::string typeName() const override { return "live"; }
+        std::string dataId() const override { return m_widgetId; }
+
     protected:
         std::string m_widgetId;
         std::shared_ptr<LiveDataProvider> m_provider;
