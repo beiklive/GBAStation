@@ -3,6 +3,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <vector>
 #include "core/common.h"
 #include "ui/view/SwitchLayout.hpp"
 #include "ui/view/IisuLayout.hpp"
@@ -19,6 +20,8 @@
 namespace beiklive
 {
     class HomeShortcutSettingsOverlay;
+    class PlatformPickerOverlay;
+
 
     class StartPage : public beiklive::Box
     {
@@ -46,6 +49,14 @@ namespace beiklive
         bool _pushGameActivity(const beiklive::GameEntry& entry,
                                beiklive::Box* previousPage);
         void _pushGameActivity(const beiklive::DirListData& dirItem, beiklive::Box* previousPage);
+        // 按机种启动文件列表条目（无歧义判定，供弹窗选择后调用）。
+        void _launchDirItem(const beiklive::DirListData& dirItem, beiklive::Box* previousPage);
+        // 歧义后缀弹窗：列出候选机种供选择。
+        void _showPlatformPicker(const beiklive::DirListData& dirItem,
+                                 beiklive::Box* previousPage,
+                                 const std::vector<int>& candidates,
+                                 int defaultIndex);
+
 
         /// 显示游戏选项侧边栏
         void _showGameOptionsPanel(const beiklive::GameEntry& entry);
@@ -58,6 +69,8 @@ namespace beiklive
         beiklive::SwitchLayout* switchLayout = nullptr;
         beiklive::IisuLayout* iisuLayout = nullptr;
         beiklive::HomeShortcutSettingsOverlay* m_shortcutSettingsOverlay = nullptr;
+        beiklive::PlatformPickerOverlay* m_platformPicker = nullptr;
+
         beiklive::Box* m_gamePage = nullptr;
         beiklive::GameOptionsSidebar* m_gameOptionsSidebar = nullptr;
         std::atomic<bool> m_alive{true};

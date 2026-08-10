@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <string>
 #include <fstream>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -30,6 +31,7 @@ int platformFromFileType(beiklive::enums::FileType type);
 
 // 根据真实文件路径判断游戏平台；会对 ZIP/7Z 做内容检测。
 int detectGamePlatform(const fs::path& path);
+std::vector<int> candidatePlatformsForExtension(const std::string& ext);
 
 // 传入文件路径，提取文件名（包含扩展名）
 std::string getFileName(const fs::path& path);
