@@ -797,6 +797,34 @@ namespace beiklive
         return cachePath;
     }
 
+    // 提取 NDS ROM header 的游戏名（偏移 0x60 起 12 字节 ASCII）。
+    std::string ExtractNdsHeaderTitle(const std::string& romPath)
+    {
+        if (romPath.empty())
+            return "";
+        std::ifstream in(romPath, std::ios::binary);
+        if (!in)
+            return "";
+        char title[12] = {};
+        in.seekg(0x60, std::ios::beg);
+        if (!in.read(title, sizeof(title)))
+            return "";
+        std::string out;
+        out.reserve(sizeof(title));
+        for (char c : title)
+        {
+            if (c == '\0' || static_cast<unsigned char>(c) < 0x20)
+                break;
+            out.push_back(c);
+        }
+        // 全空则视为无标题。
+        bool any = false;
+        for (char c : out)
+            if (c != ' ')
+                any = true;
+        return any ? out : "";
+    }
+
     /// 将金手指列表以 RetroArch .cht 格式写入文件。
     /// 返回 true 表示成功。
     bool saveChtFile(const std::string &path,

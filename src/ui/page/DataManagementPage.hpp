@@ -26,6 +26,8 @@ namespace beiklive
         void draw(NVGcontext* vg, float x, float y, float w, float h,
                   brls::Style style, brls::FrameContext* ctx) override;
 
+        friend class ScanProgressDialogView;
+
     private:
         enum class ProgressTask
         {
@@ -34,29 +36,25 @@ namespace beiklive
         };
 
         brls::View* m_mainCanvas = nullptr;
-        brls::View* m_scanDefaultFocus = nullptr;
         brls::View* m_bundleDefaultFocus = nullptr;
         brls::View* m_processDefaultFocus = nullptr;
         brls::View* m_focusBeforeModal = nullptr;
 
-        brls::Box* m_progressOverlay = nullptr;
-        brls::Label* m_progressTitleLabel = nullptr;
-        brls::Label* m_progressCountLabel = nullptr;
-        brls::Label* m_progressNameLabel = nullptr;
-        brls::Rectangle* m_progressBar = nullptr;
-
         bool m_autoSubDir = true;
         bool m_useNameMapping = true;
-        bool m_scanGBA = true;
-        bool m_scanGBC = true;
-        bool m_scanGB = true;
-        bool m_scanNES = true;
-        bool m_scanSNES = true;
-        bool m_scanNDS = true;
-        bool m_scan3DS = true;
-        bool m_scanGenesis = true;
-        bool m_scanArcade = true;
-        bool m_scanDreamcast = true;
+        // 各机型的 ROM 扫描目录（空 = 不扫描该机型），持久化到配置 scan.path.*
+        std::string m_scanPathNES;
+        std::string m_scanPathSNES;
+        std::string m_scanPathGB;
+        std::string m_scanPathGBC;
+        std::string m_scanPathGBA;
+        std::string m_scanPathNDS;
+        std::string m_scanPath3DS;
+        std::string m_scanPathArcade;
+        std::string m_scanPathDC;
+        std::string m_scanPathGenesis;
+        std::string m_scanPathPSP;
+        int m_scanTabIndex = 1; // Canvas 标签页顺序：bundle=0, scan=1, process=2
 
         std::thread m_importThread;
         std::atomic<bool> m_importing{false};
@@ -73,21 +71,17 @@ namespace beiklive
         bool m_completionShown = false;
         ProgressTask m_progressTask = ProgressTask::Import;
 
-        brls::View* buildScanImportTab();
         brls::View* buildBundleImportTab();
         brls::View* buildDataProcessingTab();
-        void setupProgressOverlay();
-        void showProgressOverlay();
-        void hideProgressOverlay();
         void rememberFocusBeforeModal();
         void restoreFocusAfterModal();
         brls::View* getFallbackFocus();
         void init();
-        void resetProgressUi(const std::string& title);
         void onSelectLpl(int platform);
         void startImport(const std::string& lplPath, int platform);
-        void selectRomDir();
-        void startDirImport(const std::string& dirPath);
+        void startScanAll();
+        void pickScanDir(int platformIndex);
+        void refreshScanTab();
         void removeInvalidGames();
         void clearGameLibrary();
         void startWebService();
@@ -95,6 +89,12 @@ namespace beiklive
         void updateProgressName(const std::string& name);
         void setErrorMessage(const std::string& msg);
         void finishWorker();
+        void showProgressDialog();
+        std::string scanPathFor(int platformIndex) const;
+        void setScanPath(int platformIndex, const std::string& path);
+        int scanOnePlatform(const std::string& dirPath, int platform,
+                            const std::vector<std::string>& exts,
+                            int startIndex);
     };
 
 } // namespace beiklive

@@ -466,6 +466,7 @@ namespace beiklive // 函数声明
     std::string GetGameLogoLayerPath(int platform); // 获取平台默认封面图路径（如 GBA 的默认封面图）
     std::string GetNdsIconCachePath(const std::string& romPath); // 获取 NDS ROM 内置图标的缓存 PNG 路径
     std::string GetOrCreateNdsIconPath(const std::string& romPath); // 提取/读取 NDS ROM 内置图标缓存，失败返回空字符串
+    std::string ExtractNdsHeaderTitle(const std::string& romPath); // 提取 NDS ROM header（0x60 起 12 字节）的游戏名，失败返回空
 
     // GB/GBC 配色预设列表
     inline const std::vector<std::string>& GetGbColorPresets()

@@ -197,6 +197,19 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_DISPLAY_OVERLAY_DC_PATH ="display.overlay.dcPath"; ///< 全局 DC 遮罩 PNG 路径
     constexpr const char *KEY_DISPLAY_OVERLAY_PSP_PATH ="display.overlay.pspPath"; ///< 全局 PSP 遮罩 PNG 路径
 
+    // 扫描导入：各机型的 ROM 扫描目录（空 = 不扫描该机型）
+    constexpr const char *KEY_SCAN_PATH_NES    ="scan.path.nes";
+    constexpr const char *KEY_SCAN_PATH_SNES   ="scan.path.sfc";
+    constexpr const char *KEY_SCAN_PATH_GB     ="scan.path.gb";
+    constexpr const char *KEY_SCAN_PATH_GBC    ="scan.path.gbc";
+    constexpr const char *KEY_SCAN_PATH_GBA    ="scan.path.gba";
+    constexpr const char *KEY_SCAN_PATH_NDS    ="scan.path.nds";
+    constexpr const char *KEY_SCAN_PATH_3DS    ="scan.path.3ds";
+    constexpr const char *KEY_SCAN_PATH_ARCADE ="scan.path.arcade";
+    constexpr const char *KEY_SCAN_PATH_DC     ="scan.path.dc";
+    constexpr const char *KEY_SCAN_PATH_GENESIS="scan.path.md";
+    constexpr const char *KEY_SCAN_PATH_PSP    ="scan.path.psp";
+
     // 着色器设置（全局默认）
     constexpr const char *KEY_DISPLAY_SHADER_ENABLED   ="display.shaderEnabled";   ///< 着色器总开关（true=启用）
     constexpr const char *KEY_DISPLAY_SHADER_PATH      ="display.shader";          ///< 着色器预设路径（.glslp）
