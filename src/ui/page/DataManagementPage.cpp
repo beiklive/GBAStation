@@ -1125,7 +1125,8 @@ private:
         const float titleY = m_itemHeight > 80.f ? r.y + r.h * 0.39f
                                                  : r.y + r.h * 0.43f;
         nvgText(vg, textX, titleY, item.title.c_str(), nullptr);
-        if (m_itemHeight > 68.f)
+        // 62px 行高（条目较多的扫描页）也显示描述行（如机型扫描路径）。
+        if (m_itemHeight > 52.f)
         {
             nvgFontSize(vg, 14.f);
             nvgFillColor(vg, nvgRGBA(205, 212, 223, focused ? 215 : 165));
@@ -2238,6 +2239,7 @@ void DataManagementPage::startScanAll()
             std::string dir = scanPathFor(static_cast<int>(i));
             if (dir.empty())
                 continue;
+            dir = fs::absolute(dir).string(); // 归一化为绝对路径
             Planned p;
             p.dir = dir;
             p.platform = kScanPlatforms[i].platform;
@@ -2291,12 +2293,14 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
                                         const std::vector<std::string>& exts,
                                         int startIndex)
 {
+    // 归一化为绝对路径：配置里可能是相对路径（依赖工作目录），统一解析。
+    const fs::path absDir = fs::absolute(dirPath);
     std::vector<fs::path> roms;
     try
     {
         if (m_autoSubDir)
         {
-            for (auto& entry : fs::recursive_directory_iterator(dirPath))
+            for (auto& entry : fs::recursive_directory_iterator(absDir))
             {
                 if (!entry.is_regular_file())
                     continue;
@@ -2307,7 +2311,7 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
         }
         else
         {
-            for (auto& entry : fs::directory_iterator(dirPath))
+            for (auto& entry : fs::directory_iterator(absDir))
             {
                 if (!entry.is_regular_file())
                     continue;
@@ -2324,7 +2328,7 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
         return 0;
     }
 
-    const std::string logosDir = (fs::path(dirPath) / "logos").string();
+    const std::string logosDir = (fs::path(absDir) / "logos").string();
 
     for (int i = 0; i < static_cast<int>(roms.size()); ++i)
     {
