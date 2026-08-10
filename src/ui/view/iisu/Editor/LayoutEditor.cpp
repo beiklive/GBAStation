@@ -155,41 +155,5 @@ namespace beiklive
                 nvgStroke(vg);
             }
         }
-
-        // 选中 Tile：强调边框 + [WxH] 角标
-        LayoutItem* item = m_layout->currentItem();
-        if (!item)
-            return;
-        const GridRect rect = m_layout->grid().getItemRect(*item);
-
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, rect.left - 2.f, rect.top - 2.f,
-                       rect.width + 4.f, rect.height + 4.f,
-                       cfg.radius + 2.f);
-        nvgStrokeColor(vg, nvgRGBA(255, 196, 90, 235));
-        nvgStrokeWidth(vg, 3.f);
-        nvgStroke(vg);
-
-        if (fontId >= 0) {
-            const std::string badge =
-                std::to_string(item->w) + "x" + std::to_string(item->h);
-            nvgFontFaceId(vg, fontId);
-            nvgFontSize(vg, 16.f);
-            float bounds[4]{};
-            nvgTextBounds(vg, 0.f, 0.f, badge.c_str(), nullptr, bounds);
-            const float bw = (bounds[2] - bounds[0]) + 16.f;
-            constexpr float bh = 22.f;
-            const float bx = rect.left - 2.f;
-            const float by = rect.top - 2.f - bh;
-
-            nvgBeginPath(vg);
-            nvgRoundedRect(vg, bx, by, bw, bh, 6.f);
-            nvgFillColor(vg, nvgRGBA(255, 176, 60, 235));
-            nvgFill(vg);
-            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(20, 16, 8, 235));
-            nvgText(vg, bx + bw * 0.5f, by + bh * 0.5f,
-                    badge.c_str(), nullptr);
-        }
     }
 } // namespace beiklive
