@@ -529,6 +529,20 @@ beiklive::enums::FileType platformToFileType(int platform)
             auto toggle = [this](brls::View*) -> bool {
                 if (!m_open || m_closing)
                     return m_open;
+                // iisu 模式：按钮列表（布局调整 / 卡片设置）
+                if (m_showLayoutButtons) {
+                    brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+                    if (m_selectedRow == 0) {
+                        if (onLayoutEditRequested)
+                            onLayoutEditRequested();
+                    } else {
+                        if (onCardSettingsRequested)
+                            onCardSettingsRequested();
+                    }
+                    close();
+                    return true;
+                }
+                // switch 模式：PICO-8 入口显示切换
                 m_pico8Visible = !m_pico8Visible;
                 m_press = 1.f;
                 brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
@@ -544,14 +558,22 @@ beiklive::enums::FileType platformToFileType(int platform)
                 close();
                 return true;
             };
+            auto rowMove = [this](int dir) -> bool {
+                if (!m_open || m_closing || !m_showLayoutButtons)
+                    return m_open;
+                m_selectedRow = (m_selectedRow + dir + 2) % 2;
+                brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+                invalidate();
+                return true;
+            };
 
-            registerAction(L("切换"), brls::BUTTON_A, toggle, false, false, brls::SOUND_NONE);
+            registerAction(L("选择"), brls::BUTTON_A, toggle, false, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_LEFT, consume, true, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_RIGHT, consume, true, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_LEFT, consume, true, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_RIGHT, consume, true, false, brls::SOUND_NONE);
-            registerAction("", brls::BUTTON_UP, consume, true, false, brls::SOUND_NONE);
-            registerAction("", brls::BUTTON_DOWN, consume, true, false, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_UP, [rowMove](brls::View*) { return rowMove(-1); }, true, true, brls::SOUND_NONE);
+            registerAction("", brls::BUTTON_DOWN, [rowMove](brls::View*) { return rowMove(1); }, true, true, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_UP, consume, true, false, brls::SOUND_NONE);
             registerAction("", brls::BUTTON_NAV_DOWN, consume, true, false, brls::SOUND_NONE);
             registerAction(L("返回"), brls::BUTTON_B, closeAction, false, false, brls::SOUND_NONE);
@@ -655,14 +677,66 @@ beiklive::enums::FileType platformToFileType(int platform)
             nvgText(vg, panelX + 84.f, panelY + 50.f, L("首页功能").c_str(), nullptr);
             nvgFontSize(vg, 15.f);
             nvgFillColor(vg, nvgRGBA(192, 201, 215, 190));
+            const std::string subtitle =
+                m_showLayoutButtons ? L("布局与卡片设置")
+                                    : L("首页快捷按键显示设置");
             nvgText(vg, panelX + 35.f, panelY + 83.f,
-                    L("首页快捷按键显示设置").c_str(), nullptr);
+                    subtitle.c_str(), nullptr);
 
-            const float rowX = panelX + 28.f;
-            const float rowY = panelY + 124.f;
-            const float rowW = panelW - 56.f;
-            const float rowH = 78.f;
-            if (m_showPico8Option) {
+            if (m_showLayoutButtons) {
+                // iisu 模式：按钮列表（布局调整 / 卡片设置）
+                const float rowX = panelX + 28.f;
+                const float rowW = panelW - 56.f;
+                constexpr float rowH = 64.f;
+                constexpr float rowGap = 12.f;
+                const float rowsY = panelY + 108.f;
+                const std::string icons[2] = {
+                    _utf8(beiklive::material::EDIT),
+                    _utf8(beiklive::material::SETTINGS),
+                };
+                const char* labels[2] = {
+                    L("布局调整").c_str(),
+                    L("卡片设置").c_str(),
+                };
+                for (int i = 0; i < 2; ++i) {
+                    const bool selected = m_selectedRow == i;
+                    const float ry = rowsY + static_cast<float>(i) * (rowH + rowGap);
+                    const float rowScale = 1.f - (selected ? m_press : 0.f) * 0.018f;
+                    nvgSave(vg);
+                    nvgTranslate(vg, rowX + rowW * 0.5f, ry + rowH * 0.5f);
+                    nvgScale(vg, rowScale, rowScale);
+                    nvgTranslate(vg, -(rowX + rowW * 0.5f), -(ry + rowH * 0.5f));
+                    nvgBeginPath(vg);
+                    nvgRoundedRect(vg, rowX, ry, rowW, rowH, 12.f);
+                    nvgFillColor(vg, selected
+                        ? nvgRGBA(91, 193, 255, 220)
+                        : nvgRGBA(255, 255, 255, 14));
+                    nvgFill(vg);
+                    nvgStrokeColor(vg, selected
+                        ? nvgRGBA(168, 224, 255, 230)
+                        : nvgRGBA(255, 255, 255, 45));
+                    nvgStrokeWidth(vg, 1.f);
+                    nvgStroke(vg);
+                    nvgFontFaceId(vg, m_materialFont);
+                    nvgFontSize(vg, 30.f);
+                    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+                    nvgFillColor(vg, selected
+                        ? nvgRGBA(18, 24, 34, 245)
+                        : nvgRGBA(96, 195, 255, 235));
+                    nvgText(vg, rowX + 22.f, ry + rowH * 0.5f, icons[i].c_str(), nullptr);
+                    nvgFontFaceId(vg, m_defaultFont);
+                    nvgFontSize(vg, 22.f);
+                    nvgFillColor(vg, selected
+                        ? nvgRGBA(18, 24, 34, 245)
+                        : nvgRGBA(242, 245, 250, 242));
+                    nvgText(vg, rowX + 68.f, ry + rowH * 0.5f, labels[i], nullptr);
+                    nvgRestore(vg);
+                }
+            } else if (m_showPico8Option) {
+                const float rowX = panelX + 28.f;
+                const float rowY = panelY + 124.f;
+                const float rowW = panelW - 56.f;
+                const float rowH = 78.f;
                 const float rowScale = 1.f - m_press * 0.018f;
                 nvgSave(vg);
                 nvgTranslate(vg, rowX + rowW * 0.5f, rowY + rowH * 0.5f);
@@ -691,15 +765,20 @@ beiklive::enums::FileType platformToFileType(int platform)
             }
 
             float cursor = panelX + panelW - 30.f;
+            const std::string hintA = m_showLayoutButtons ? L("选择") : L("切换");
             _drawHint(vg, brls::BUTTON_START, L("关闭").c_str(), cursor, panelY + panelH - 27.f, alpha);
             _drawHint(vg, brls::BUTTON_B, L("返回").c_str(), cursor, panelY + panelH - 27.f, alpha);
-            _drawHint(vg, brls::BUTTON_A, L("切换").c_str(), cursor, panelY + panelH - 27.f, alpha);
+            _drawHint(vg, brls::BUTTON_A, hintA.c_str(),
+                      cursor, panelY + panelH - 27.f, alpha);
         }
 
         std::function<void(bool)> onPico8VisibleChanged;
         std::function<void()> onClosed;
+        std::function<void()> onLayoutEditRequested;
+        std::function<void()> onCardSettingsRequested;
 
         void setShowPico8Option(bool show) { m_showPico8Option = show; }
+        void setShowLayoutButtons(bool show) { m_showLayoutButtons = show; }
 
     private:
         static float _clamp01(float value)
@@ -796,6 +875,8 @@ beiklive::enums::FileType platformToFileType(int platform)
         bool m_closing = false;
         bool m_pico8Visible = true;
         bool m_showPico8Option = true;
+        bool m_showLayoutButtons = false;
+        int m_selectedRow = 0;
         float m_progress = 0.f;
         float m_press = 0.f;
         int m_defaultFont = -1;
@@ -1695,6 +1776,15 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
         this->getContentBox()->addView(iisuLayout);
         m_shortcutSettingsOverlay = new HomeShortcutSettingsOverlay();
         m_shortcutSettingsOverlay->setShowPico8Option(false);
+        m_shortcutSettingsOverlay->setShowLayoutButtons(true);
+        m_shortcutSettingsOverlay->onLayoutEditRequested = [this]() {
+            if (iisuLayout)
+                iisuLayout->enterEditMode();
+        };
+        m_shortcutSettingsOverlay->onCardSettingsRequested = [this]() {
+            if (iisuLayout)
+                iisuLayout->requestCardSettings();
+        };
         m_shortcutSettingsOverlay->onPico8VisibleChanged = [this](bool visible) {
             SET_SETTING_KEY_INT(
                 beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE,

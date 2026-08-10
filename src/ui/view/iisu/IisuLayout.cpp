@@ -331,7 +331,7 @@ namespace beiklive
             return;
         }
 
-        // 键盘 - ：切换编辑模式
+        // 键盘 - 或手柄减号（BUTTON_BACK）：切换编辑模式
         if (minus && !m_prevMinus) {
             m_prevLeft = left;
             m_prevRight = right;
@@ -341,6 +341,33 @@ namespace beiklive
             m_prevB = b;
             m_prevMinus = minus;
             _toggleEditMode();
+            return;
+        }
+
+        // 卡片操作浮层：独占输入
+        if (m_cardPanelOpen) {
+            _handleCardPanelInput(dt);
+            m_prevLeft = left;
+            m_prevRight = right;
+            m_prevUp = up;
+            m_prevDown = down;
+            m_prevA = a;
+            m_prevB = b;
+            m_prevMinus = minus;
+            return;
+        }
+
+        // 卡片编辑占位面板：仅 B 返回
+        if (m_cardEditOpen) {
+            if (b && !m_prevB)
+                _closeCardEditPanel();
+            m_prevLeft = left;
+            m_prevRight = right;
+            m_prevUp = up;
+            m_prevDown = down;
+            m_prevA = a;
+            m_prevB = b;
+            m_prevMinus = minus;
             return;
         }
 
@@ -427,7 +454,7 @@ namespace beiklive
             return;
         }
         // 浮层打开时不进入编辑
-        if (m_uiContext.isFolderOpen())
+        if (m_uiContext.isFolderOpen() || m_cardPanelOpen || m_cardEditOpen)
             return;
         m_focusArea = FocusArea::GRID;
         m_editor.enter();
@@ -615,14 +642,331 @@ namespace beiklive
         m_selectedFunction = (m_selectedFunction + direction + count) % count;
     }
 
+    void IisuLayout::enterEditMode()
+    {
+        if (m_uiContext.isFolderOpen() || m_cardPanelOpen || m_cardEditOpen)
+            return;
+        m_focusArea = FocusArea::GRID;
+        m_editor.enter();
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+    }
+
+    void IisuLayout::requestCardSettings()
+    {
+        // 当前聚焦在卡片上才弹出占位面板
+        if (m_uiContext.isFolderOpen())
+            return;
+        if (auto* item = _layout().currentItem()) {
+            if (item->widget)
+                _openCardEditPanel();
+        }
+    }
+
+    void IisuLayout::_openCardPanel()
+    {
+        auto* item = _activeLayout().currentItem();
+        if (!item || !item->widget)
+            return;
+
+        m_cardPanelItem = item;
+        m_cardPanelSelected = 0;
+        m_cardPanelImage = 0;
+        m_cardPanelTextureRequested = false;
+
+        // 缩略图来源：图片直接用路径，封面通过数据提供者解析
+        std::string imgPath;
+        const std::string type = item->widget->typeName();
+        if (type == "image") {
+            imgPath = item->widget->dataId();
+        } else if (type == "game_cover") {
+            const auto info =
+                m_uiContext.gameProvider().getGame(item->widget->dataId());
+            if (info)
+                imgPath = info->coverPath;
+        }
+        m_cardPanelImagePath = std::move(imgPath);
+
+        m_cardPanelOpen = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+    }
+
+    void IisuLayout::_closeCardPanel()
+    {
+        if (!m_cardPanelOpen)
+            return;
+        if (m_cardPanelImage > 0) {
+            m_uiContext.textures().releaseTexture(
+                brls::Application::getNVGContext(), m_cardPanelImagePath);
+            m_cardPanelImage = 0;
+        }
+        m_cardPanelOpen = false;
+        m_cardPanelItem = nullptr;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+    }
+
+    void IisuLayout::_handleCardPanelInput(float /*dt*/)
+    {
+        auto& state = brls::Application::getControllerState();
+        const float lx = state.axes[static_cast<int>(brls::LEFT_X)];
+        const float ly = state.axes[static_cast<int>(brls::LEFT_Y)];
+        const float rx = state.axes[static_cast<int>(brls::RIGHT_X)];
+        const float ry = state.axes[static_cast<int>(brls::RIGHT_Y)];
+        const float navX = std::abs(rx) > std::abs(lx) ? rx : lx;
+        const float navY = std::abs(ry) > std::abs(ly) ? ry : ly;
+        const bool up = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
+        const bool down = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
+        const bool a = state.buttons[static_cast<int>(brls::BUTTON_A)];
+        const bool b = state.buttons[static_cast<int>(brls::BUTTON_B)];
+
+        constexpr int kActionCount = 4; // 启动游戏 / 加入收藏 / 修改名称 / 关闭
+        if (up && !m_prevUp) {
+            m_cardPanelSelected =
+                (m_cardPanelSelected + kActionCount - 1) % kActionCount;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        }
+        if (down && !m_prevDown) {
+            m_cardPanelSelected = (m_cardPanelSelected + 1) % kActionCount;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        }
+
+        if (a && !m_prevA) {
+            // 占位：前三个动作暂未实现，最后一项关闭
+            if (m_cardPanelSelected == kActionCount - 1) {
+                _closeCardPanel();
+            } else {
+                brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+                brls::Application::notify(L("功能开发中"));
+            }
+        }
+
+        if (b && !m_prevB)
+            _closeCardPanel();
+    }
+
+    void IisuLayout::_drawRoundedImage(NVGcontext* vg, int texture,
+                                       const GridRect& rect)
+    {
+        if (texture <= 0)
+            return;
+        int imageW = 0;
+        int imageH = 0;
+        nvgImageSize(vg, texture, &imageW, &imageH);
+        if (imageW <= 0 || imageH <= 0)
+            return;
+        const float scale = std::max(
+            rect.width / static_cast<float>(imageW),
+            rect.height / static_cast<float>(imageH));
+        const float drawW = static_cast<float>(imageW) * scale;
+        const float drawH = static_cast<float>(imageH) * scale;
+        const float drawX = rect.left + (rect.width - drawW) * 0.5f;
+        const float drawY = rect.top + (rect.height - drawH) * 0.5f;
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, rect.left, rect.top,
+                       rect.width, rect.height, m_uiContext.layout()
+                           .grid().config().radius - 6.f);
+        NVGpaint paint = nvgImagePattern(
+            vg, drawX, drawY, drawW, drawH, 0.f, texture, 1.f);
+        nvgFillPaint(vg, paint);
+        nvgFill(vg);
+    }
+
+    void IisuLayout::_drawCardPanel(NVGcontext* vg, float x, float y,
+                                    float w, float h)
+    {
+        if (!m_cardPanelOpen)
+            return;
+
+        // 遮罩
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, w, h);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 130));
+        nvgFill(vg);
+
+        constexpr float panelW = 640.f;
+        constexpr float panelH = 380.f;
+        const float panelX = x + (w - panelW) * 0.5f;
+        const float panelY = y + (h - panelH) * 0.5f;
+        constexpr float radius = 18.f;
+
+        // 阴影 + 背景
+        NVGpaint panelShadow = nvgBoxGradient(
+            vg, panelX + 6.f, panelY + 8.f, panelW, panelH,
+            radius, 8.f, nvgRGBA(0, 0, 0, 150), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, panelX - 2.f, panelY, panelW + 14.f, panelH + 18.f);
+        nvgRoundedRect(vg, panelX, panelY, panelW, panelH, radius);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, panelShadow);
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, panelX, panelY, panelW, panelH, radius);
+        nvgFillColor(vg, nvgRGBA(28, 32, 44, 242));
+        nvgFill(vg);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 80));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        const int fontId = m_fontId;
+
+        // 左列：缩略图 + 名称
+        constexpr float imgSize = 150.f;
+        const GridRect imgRect{panelX + 28.f, panelY + 28.f,
+                               imgSize, imgSize};
+        if (!m_cardPanelTextureRequested) {
+            m_cardPanelTextureRequested = true;
+            if (!m_cardPanelImagePath.empty())
+                m_cardPanelImage = m_uiContext.textures().loadTexture(
+                    vg, m_cardPanelImagePath);
+        }
+        if (m_cardPanelImage > 0) {
+            _drawRoundedImage(vg, m_cardPanelImage, imgRect);
+        } else {
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, imgRect.left, imgRect.top,
+                           imgRect.width, imgRect.height, 12.f);
+            nvgFillColor(vg, nvgRGBA(90, 95, 110, 160));
+            nvgFill(vg);
+        }
+
+        const std::string name = m_cardPanelItem && m_cardPanelItem->widget
+            ? m_cardPanelItem->widget->displayName()
+            : "";
+        nvgFontFaceId(vg, fontId);
+        nvgFontSize(vg, 16.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+        nvgFillColor(vg, nvgRGBA(242, 245, 251, 235));
+        nvgText(vg, panelX + 28.f + imgSize * 0.5f, panelY + 28.f + imgSize + 12.f,
+                name.c_str(), nullptr);
+
+        // 右列：按钮列表（占位）
+        const float btnX0 = panelX + 212.f;
+        const float btnW = panelW - 212.f - 28.f;
+        constexpr float btnH = 46.f;
+        constexpr float btnGap = 10.f;
+        static const std::string kActions[] = {
+            L("启动游戏"), L("加入收藏"), L("修改名称"), L("关闭"),
+        };
+        for (int i = 0; i < 4; ++i) {
+            const bool selected = i == m_cardPanelSelected;
+            const float by = panelY + 26.f +
+                static_cast<float>(i) * (btnH + btnGap);
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, btnX0, by, btnW, btnH, 10.f);
+            nvgFillColor(vg, selected
+                ? nvgRGBA(91, 193, 255, 225)
+                : nvgRGBA(255, 255, 255, 12));
+            nvgFill(vg);
+            nvgStrokeColor(vg, selected
+                ? nvgRGBA(168, 224, 255, 230)
+                : nvgRGBA(255, 255, 255, 45));
+            nvgStrokeWidth(vg, 1.f);
+            nvgStroke(vg);
+
+            nvgFontFaceId(vg, fontId);
+            nvgFontSize(vg, 19.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, selected
+                ? nvgRGBA(18, 24, 34, 245)
+                : nvgRGBA(220, 228, 240, 225));
+            nvgText(vg, btnX0 + btnW * 0.5f, by + btnH * 0.5f,
+                    kActions[i].c_str(), nullptr);
+        }
+
+        // 底部提示
+        nvgFontSize(vg, 14.f);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(190, 200, 218, 180));
+        nvgText(vg, panelX + panelW - 16.f, panelY + panelH - 22.f,
+                L("A 选择  B 返回").c_str(), nullptr);
+    }
+
+    void IisuLayout::_openCardEditPanel()
+    {
+        auto* item = _layout().currentItem();
+        if (!item || !item->widget)
+            return;
+        m_cardEditName = item->widget->displayName();
+        m_cardEditOpen = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+    }
+
+    void IisuLayout::_closeCardEditPanel()
+    {
+        if (!m_cardEditOpen)
+            return;
+        m_cardEditOpen = false;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+    }
+
+    void IisuLayout::_drawCardEditPanel(NVGcontext* vg, float x, float y,
+                                        float w, float h)
+    {
+        if (!m_cardEditOpen)
+            return;
+
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, w, h);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 130));
+        nvgFill(vg);
+
+        constexpr float panelW = 560.f;
+        constexpr float panelH = 240.f;
+        const float panelX = x + (w - panelW) * 0.5f;
+        const float panelY = y + (h - panelH) * 0.5f;
+        constexpr float radius = 18.f;
+
+        NVGpaint panelShadow = nvgBoxGradient(
+            vg, panelX + 6.f, panelY + 8.f, panelW, panelH,
+            radius, 8.f, nvgRGBA(0, 0, 0, 150), nvgRGBA(0, 0, 0, 0));
+        nvgBeginPath(vg);
+        nvgRect(vg, panelX - 2.f, panelY, panelW + 14.f, panelH + 18.f);
+        nvgRoundedRect(vg, panelX, panelY, panelW, panelH, radius);
+        nvgPathWinding(vg, NVG_HOLE);
+        nvgFillPaint(vg, panelShadow);
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, panelX, panelY, panelW, panelH, radius);
+        nvgFillColor(vg, nvgRGBA(28, 32, 44, 242));
+        nvgFill(vg);
+        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 80));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+
+        nvgFontFaceId(vg, m_fontId);
+        nvgFontSize(vg, 24.f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(242, 245, 251, 240));
+        nvgText(vg, panelX + panelW * 0.5f, panelY + 70.f,
+                L("卡片设置").c_str(), nullptr);
+
+        nvgFontSize(vg, 16.f);
+        nvgFillColor(vg, nvgRGBA(200, 209, 225, 200));
+        nvgText(vg, panelX + panelW * 0.5f, panelY + 110.f,
+                m_cardEditName.c_str(), nullptr);
+
+        nvgFontSize(vg, 14.f);
+        nvgFillColor(vg, nvgRGBA(170, 180, 200, 160));
+        nvgText(vg, panelX + panelW * 0.5f, panelY + 150.f,
+                L("（占位功能，等待实现）").c_str(), nullptr);
+
+        nvgFontSize(vg, 14.f);
+        nvgFillColor(vg, nvgRGBA(190, 200, 218, 180));
+        nvgText(vg, panelX + panelW * 0.5f, panelY + panelH - 26.f,
+                L("B 返回").c_str(), nullptr);
+    }
+
     void IisuLayout::_activateCurrent()
     {
         brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
         if (m_focusArea == FocusArea::GRID) {
-            // 交由 Widget 处理（FolderWidget 展开浮层）
             if (auto* current = _activeLayout().currentItem()) {
-                if (current->widget)
-                    current->widget->onActivate();
+                if (current->widget) {
+                    // 文件夹保持原逻辑展开，其他 Widget 弹出卡片操作浮层
+                    if (current->widget->typeName() == "folder")
+                        current->widget->onActivate();
+                    else
+                        _openCardPanel();
+                }
             }
             return;
         }
@@ -734,6 +1078,12 @@ namespace beiklive
         // 编辑模式覆盖层
         if (m_editor.isActive())
             m_editor.draw(vg, m_fontId);
+
+        // 卡片操作浮层（非文件夹 Widget 按 A 弹出）
+        _drawCardPanel(vg, x, y, w, h);
+
+        // 卡片编辑占位面板（START → 卡片设置）
+        _drawCardEditPanel(vg, x, y, w, h);
 
         // ── 文件夹浮层：悬浮在当前界面上 ────────────────────────────────
         if (m_uiContext.isFolderOpen()) {

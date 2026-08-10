@@ -25,6 +25,7 @@ namespace beiklive
 
         std::string typeName() const override { return "game_cover"; }
         std::string dataId() const override { return m_gameId; }
+        std::string displayName() override;
 
     private:
         bool loadCover(NVGcontext* vg);

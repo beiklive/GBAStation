@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "core/Tools.hpp"
 #include "GridSystem.hpp"
 #include "TextureManager.hpp"
 
@@ -28,6 +29,11 @@ namespace beiklive
         m_path = path;
         m_textureId = 0;
         m_textureRequested = false;
+    }
+
+    std::string ImageWidget::displayName()
+    {
+        return beiklive::tools::getFileName(m_path);
     }
 
     void ImageWidget::draw(NVGcontext* vg, const GridRect& rect)

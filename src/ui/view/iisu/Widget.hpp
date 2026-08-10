@@ -40,6 +40,8 @@ namespace beiklive
         virtual std::string typeName() const { return "empty"; }
         /// 组件数据标识（gameId / folderId / 图片路径 / live widgetId）
         virtual std::string dataId() const { return {}; }
+        /// 显示名称（封面为游戏标题，图片为文件名等）
+        virtual std::string displayName() { return dataId(); }
 
     protected:
         TextureManager* m_textures = nullptr;

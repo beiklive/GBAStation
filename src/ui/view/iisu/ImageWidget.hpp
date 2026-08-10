@@ -19,6 +19,7 @@ namespace beiklive
 
         std::string typeName() const override { return "image"; }
         std::string dataId() const override { return m_path; }
+        std::string displayName() override;
 
     private:
         std::string m_path;

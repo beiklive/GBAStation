@@ -97,6 +97,16 @@ namespace beiklive
         m_coverTexture = 0;
     }
 
+    std::string GameCoverWidget::displayName()
+    {
+        if (!m_infoResolved) {
+            m_infoResolved = true;
+            if (m_provider)
+                m_info = m_provider->getGame(m_gameId);
+        }
+        return m_info ? m_info->title : m_gameId;
+    }
+
     void GameCoverWidget::onFocus()
     {
         m_focused = true;
@@ -130,7 +140,6 @@ namespace beiklive
             if (m_provider)
                 m_info = m_provider->getGame(m_gameId);
         }
-
         const int fontId = brls::Application::getDefaultFont();
 
         nvgSave(vg);
