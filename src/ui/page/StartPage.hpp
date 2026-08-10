@@ -6,7 +6,7 @@
 #include <vector>
 #include "core/common.h"
 #include "ui/view/SwitchLayout.hpp"
-#include "ui/view/IisuLayout.hpp"
+#include "ui/view/iisu/IisuLayout.hpp"
 #include "ui/page/FileListPage.hpp"
 #include "ui/page/GamePage.hpp"
 #include "ui/page/SettingPage.hpp"

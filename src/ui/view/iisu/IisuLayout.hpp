@@ -1,13 +1,15 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <vector>
 
 #include <borealis.hpp>
 
-#include "Layout.hpp"
-#include "core/common.h"
+#include "../Layout.hpp"
+#include "../../../core/common.h"
+#include "GridDebugRenderer.hpp"
 
 namespace beiklive
 {
@@ -16,7 +18,7 @@ namespace beiklive
     {
     public:
         IisuLayout();
-        ~IisuLayout() override = default;
+        ~IisuLayout() override;
 
         void refreshGameList(beiklive::GameList gameList) override;
         brls::Box* getContentBox() { return this; }
@@ -58,8 +60,42 @@ namespace beiklive
         }
 
     private:
+        struct FunctionItem
+        {
+            std::string label;
+            std::string imagePath;
+            int imageHandle = 0;
+        };
+
         beiklive::GameList m_games;
         bool m_pico8ShortcutVisible = true;
         int m_fontId = -1;
+        GridDebugRenderer m_grid;
+
+        std::vector<FunctionItem> m_functions;
+        std::vector<float> m_functionFocus;
+        int m_selectedFunction = 0;
+        float m_time = 0.f;
+        std::chrono::steady_clock::time_point m_lastFrameTime;
+
+        bool m_functionClickAnimating = false;
+        int m_functionClickIndex = -1;
+        float m_functionClickTime = 0.f;
+
+        bool m_prevLeft = false;
+        bool m_prevRight = false;
+        bool m_prevA = false;
+        float m_holdLeft = 0.f;
+        float m_holdRight = 0.f;
+        float m_repeatLeft = 0.f;
+        float m_repeatRight = 0.f;
+
+        void _captureInputState();
+        void _handleInput(float dt);
+        void _moveHorizontal(int direction);
+        void _activateCurrent();
+        void _activateFunction(int index);
+
+        void _drawFunctions(NVGcontext* vg, float x, float y, float w, float h);
     };
 } // namespace beiklive
