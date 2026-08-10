@@ -1,55 +1,48 @@
 #include "GridDebugRenderer.hpp"
 
-#include <algorithm>
-#include <string>
+#include <set>
+#include <utility>
 
 namespace beiklive
 {
-    void GridDebugRenderer::setArea(float x, float y, float width, float height)
-    {
-        const float gridW = static_cast<float>(m_config.columns) *
-                m_config.cellWidth +
-            static_cast<float>(m_config.columns - 1) * m_config.gap;
-        const float gridH = static_cast<float>(m_config.rows) *
-                m_config.cellHeight +
-            static_cast<float>(m_config.rows - 1) * m_config.gap;
-
-        m_config.width = gridW;
-        m_config.height = gridH;
-        m_config.x = x + std::max(0.f, (width - gridW) * 0.5f);
-        m_config.y = y + std::max(0.f, (height - gridH) * 0.5f);
-    }
-
-    void GridDebugRenderer::draw(NVGcontext* vg, int fontId)
+    void GridDebugRenderer::draw(NVGcontext* vg, const GridSystem& grid,
+                                 const std::vector<LayoutItem>& items)
     {
         if (!vg)
             return;
 
-        for (int r = 0; r < m_config.rows; ++r) {
-            for (int c = 0; c < m_config.columns; ++c) {
-                const float px = m_config.x +
-                    static_cast<float>(c) * (m_config.cellWidth + m_config.gap);
-                const float py = m_config.y +
-                    static_cast<float>(r) * (m_config.cellHeight + m_config.gap);
+        // 收集被 LayoutItem 占用的格子
+        std::set<std::pair<int, int>> occupied;
+        for (const auto& item : items) {
+            if (!item.visible)
+                continue;
+            for (int y = item.y; y < item.y + item.h; ++y) {
+                for (int x = item.x; x < item.x + item.w; ++x)
+                    occupied.insert({x, y});
+            }
+        }
 
+        const GridConfig& cfg = grid.config();
+        const float dotRadius = 4.f;
+
+        for (int r = 0; r < cfg.rows; ++r) {
+            for (int c = 0; c < cfg.columns; ++c) {
+                // 使用中的格子不再绘制
+                if (occupied.count({c, r}) != 0)
+                    continue;
+
+                const float cx = cfg.x +
+                    static_cast<float>(c) * (cfg.cellWidth + cfg.gap) +
+                    cfg.cellWidth * 0.5f;
+                const float cy = cfg.y +
+                    static_cast<float>(r) * (cfg.cellHeight + cfg.gap) +
+                    cfg.cellHeight * 0.5f;
+
+                // 空闲格：仅绘制中心小点
                 nvgBeginPath(vg);
-                nvgRoundedRect(vg, px, py, m_config.cellWidth,
-                               m_config.cellHeight, m_config.radius);
+                nvgCircle(vg, cx, cy, dotRadius);
                 nvgFillColor(vg, nvgRGBA(128, 128, 128, 80));
                 nvgFill(vg);
-
-                // 行列编号，验证坐标
-                if (fontId >= 0) {
-                    nvgFontFaceId(vg, fontId);
-                    nvgFontSize(vg, 16.f);
-                    nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-                    nvgFillColor(vg, nvgRGBA(255, 255, 255, 110));
-                    const std::string label =
-                        std::to_string(c) + "," + std::to_string(r);
-                    nvgText(vg, px + m_config.cellWidth * 0.5f,
-                            py + m_config.cellHeight * 0.5f,
-                            label.c_str(), nullptr);
-                }
             }
         }
     }

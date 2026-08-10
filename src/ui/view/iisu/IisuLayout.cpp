@@ -1,7 +1,8 @@
-#include "IisuLayout.hpp"
+﻿#include "IisuLayout.hpp"
 
 #include "core/Translation.hpp"
 #include "ui/utils/GradientFocus.hpp"
+#include "WidgetFactory.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -59,6 +60,17 @@ namespace beiklive
         registerAction("", brls::BUTTON_RIGHT, consume, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_LB, consume, true, false, brls::SOUND_NONE);
         _captureInputState();
+
+        // Debug：多 Tile 管理验证（id / 位置 / 尺寸 / Widget）
+        const std::string logoPath = BK_RES("img/pico8_logo_vector.png");
+        m_uiContext.addItem({1, 0, 0, 2, 2,
+            WidgetFactory::createImage(logoPath)});
+        m_uiContext.addItem({2, 3, 0, 1, 1,
+            WidgetFactory::createColor(nvgRGBA(90, 200, 120, 255))});
+        m_uiContext.addItem({3, 4, 2, 2, 1,
+            WidgetFactory::createImage(
+                BK_RES("img/ui/light/GameList_64.png"))});
+        _layout().resetFocusToFirst();
     }
 
     IisuLayout::~IisuLayout()
@@ -160,7 +172,8 @@ namespace beiklive
         m_time += dt;
 
         for (size_t i = 0; i < m_functionFocus.size(); ++i) {
-            const bool selected = static_cast<int>(i) == m_selectedFunction;
+            const bool selected = m_focusArea == FocusArea::FUNCTIONS &&
+                static_cast<int>(i) == m_selectedFunction;
             const float target = selected ? 1.f : 0.f;
             m_functionFocus[i] += (target - m_functionFocus[i]) *
                 std::min(1.f, dt * 12.f);
@@ -177,6 +190,7 @@ namespace beiklive
             }
         }
 
+        _layout().update(dt);
         _handleInput(dt);
         invalidate();
     }
@@ -185,10 +199,15 @@ namespace beiklive
     {
         auto& state = brls::Application::getControllerState();
         const float lx = state.axes[static_cast<int>(brls::LEFT_X)];
+        const float ly = state.axes[static_cast<int>(brls::LEFT_Y)];
         const float rx = state.axes[static_cast<int>(brls::RIGHT_X)];
+        const float ry = state.axes[static_cast<int>(brls::RIGHT_Y)];
         const float navX = std::abs(rx) > std::abs(lx) ? rx : lx;
+        const float navY = std::abs(ry) > std::abs(ly) ? ry : ly;
         m_prevLeft = state.buttons[static_cast<int>(brls::BUTTON_LEFT)] || navX < -0.5f;
         m_prevRight = state.buttons[static_cast<int>(brls::BUTTON_RIGHT)] || navX > 0.5f;
+        m_prevUp = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
+        m_prevDown = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
         m_prevA = state.buttons[static_cast<int>(brls::BUTTON_A)];
     }
 
@@ -196,10 +215,15 @@ namespace beiklive
     {
         auto& state = brls::Application::getControllerState();
         const float lx = state.axes[static_cast<int>(brls::LEFT_X)];
+        const float ly = state.axes[static_cast<int>(brls::LEFT_Y)];
         const float rx = state.axes[static_cast<int>(brls::RIGHT_X)];
+        const float ry = state.axes[static_cast<int>(brls::RIGHT_Y)];
         const float navX = std::abs(rx) > std::abs(lx) ? rx : lx;
+        const float navY = std::abs(ry) > std::abs(ly) ? ry : ly;
         const bool left = state.buttons[static_cast<int>(brls::BUTTON_LEFT)] || navX < -0.5f;
         const bool right = state.buttons[static_cast<int>(brls::BUTTON_RIGHT)] || navX > 0.5f;
+        const bool up = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
+        const bool down = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
         const bool a = state.buttons[static_cast<int>(brls::BUTTON_A)];
 
         if (!isFocused() || brls::Application::isInputBlocks() ||
@@ -208,19 +232,27 @@ namespace beiklive
             m_repeatLeft = m_repeatRight = 0.f;
             m_prevLeft = left;
             m_prevRight = right;
+            m_prevUp = up;
+            m_prevDown = down;
             m_prevA = a;
             return;
         }
 
         if (left && !m_prevLeft)
-            _moveHorizontal(-1);
+            _moveLeft();
         if (right && !m_prevRight)
-            _moveHorizontal(1);
+            _moveRight();
+        if (up && !m_prevUp)
+            _moveUp();
+        if (down && !m_prevDown)
+            _moveDown();
 
         const bool activate = a && !m_prevA;
         if (activate) {
             m_prevLeft = left;
             m_prevRight = right;
+            m_prevUp = up;
+            m_prevDown = down;
             m_prevA = a;
             _activateCurrent();
             return;
@@ -239,7 +271,10 @@ namespace beiklive
             timer += dt;
             if (timer >= HOLD_REPEAT) {
                 timer = 0.f;
-                _moveHorizontal(direction);
+                if (direction < 0)
+                    _moveLeft();
+                else
+                    _moveRight();
             }
         };
         repeat(left, m_holdLeft, m_repeatLeft, -1);
@@ -247,21 +282,62 @@ namespace beiklive
 
         m_prevLeft = left;
         m_prevRight = right;
+        m_prevUp = up;
+        m_prevDown = down;
         m_prevA = a;
     }
 
-    void IisuLayout::_moveHorizontal(int direction)
+    void IisuLayout::_moveLeft()
+    {
+        if (m_focusArea == FocusArea::GRID) {
+            _layout().moveFocus(UIAction::Left);
+        } else {
+            _moveFunctionHorizontal(-1);
+        }
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+    }
+
+    void IisuLayout::_moveRight()
+    {
+        if (m_focusArea == FocusArea::GRID) {
+            _layout().moveFocus(UIAction::Right);
+        } else {
+            _moveFunctionHorizontal(1);
+        }
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+    }
+
+    void IisuLayout::_moveUp()
+    {
+        if (m_focusArea == FocusArea::FUNCTIONS) {
+            m_focusArea = FocusArea::GRID;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        }
+    }
+
+    void IisuLayout::_moveDown()
+    {
+        if (m_focusArea == FocusArea::GRID) {
+            m_focusArea = FocusArea::FUNCTIONS;
+            brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        }
+    }
+
+    void IisuLayout::_moveFunctionHorizontal(int direction)
     {
         if (m_functions.empty())
             return;
         const int count = static_cast<int>(m_functions.size());
         m_selectedFunction = (m_selectedFunction + direction + count) % count;
-        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
     }
 
     void IisuLayout::_activateCurrent()
     {
         brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+        if (m_focusArea == FocusArea::GRID) {
+            // 空 Tile 阶段：仅确认音效，后续由 GameCover/Folder 组件接管
+            return;
+        }
         if (!m_functionClickAnimating) {
             m_functionClickAnimating = true;
             m_functionClickIndex = m_selectedFunction;
@@ -316,18 +392,32 @@ namespace beiklive
                 L("顶部功能区（占位）").c_str(), nullptr);
 
         // 当前聚焦信息：顶部占位区中间偏上，随聚焦动画淡入
-        if (!m_functions.empty()) {
-            const float focus =
+        std::string focusInfo;
+        float focusAlpha = 1.f;
+        if (m_focusArea == FocusArea::GRID) {
+            if (auto* current = _layout().focus().current()) {
+                focusInfo = "#" + std::to_string(current->id) + " " +
+                    std::to_string(current->w) + "x" +
+                    std::to_string(current->h) + "@" +
+                    std::to_string(current->x) + "," +
+                    std::to_string(current->y);
+            } else {
+                focusInfo = L("未选中");
+            }
+        } else if (!m_functions.empty()) {
+            focusInfo =
+                m_functions[static_cast<size_t>(m_selectedFunction)].label;
+            focusAlpha =
                 static_cast<size_t>(m_selectedFunction) < m_functionFocus.size()
                 ? m_functionFocus[static_cast<size_t>(m_selectedFunction)]
                 : 1.f;
+        }
+        if (!focusInfo.empty()) {
             nvgFontSize(vg, 26.f);
             nvgFillColor(vg, nvgRGBA(242, 245, 251,
-                static_cast<unsigned char>(235.f * focus)));
+                static_cast<unsigned char>(235.f * focusAlpha)));
             nvgText(vg, cx, topY + barH * 0.34f,
-                    m_functions[static_cast<size_t>(m_selectedFunction)]
-                        .label.c_str(),
-                    nullptr);
+                    focusInfo.c_str(), nullptr);
         }
 
         // ── 布局主体网格：顶部占位区与底部功能区之间 ────────────────────
@@ -335,8 +425,9 @@ namespace beiklive
         const float bodyY = y + barMargin + barH;
         const float bodyW = w - 24.f;
         const float bodyH = h - 2.f * (barMargin + barH);
-        m_grid.setArea(bodyX, bodyY, bodyW, bodyH);
-        m_grid.draw(vg, m_fontId);
+        _layout().setArea(bodyX, bodyY, bodyW, bodyH);
+        GridDebugRenderer::draw(vg, _layout().grid(), _layout().items());
+        _layout().draw(vg, m_time);
 
         _drawFunctions(vg, x, y, w, h);
 
@@ -394,6 +485,7 @@ namespace beiklive
                 ? m_functionFocus[i]
                 : 0.f;
             const bool selectedFunction =
+                m_focusArea == FocusArea::FUNCTIONS &&
                 static_cast<int>(i) == m_selectedFunction;
             const float segmentX = barX + static_cast<float>(i) * pitch;
             const float cx = segmentX + pitch * 0.5f;

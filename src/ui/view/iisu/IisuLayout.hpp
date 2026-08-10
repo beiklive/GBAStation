@@ -10,6 +10,7 @@
 #include "../Layout.hpp"
 #include "../../../core/common.h"
 #include "GridDebugRenderer.hpp"
+#include "UIContext.hpp"
 
 namespace beiklive
 {
@@ -60,6 +61,12 @@ namespace beiklive
         }
 
     private:
+        enum class FocusArea
+        {
+            GRID,      // 布局主体网格
+            FUNCTIONS, // 底部功能按钮区
+        };
+
         struct FunctionItem
         {
             std::string label;
@@ -67,14 +74,17 @@ namespace beiklive
             int imageHandle = 0;
         };
 
+        LayoutManager& _layout() { return m_uiContext.layout(); }
         beiklive::GameList m_games;
         bool m_pico8ShortcutVisible = true;
         int m_fontId = -1;
-        GridDebugRenderer m_grid;
+
+        UIContext m_uiContext;
 
         std::vector<FunctionItem> m_functions;
         std::vector<float> m_functionFocus;
         int m_selectedFunction = 0;
+        FocusArea m_focusArea = FocusArea::GRID;
         float m_time = 0.f;
         std::chrono::steady_clock::time_point m_lastFrameTime;
 
@@ -84,6 +94,8 @@ namespace beiklive
 
         bool m_prevLeft = false;
         bool m_prevRight = false;
+        bool m_prevUp = false;
+        bool m_prevDown = false;
         bool m_prevA = false;
         float m_holdLeft = 0.f;
         float m_holdRight = 0.f;
@@ -92,7 +104,11 @@ namespace beiklive
 
         void _captureInputState();
         void _handleInput(float dt);
-        void _moveHorizontal(int direction);
+        void _moveLeft();
+        void _moveRight();
+        void _moveUp();
+        void _moveDown();
+        void _moveFunctionHorizontal(int direction);
         void _activateCurrent();
         void _activateFunction(int index);
 
