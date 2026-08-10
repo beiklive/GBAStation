@@ -3,10 +3,13 @@
 #include <memory>
 #include <string>
 
+#include "ClockWidget.hpp"
 #include "ColorWidget.hpp"
 #include "FolderWidget.hpp"
 #include "GameCoverWidget.hpp"
 #include "ImageWidget.hpp"
+#include "RecentGamesWidget.hpp"
+#include "SystemInfoWidget.hpp"
 #include "Widget.hpp"
 
 namespace beiklive
@@ -39,6 +42,18 @@ namespace beiklive
         static std::shared_ptr<Widget> createFolder(std::string folderId)
         {
             return std::make_shared<FolderWidget>(std::move(folderId));
+        }
+
+        /// 动态组件（widgetId: recent_games / system_info / clock）
+        static std::shared_ptr<Widget> createLive(const std::string& widgetId)
+        {
+            if (widgetId == "recent_games")
+                return std::make_shared<RecentGamesWidget>();
+            if (widgetId == "system_info")
+                return std::make_shared<SystemInfoWidget>();
+            if (widgetId == "clock")
+                return std::make_shared<ClockWidget>();
+            return nullptr;
         }
     };
 } // namespace beiklive

@@ -210,16 +210,23 @@ namespace beiklive
             }
         }
 
-        // 焦点框：流光渐变描边（Item 覆盖时框住整体，空白格框住单元格）
+        // 焦点框：流光渐变描边（框在格子与内容之间的边距缝内）
         if (m_focusVisible) {
+            constexpr float inset = 5.f; // 与内容边距一致
             const GridRect focusRect = focused
                 ? m_grid.getItemRect(*focused)
                 : m_grid.getItemRect(m_focus.cellX(), m_focus.cellY(), 1, 1);
-            beiklive::ui::drawGradientFocusBorder(
-                vg, focusRect.left - 1.f, focusRect.top - 1.f,
-                focusRect.width + 2.f, focusRect.height + 2.f,
-                radius, 6.f, 1.f,
-                beiklive::ui::gradientFocusAnimationOffset(time));
+            const float fx = focusRect.left + inset;
+            const float fy = focusRect.top + inset;
+            const float fw = focusRect.width - inset * 2.f;
+            const float fh = focusRect.height - inset * 2.f;
+            if (fw > 0.f && fh > 0.f) {
+                // 焦点框圆角比卡片/内容小
+                beiklive::ui::drawGradientFocusBorder(
+                    vg, fx, fy, fw, fh,
+                    12.f, 5.f, 1.f,
+                    beiklive::ui::gradientFocusAnimationOffset(time));
+            }
         }
     }
 } // namespace beiklive

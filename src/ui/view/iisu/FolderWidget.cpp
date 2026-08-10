@@ -83,16 +83,6 @@ namespace beiklive
 
         nvgSave(vg);
 
-        // 焦点缩放效果
-        const float scale = m_focused ? 1.05f : 1.f;
-        if (scale != 1.f) {
-            nvgTranslate(vg, rect.left + rect.width * 0.5f,
-                         rect.top + rect.height * 0.5f);
-            nvgScale(vg, scale, scale);
-            nvgTranslate(vg, -(rect.left + rect.width * 0.5f),
-                         -(rect.top + rect.height * 0.5f));
-        }
-
         // 底
         nvgBeginPath(vg);
         nvgRoundedRect(vg, rect.left, rect.top,

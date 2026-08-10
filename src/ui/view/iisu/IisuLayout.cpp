@@ -108,6 +108,12 @@ namespace beiklive
         mainPage.push_back({WidgetType::Image, "",
                             BK_RES("img/ui/light/GameList_64.png"),
                             2, 1, 1, 1, true});
+        mainPage.push_back({WidgetType::Live, "clock", "",
+                            2, 2, 1, 1, true});
+        mainPage.push_back({WidgetType::Live, "system_info", "",
+                            3, 2, 1, 1, true});
+        mainPage.push_back({WidgetType::Live, "recent_games", "",
+                            4, 2, 2, 1, true});
         for (size_t i = 0; i < std::min<size_t>(2, platforms.size()); ++i)
             mainPage.push_back({WidgetType::Folder,
                                 "platform:" + std::to_string(platforms[i]),

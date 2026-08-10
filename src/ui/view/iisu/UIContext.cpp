@@ -22,8 +22,8 @@ namespace beiklive
         if (!item.widget)
             return;
         item.widget->setTextureManager(&m_textures);
-        // 内部元素圆角比格子圆角小 4px
-        item.widget->setCornerRadius(m_layout.grid().config().radius - 4.f);
+        // 内部元素圆角比格子圆角小 6px
+        item.widget->setCornerRadius(m_layout.grid().config().radius - 6.f);
         if (auto* cover = dynamic_cast<GameCoverWidget*>(item.widget.get()))
             cover->setGameDataProvider(&m_gameProvider);
         if (auto* folder = dynamic_cast<FolderWidget*>(item.widget.get())) {
@@ -59,6 +59,9 @@ namespace beiklive
                 break;
             case WidgetType::Image:
                 item.widget = WidgetFactory::createImage(desc.path);
+                break;
+            case WidgetType::Live:
+                item.widget = WidgetFactory::createLive(desc.id);
                 break;
             default:
                 break;
