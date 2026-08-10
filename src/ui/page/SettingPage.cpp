@@ -3195,6 +3195,22 @@ private:
             return;
         }
 
+        if (prefix == "dc.")
+        {
+            // DC 游戏按键由 flycast 原生映射（dc_joymap）驱动，前端不再覆盖；
+            // 这里只保留 flycast 实际响应的功能键。
+            m_mappingItems.push_back(_section(L("DC 功能键")));
+            _addBinding(L("打开菜单"), L("可绑定单键或双键组合"),
+                        beiklive::input_mapping::makeKey(prefix, "hotkey.menu.pad"),
+                        "PAD_START+PAD_BACK");
+            _addBinding(L("快进"), L("按住或切换以加速运行"),
+                        beiklive::input_mapping::makeKey(prefix, "handle.fastforward"),
+                        "PAD_LSB");
+            m_mappingFocus = _firstFocusable(m_mappingItems);
+            m_mappingScroll = m_mappingTargetScroll = 0.f;
+            return;
+        }
+
         const unsigned mask = beiklive::input_mapping::platformMaskForPrefix(prefix);
         m_mappingItems.push_back(_section(L("游戏按键")));
         for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)

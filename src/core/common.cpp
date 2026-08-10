@@ -596,29 +596,34 @@ namespace beiklive
         const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds.", "md.", "arcade.", "dc.", "psp."};
         for (const auto& prefix : mappingPrefixes)
         {
+            // DC 游戏按键由 flycast 原生映射（dc_joymap）驱动，前端不再写入
+            // dc.handle.* 游戏按键默认值，仅保留功能键（菜单/快进）。
             const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
-            for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
+            if (prefix != "dc.")
             {
-                if ((entry.platformMask & platformMask) == 0)
-                    continue;
-                std::string defaultValue =
-                    beiklive::input_mapping::defaultHandleValueForPrefix(
-                        prefix, entry.suffix, entry.defaultValue);
-                if (beiklive::input_mapping::usesLegacyGbFamilyFallback(prefix) &&
-                    !beiklive::input_mapping::isRightStickMapping(entry.suffix))
+                for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
                 {
-                    auto legacy = SettingManager->Get(
-                        beiklive::input_mapping::makeHandleKey("", entry.suffix));
-                    if (legacy.has_value())
+                    if ((entry.platformMask & platformMask) == 0)
+                        continue;
+                    std::string defaultValue =
+                        beiklive::input_mapping::defaultHandleValueForPrefix(
+                            prefix, entry.suffix, entry.defaultValue);
+                    if (beiklive::input_mapping::usesLegacyGbFamilyFallback(prefix) &&
+                        !beiklive::input_mapping::isRightStickMapping(entry.suffix))
                     {
-                        auto legacyStr = legacy->AsString();
-                        if (legacyStr.has_value())
-                            defaultValue = *legacyStr;
+                        auto legacy = SettingManager->Get(
+                            beiklive::input_mapping::makeHandleKey("", entry.suffix));
+                        if (legacy.has_value())
+                        {
+                            auto legacyStr = legacy->AsString();
+                            if (legacyStr.has_value())
+                                defaultValue = *legacyStr;
+                        }
                     }
+                    SettingManager->SetDefault(
+                        beiklive::input_mapping::makeHandleKey(prefix, entry.suffix),
+                        ConfigValue(defaultValue));
                 }
-                SettingManager->SetDefault(
-                    beiklive::input_mapping::makeHandleKey(prefix, entry.suffix),
-                    ConfigValue(defaultValue));
             }
             for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
             {
