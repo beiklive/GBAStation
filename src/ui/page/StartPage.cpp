@@ -5,6 +5,7 @@
 #include "core/SteamGridDb.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "core/Tools.hpp"
+#include "core/rom/PspMeta.hpp"
 #include "core/ThreadPool.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/ExternalCoreSession.hpp"
@@ -611,6 +612,26 @@ namespace beiklive
                     static_cast<beiklive::enums::EmuPlatform>(entry.platform),
                     entry.path);
                 changed = true;
+            }
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)) {
+                // PSP ROM：文件浏览打开时提取真实游戏标题与 ICON0 封面
+                // （保存到该 ROM 的存档目录）。TITLE 仅在仍是默认文件名/映射名
+                // 时覆盖；封面仅当仍是默认资源图时替换。
+                const std::string realTitle = beiklive::psp_meta::ExtractTitle(entry.path);
+                if (!realTitle.empty() && entry.title == GET_MAPPING_KEY_STR(stem, stem)) {
+                    entry.title = realTitle;
+                    changed = true;
+                }
+                if (entry.logoPath.empty() ||
+                    entry.logoPath == beiklive::tools::getDefaultLogoPath(
+                        static_cast<beiklive::enums::EmuPlatform>(entry.platform), entry.path))
+                {
+                    const std::string icon = beiklive::psp_meta::ExtractIcon0(entry.path, entry.savePath);
+                    if (!icon.empty()) {
+                        entry.logoPath = icon;
+                        changed = true;
+                    }
+                }
             }
 
             if (beiklive::tools::tryUseNdsInternalIconCover(entry))

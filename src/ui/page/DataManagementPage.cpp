@@ -7,6 +7,7 @@
 #include "ui/utils/MaterialIcons.hpp"
 #include "ui/widget/DetailCell.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
+#include "core/rom/PspMeta.hpp"
 #include "core/Tools.hpp"
 #include "network/WebService.h"
 #include "third_party/qrcodegen/qrcodegen.hpp"
@@ -2130,6 +2131,35 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
                 entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(romPath);
             entry.logoPath = logoPath;
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)) {
+                // PSP ROM：开启读取映射名称且映射名存在时使用映射名（不用 TITLE）；
+                // 否则 TITLE 优先于 lpl 的文件名称。无 RetroArch 缩略图时
+                // 提取 ICON0 作为封面（保存在该 ROM 的专属存档目录下）。
+                std::string mappedName;
+                if (m_useNameMapping) {
+                    auto nameVal = beiklive::NameMappingManager->Get(romStem);
+                    if (nameVal) {
+                        auto nameStr = nameVal->AsString();
+                        if (nameStr && !nameStr->empty())
+                            mappedName = *nameStr;
+                    }
+                }
+                if (!mappedName.empty()) {
+                    entry.title = mappedName;
+                } else {
+                    const std::string realTitle = beiklive::psp_meta::ExtractTitle(romPath);
+                    if (!realTitle.empty())
+                        entry.title = realTitle;
+                }
+                if (logoPath == beiklive::tools::getDefaultLogoPath(
+                                     static_cast<beiklive::enums::EmuPlatform>(config.platform),
+                                     romPath))
+                {
+                    const std::string icon = beiklive::psp_meta::ExtractIcon0(romPath, savePath);
+                    if (!icon.empty())
+                        entry.logoPath = icon;
+                }
+            }
             entry.savePath = savePath;
             entry.overlayPath = config.overlayPath;
             entry.shaderPath = config.shaderPath;
@@ -2295,6 +2325,18 @@ void DataManagementPage::startDirImport(const std::string& dirPath)
             {
             }
             entry.savePath = savePath;
+            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)) {
+                // PSP ROM：开启读取映射名称且映射名存在时保留映射名，否则 TITLE
+                // 优先于文件名称；ICON0 封面保存在该 ROM 的专属存档目录下。
+                if (!(m_useNameMapping && displayName != romStem)) {
+                    const std::string realTitle = beiklive::psp_meta::ExtractTitle(path);
+                    if (!realTitle.empty())
+                        entry.title = realTitle;
+                }
+                const std::string icon = beiklive::psp_meta::ExtractIcon0(path, savePath);
+                if (!icon.empty())
+                    entry.logoPath = icon;
+            }
             entry.overlayEnabled = config.overlayEnabled;
             entry.shaderEnabled = config.shaderEnabled;
             entry.overlayPath = config.overlayPath;
