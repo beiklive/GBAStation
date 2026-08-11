@@ -17,11 +17,13 @@
 namespace beiklive
 {
     class SwitchLayout;
+    class IisuLayout;
 
     class Pico8Page : public brls::Box
     {
     public:
         explicit Pico8Page(SwitchLayout* homeLayout);
+        explicit Pico8Page(IisuLayout* homeLayout);
         ~Pico8Page() override;
 
         void frame(brls::FrameContext* ctx) override;
@@ -124,6 +126,7 @@ namespace beiklive
                        const std::string& label, float x, float y, float alpha);
 
         SwitchLayout* m_homeLayout = nullptr;
+        IisuLayout* m_iisuHomeLayout = nullptr;
         pico8::Core m_core;
         pico8::Input m_input;
         pico8::Video m_video;

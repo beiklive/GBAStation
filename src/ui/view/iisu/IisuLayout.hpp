@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -30,7 +31,7 @@ namespace beiklive
         void removeGameByPath(const std::string& path);
         void completeGameRemoval(std::function<void()> completion = {});
         void cancelGameRemoval();
-        bool isDeleteAnimationRunning() const { return false; }
+        bool isDeleteAnimationRunning() const { return m_deleteLayout != nullptr; }
 
         int acquireSelectedCoverTexture();
         void releaseSelectedCoverTexture();
@@ -100,6 +101,21 @@ namespace beiklive
         bool m_pico8ShortcutVisible = true;
         int m_fontId = -1;
 
+        // 页面进出场与 PICO-8 转场共用的淡入淡出状态。
+        float m_pageOpacity = 1.f;
+        bool m_exitAnimationRunning = false;
+        std::function<void()> m_exitCompletion;
+
+        // 游戏选项侧栏预览图持有的纹理引用。
+        std::string m_selectedCoverPath;
+        int m_selectedCoverReferences = 0;
+
+        // 删除动画目标；布局在动画完成前保持不修改，避免焦点指针失效。
+        LayoutManager* m_deleteLayout = nullptr;
+        size_t m_deleteIndex = 0;
+        std::string m_deletePath;
+        std::function<void()> m_deleteCompletion;
+
         UIContext m_uiContext;
         LayoutEditor m_editor;
 
@@ -140,6 +156,8 @@ namespace beiklive
         void _moveFunctionHorizontal(int direction);
         void _activateCurrent();
         void _activateFunction(int index);
+        std::optional<beiklive::GameEntry> _currentGameEntry() const;
+        void _animateEntrance(LayoutManager& layout, float delay = 0.f);
 
         // 卡片操作浮层（非文件夹 Widget 按 A 弹出）
         void _openCardPanel();

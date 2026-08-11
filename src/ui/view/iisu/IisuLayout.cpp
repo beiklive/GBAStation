@@ -131,6 +131,8 @@ namespace beiklive
 
     IisuLayout::~IisuLayout()
     {
+        releaseSelectedCoverTexture();
+        m_uiContext.textures().clear(brls::Application::getNVGContext());
         if (auto* vg = brls::Application::getNVGContext()) {
             for (const auto& function : m_functions) {
                 if (function.imageHandle > 0)
@@ -155,59 +157,201 @@ namespace beiklive
         restoreCardFocus(false);
     }
 
-    void IisuLayout::removeGameByPath(const std::string& /*path*/)
+    void IisuLayout::removeGameByPath(const std::string& path)
     {
-        // TODO: iisu 布局删除动画
+        if (path.empty() || isDeleteAnimationRunning())
+            return;
+
+        auto findTarget = [&path](LayoutManager& layout)
+            -> std::optional<size_t> {
+            const auto& items = layout.items();
+            for (size_t i = 0; i < items.size(); ++i) {
+                const auto& item = items[i];
+                if (item.widget && item.widget->typeName() == "game_cover" &&
+                    item.widget->dataId() == path)
+                    return i;
+            }
+            return std::nullopt;
+        };
+
+        LayoutManager* layout = &m_uiContext.layout();
+        auto index = findTarget(*layout);
+        if (!index && m_uiContext.isFolderOpen()) {
+            layout = &m_uiContext.panelLayout();
+            index = findTarget(*layout);
+        }
+        if (!index)
+            return;
+
+        m_deleteLayout = layout;
+        m_deleteIndex = *index;
+        m_deletePath = path;
+        auto& item = m_deleteLayout->items()[m_deleteIndex];
+        m_uiContext.animations().add({
+            0.20f, 0.f,
+            [&item](float t) {
+                item.transform.alpha = 1.f - t;
+                item.transform.scale = 1.f - t * 0.18f;
+            },
+            { }, false,
+        });
+        invalidate();
     }
 
     void IisuLayout::completeGameRemoval(std::function<void()> completion)
     {
-        if (completion)
-            completion();
+        if (!isDeleteAnimationRunning()) {
+            if (completion)
+                completion();
+            return;
+        }
+
+        // 后端完成得很快时，先取消等待阶段的抖动动画，避免其继续引用
+        // 即将从 vector 删除的 LayoutItem。
+        m_uiContext.animations().clear();
+        if (m_deleteIndex < m_deleteLayout->items().size()) {
+            auto& item = m_deleteLayout->items()[m_deleteIndex];
+            item.transform.alpha = 1.f;
+            item.transform.scale = 1.f;
+        }
+        m_deleteCompletion = std::move(completion);
+        LayoutManager* layout = m_deleteLayout;
+        const size_t index = m_deleteIndex;
+        const std::string path = m_deletePath;
+        m_uiContext.animations().add({
+            0.16f, 0.f, { },
+            [this, layout, index, path]() {
+                if (layout && index < layout->items().size()) {
+                    const auto& item = layout->items()[index];
+                    if (item.widget && item.widget->dataId() == path)
+                        layout->removeItem(index);
+                    layout->resetFocusToFirst();
+                }
+                m_deleteLayout = nullptr;
+                m_deletePath.clear();
+                if (m_deleteCompletion) {
+                    auto done = std::move(m_deleteCompletion);
+                    m_deleteCompletion = nullptr;
+                    done();
+                }
+                invalidate();
+            }, false,
+        });
     }
 
     void IisuLayout::cancelGameRemoval()
     {
-        // TODO: iisu 布局删除动画取消
+        if (!m_deleteLayout)
+            return;
+        if (m_deleteIndex < m_deleteLayout->items().size()) {
+            auto& item = m_deleteLayout->items()[m_deleteIndex];
+            item.transform.alpha = 1.f;
+            item.transform.scale = 1.f;
+        }
+        m_uiContext.animations().clear();
+        m_deleteLayout = nullptr;
+        m_deletePath.clear();
+        m_deleteCompletion = nullptr;
+        invalidate();
     }
 
     int IisuLayout::acquireSelectedCoverTexture()
     {
-        return 0;
+        const auto entry = _currentGameEntry();
+        if (!entry || entry->logoPath.empty())
+            return -1;
+        if (!m_selectedCoverPath.empty() &&
+            m_selectedCoverPath != entry->logoPath)
+            return -1;
+        const int texture = m_uiContext.textures().loadTexture(
+            brls::Application::getNVGContext(), entry->logoPath);
+        if (texture <= 0)
+            return -1;
+        m_selectedCoverPath = entry->logoPath;
+        ++m_selectedCoverReferences;
+        return texture;
     }
 
     void IisuLayout::releaseSelectedCoverTexture()
     {
+        if (m_selectedCoverReferences <= 0 || m_selectedCoverPath.empty())
+            return;
+        m_uiContext.textures().releaseTexture(
+            brls::Application::getNVGContext(), m_selectedCoverPath);
+        if (--m_selectedCoverReferences == 0)
+            m_selectedCoverPath.clear();
     }
 
     void IisuLayout::playEntranceAnimation()
     {
-        // TODO: iisu 布局入场动画
+        m_exitAnimationRunning = false;
+        m_exitCompletion = nullptr;
+        m_pageOpacity = 0.f;
+        m_uiContext.animations().clear();
+        _animateEntrance(m_uiContext.layout());
+        if (m_uiContext.isFolderOpen())
+            _animateEntrance(m_uiContext.panelLayout(), 0.06f);
+        m_uiContext.animations().add({
+            0.24f, 0.f,
+            [this](float t) { m_pageOpacity = t; },
+            { }, false,
+        });
+        _captureInputState();
+        invalidate();
     }
 
     void IisuLayout::playExitAnimation(std::function<void()> completion)
     {
-        if (completion)
-            completion();
+        if (m_exitAnimationRunning) {
+            if (completion)
+                m_exitCompletion = std::move(completion);
+            return;
+        }
+        m_exitAnimationRunning = true;
+        m_exitCompletion = std::move(completion);
+        m_uiContext.animations().add({
+            0.20f, 0.f,
+            [this](float t) { m_pageOpacity = 1.f - t; },
+            [this]() {
+                m_exitAnimationRunning = false;
+                if (m_exitCompletion) {
+                    auto done = std::move(m_exitCompletion);
+                    m_exitCompletion = nullptr;
+                    done();
+                }
+            }, false,
+        });
+        _captureInputState();
+        invalidate();
     }
 
     void IisuLayout::playPico8ExitAnimation(std::function<void()> completion)
     {
-        if (completion)
-            completion();
+        brls::Application::blockInputs();
+        playExitAnimation(std::move(completion));
     }
 
     void IisuLayout::beginPico8ReturnAnimation()
     {
-        // TODO: iisu 布局 PICO-8 返回动画
+        m_exitAnimationRunning = false;
+        m_exitCompletion = nullptr;
+        m_pageOpacity = 0.f;
+        _captureInputState();
+        invalidate();
     }
 
-    void IisuLayout::setPico8ReturnProgress(float /*progress*/)
+    void IisuLayout::setPico8ReturnProgress(float progress)
     {
+        m_pageOpacity = std::clamp(progress, 0.f, 1.f);
+        invalidate();
     }
 
     void IisuLayout::finishPico8ReturnAnimation()
     {
+        m_pageOpacity = 1.f;
+        _animateEntrance(m_uiContext.layout());
+        _captureInputState();
+        invalidate();
     }
 
     void IisuLayout::setPico8ShortcutVisible(bool visible)
@@ -322,6 +466,7 @@ namespace beiklive
         const bool minus = state.buttons[static_cast<int>(brls::BUTTON_BACK)];
 
         if (!isFocused() || brls::Application::isInputBlocks() ||
+            m_exitAnimationRunning || isDeleteAnimationRunning() ||
             m_functionClickAnimating) {
             m_holdLeft = m_holdRight = 0.f;
             m_repeatLeft = m_repeatRight = 0.f;
@@ -717,18 +862,15 @@ namespace beiklive
     void IisuLayout::_handleCardPanelInput(float /*dt*/)
     {
         auto& state = brls::Application::getControllerState();
-        const float lx = state.axes[static_cast<int>(brls::LEFT_X)];
         const float ly = state.axes[static_cast<int>(brls::LEFT_Y)];
-        const float rx = state.axes[static_cast<int>(brls::RIGHT_X)];
         const float ry = state.axes[static_cast<int>(brls::RIGHT_Y)];
-        const float navX = std::abs(rx) > std::abs(lx) ? rx : lx;
         const float navY = std::abs(ry) > std::abs(ly) ? ry : ly;
         const bool up = state.buttons[static_cast<int>(brls::BUTTON_UP)] || navY < -0.5f;
         const bool down = state.buttons[static_cast<int>(brls::BUTTON_DOWN)] || navY > 0.5f;
         const bool a = state.buttons[static_cast<int>(brls::BUTTON_A)];
         const bool b = state.buttons[static_cast<int>(brls::BUTTON_B)];
 
-        constexpr int kActionCount = 5; // 启动/收藏/名称/卡片设置/关闭
+        constexpr int kActionCount = 4; // 启动/游戏选项/卡片设置/关闭
         if (up && !m_prevUp) {
             m_cardPanelSelected =
                 (m_cardPanelSelected + kActionCount - 1) % kActionCount;
@@ -740,17 +882,28 @@ namespace beiklive
         }
 
         if (a && !m_prevA) {
+            if (m_cardPanelSelected == 0) {
+                const auto entry = _currentGameEntry();
+                _closeCardPanel();
+                if (entry && onGameActivated)
+                    onGameActivated(*entry);
+                return;
+            }
+            if (m_cardPanelSelected == 1) {
+                const auto entry = _currentGameEntry();
+                _closeCardPanel();
+                if (entry && onGameOptions)
+                    onGameOptions(*entry);
+                return;
+            }
             // 卡片设置：关闭本面板并打开卡片编辑面板
-            if (m_cardPanelSelected == 3) {
+            if (m_cardPanelSelected == 2) {
                 _closeCardPanel();
                 _openCardEditPanel();
                 return;
             }
             if (m_cardPanelSelected == kActionCount - 1) {
                 _closeCardPanel();
-            } else {
-                brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
-                brls::Application::notify(L("功能开发中"));
             }
         }
 
@@ -859,10 +1012,9 @@ namespace beiklive
         constexpr float btnH = 46.f;
         constexpr float btnGap = 10.f;
         static const std::string kActions[] = {
-            L("启动游戏"), L("加入收藏"), L("修改名称"),
-            L("卡片设置"), L("关闭"),
+            L("启动游戏"), L("游戏选项"), L("卡片设置"), L("关闭"),
         };
-        for (int i = 0; i < 5; ++i) {
+        for (int i = 0; i < 4; ++i) {
             const bool selected = i == m_cardPanelSelected;
             const float by = panelY + 26.f +
                 static_cast<float>(i) * (btnH + btnGap);
@@ -1064,11 +1216,20 @@ namespace beiklive
         if (m_focusArea == FocusArea::GRID) {
             if (auto* current = _activeLayout().currentItem()) {
                 if (current->widget) {
-                    // 文件夹保持原逻辑展开，其他 Widget 弹出卡片操作浮层
+                    // 文件夹展开；游戏封面进入与主页共用的游戏操作链路；
+                    // 图片等装饰组件直接打开其设置，而不显示无效游戏操作。
                     if (current->widget->typeName() == "folder")
                         current->widget->onActivate();
-                    else
+                    else if (current->widget->typeName() == "game_cover")
                         _openCardPanel();
+                    else if (current->widget->typeName() == "image") {
+                        const bool isPico8Logo = current->widget->dataId() ==
+                            BK_RES("img/pico8_logo_vector.png");
+                        if (isPico8Logo && m_pico8ShortcutVisible && onPico8Opened)
+                            playPico8ExitAnimation(onPico8Opened);
+                        else
+                            _openCardEditPanel();
+                    }
                 }
             }
             return;
@@ -1093,6 +1254,43 @@ namespace beiklive
         }
     }
 
+    std::optional<beiklive::GameEntry> IisuLayout::_currentGameEntry() const
+    {
+        const auto& layout = m_uiContext.isFolderOpen()
+            ? m_uiContext.panelLayout() : m_uiContext.layout();
+        auto* item = const_cast<LayoutManager&>(layout).currentItem();
+        if (!item || !item->widget || item->widget->typeName() != "game_cover" ||
+            !beiklive::GameDB)
+            return std::nullopt;
+        return beiklive::GameDB->findByPath(item->widget->dataId());
+    }
+
+    void IisuLayout::_animateEntrance(LayoutManager& layout, float delay)
+    {
+        auto& items = layout.items();
+        for (size_t i = 0; i < items.size(); ++i) {
+            auto& item = items[i];
+            if (!item.visible)
+                continue;
+            item.transform.alpha = 0.f;
+            item.transform.scale = 0.92f;
+            const float duration = 0.20f + std::min(0.12f,
+                static_cast<float>(i) * 0.025f) + delay;
+            m_uiContext.animations().add({
+                duration, 0.f,
+                [&item, delay, duration](float t) {
+                    const float local = duration > delay
+                        ? std::clamp((t * duration - delay) /
+                                         (duration - delay), 0.f, 1.f)
+                        : 1.f;
+                    item.transform.alpha = local;
+                    item.transform.scale = 0.92f + local * 0.08f;
+                },
+                { }, false,
+            });
+        }
+    }
+
     void IisuLayout::draw(NVGcontext* vg, float x, float y, float w, float h,
                           brls::Style style, brls::FrameContext* ctx)
     {
@@ -1103,6 +1301,7 @@ namespace beiklive
             m_fontId = brls::Application::getDefaultFont();
 
         nvgSave(vg);
+        nvgGlobalAlpha(vg, std::clamp(m_pageOpacity, 0.f, 1.f));
         nvgIntersectScissor(vg, x, y, w, h);
 
         const float cx = x + w * 0.5f;

@@ -4,6 +4,7 @@
 #include "core/common.h"
 #include "ui/utils/Pico8Transition.hpp"
 #include "ui/view/SwitchLayout.hpp"
+#include "ui/view/iisu/IisuLayout.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -203,6 +204,12 @@ namespace beiklive
             return m_core.Initialize();
         });
         _captureInputState();
+    }
+
+    Pico8Page::Pico8Page(IisuLayout* homeLayout)
+        : Pico8Page(static_cast<SwitchLayout*>(nullptr))
+    {
+        m_iisuHomeLayout = homeLayout;
     }
 
     Pico8Page::~Pico8Page()
@@ -821,6 +828,8 @@ namespace beiklive
         m_popScheduled = true;
         if (m_homeLayout)
             m_homeLayout->finishPico8ReturnAnimation();
+        else if (m_iisuHomeLayout)
+            m_iisuHomeLayout->finishPico8ReturnAnimation();
         brls::sync([]() {
             brls::Application::popActivity(
                 brls::TransitionAnimation::NONE,
@@ -969,6 +978,8 @@ namespace beiklive
                     m_homeReturnStarted = true;
                     if (m_homeLayout)
                         m_homeLayout->beginPico8ReturnAnimation();
+                    else if (m_iisuHomeLayout)
+                        m_iisuHomeLayout->beginPico8ReturnAnimation();
                 }
                 if (m_homeReturnStarted) {
                     const float progress = clamp01(
@@ -976,6 +987,8 @@ namespace beiklive
                         pico8_transition::TRANSITION_DURATION);
                     if (m_homeLayout)
                         m_homeLayout->setPico8ReturnProgress(progress);
+                    else if (m_iisuHomeLayout)
+                        m_iisuHomeLayout->setPico8ReturnProgress(progress);
                     if (progress >= 1.f)
                         _finishHomeReturn();
                 }

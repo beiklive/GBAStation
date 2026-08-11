@@ -47,14 +47,14 @@ namespace beiklive
             static_cast<beiklive::enums::EmuPlatform>(platform));
 
         std::vector<FolderItemDescriptor> items;
-        constexpr size_t maxItems = 18; // 6x3 网格
-        const size_t count = std::min(maxItems, games.size());
+        const size_t count = games.size();
         for (size_t i = 0; i < count; ++i) {
             FolderItemDescriptor desc;
             desc.type = WidgetType::GameCover;
             desc.id = games[i].path;
-            desc.x = static_cast<int>(i % 6);
-            desc.y = static_cast<int>(i / 6);
+            // 文件夹浮层固定三行、按列向右扩展，由 GridSystem 横向滚动。
+            desc.x = static_cast<int>(i / 3);
+            desc.y = static_cast<int>(i % 3);
             desc.w = 1;
             desc.h = 1;
             items.push_back(std::move(desc));

@@ -1339,7 +1339,8 @@ beiklive::enums::FileType platformToFileType(int platform)
 
                 brls::sync([this, gen, recent = std::move(recent),
                             prepared = std::move(prepared)]() mutable {
-                    if (!m_alive.load() || gen != m_recentRefreshGen.load() || !switchLayout) return;
+                    if (!m_alive.load() || gen != m_recentRefreshGen.load() ||
+                        (!switchLayout && !iisuLayout)) return;
 
                     m_libraryPreparedData = std::move(prepared);
                     brls::View* currentFocus = brls::Application::getCurrentFocus();
@@ -1753,7 +1754,7 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
         iisuLayout->onPico8Opened = [this]()
         {
             brls::Logger::info("PICO-8 shortcut opened (iisu layout)");
-            brls::Application::notify(L("iisu 布局暂不支持 PICO-8 入口"));
+            _openPico8Page();
         };
 
         iisuLayout->onExitRequested = [this]()
@@ -1813,11 +1814,13 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
 
     void StartPage::_openPico8Page()
     {
-        if (!switchLayout) {
+        if (!switchLayout && !iisuLayout) {
             brls::Application::unblockInputs();
             return;
         }
-        auto* pico8Page = new beiklive::Pico8Page(switchLayout);
+        auto* pico8Page = switchLayout
+            ? new beiklive::Pico8Page(switchLayout)
+            : new beiklive::Pico8Page(iisuLayout);
         brls::Application::pushActivity(
             new brls::Activity(pico8Page),
             brls::TransitionAnimation::NONE);
@@ -1993,6 +1996,9 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
         if (switchLayout) {
             m_gameOptionsSidebar->setNanoVgPreviewImageHandle(
                 switchLayout->acquireSelectedCoverTexture());
+        } else if (iisuLayout) {
+            m_gameOptionsSidebar->setNanoVgPreviewImageHandle(
+                iisuLayout->acquireSelectedCoverTexture());
         }
         this->getBottomBar()->setVisibility(brls::Visibility::GONE);
 
@@ -2166,6 +2172,8 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
                             ++m_recentRefreshGen;
                             if (switchLayout)
                                 switchLayout->removeGameByPath(path);
+                            else if (iisuLayout)
+                                iisuLayout->removeGameByPath(path);
 
                             auto alive = m_aliveToken;
                             ThreadPool::instance().enqueue([
@@ -2202,6 +2210,8 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
                                         m_homeDeletePending = false;
                                         if (switchLayout)
                                             switchLayout->cancelGameRemoval();
+                                        else if (iisuLayout)
+                                            iisuLayout->cancelGameRemoval();
                                         brls::Application::notify(
                                             deleteRomFile && !removedFile
                                                 ? L("游戏文件删除失败，记录已保留")
@@ -2227,6 +2237,9 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
                                     if (switchLayout)
                                         switchLayout->completeGameRemoval(
                                             std::move(finish));
+                                    else if (iisuLayout)
+                                        iisuLayout->completeGameRemoval(
+                                            std::move(finish));
                                     else
                                         finish();
                                 });
@@ -2247,8 +2260,12 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
         m_gameOptionsSidebar->onClosed = [this]() {
             if (switchLayout)
                 switchLayout->releaseSelectedCoverTexture();
+            if (iisuLayout)
+                iisuLayout->releaseSelectedCoverTexture();
             if (switchLayout)
                 switchLayout->restoreCardFocus(false);
+            if (iisuLayout)
+                iisuLayout->restoreCardFocus(false);
             this->getBottomBar()->setVisibility(brls::Visibility::GONE);
         };
         m_gameOptionsSidebar->onCloseRequested = [this]() {
@@ -2267,6 +2284,8 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
         m_gameOptionsSidebar = nullptr;
         if (switchLayout)
             switchLayout->releaseSelectedCoverTexture();
+        if (iisuLayout)
+            iisuLayout->releaseSelectedCoverTexture();
         stale->removeFromSuperView(true);
         this->getBottomBar()->setVisibility(brls::Visibility::GONE);
     }
