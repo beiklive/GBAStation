@@ -45,6 +45,7 @@ struct ImportItem
 {
     std::string romPath;
     std::string label;
+    std::string dbName;
 };
 
 struct ImportSharedConfig
@@ -251,9 +252,117 @@ std::string stemFromPath(const std::string& path)
     return fs::path(path).stem().string();
 }
 
-std::string parentPath(const std::string& path)
+/* 缩略图文件名清洗：与 RetroArch gfx_thumbnail_fill_content_img() 一致，
+ * 将 No-Intro 非法字符替换为下划线 */
+std::string scrubThumbnailName(std::string name)
 {
-    return fs::path(path).parent_path().string();
+    for (auto& c : name)
+    {
+        if (c == '&' || c == '*' || c == '/' || c == ':' ||
+            c == '"' || c == '<' || c == '>' || c == '?' ||
+            c == '\\' || c == '|')
+            c = '_';
+    }
+    return name;
+}
+
+/* 由 label 生成缩略图文件名；shorten 为 true 时截取到第一个 " (" 之前
+ * （与 RetroArch 的 content_img_short 逻辑一致） */
+std::string thumbnailNameFromLabel(const std::string& label, bool shorten)
+{
+    std::string name = label;
+    if (shorten)
+    {
+        const std::size_t pos = label.find(" (");
+        if (pos == std::string::npos || pos == 0)
+            return "";
+        name = label.substr(0, pos);
+    }
+    return scrubThumbnailName(name) + ".png";
+}
+
+/* 缩略图一级目录（系统名）：优先条目 db_name，其次 lpl 文件名，
+ * 最后回退 ROM 所在目录名（对齐 RetroArch 规则） */
+std::string thumbnailSystemDir(const std::string& dbName,
+                               const std::string& lplStem,
+                               const std::string& romPath)
+{
+    if (!dbName.empty())
+    {
+        /* MAME 缩略图仓库只保留一个 MAME 目录 */
+        if (dbName.compare(0, 4, "MAME") == 0)
+            return "MAME";
+        const std::size_t pos = dbName.find('|');
+        return (pos == std::string::npos) ? dbName : dbName.substr(0, pos);
+    }
+    if (!lplStem.empty())
+        return lplStem;
+    return fs::path(romPath).parent_path().filename().string();
+}
+
+/* 从 ROM 路径推导缩略图根目录：大小写不敏感地整路径段匹配 "roms"，
+ * 替换为 "thumbnails"（如 ...\retroarch\roms\<sys>\x.nes →
+ * ...\retroarch\thumbnails） */
+std::string thumbnailRootFromRoms(const std::string& romPath)
+{
+    std::string lower = romPath;
+    for (auto& c : lower)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    std::size_t pos = 0;
+    while ((pos = lower.find("roms", pos)) != std::string::npos)
+    {
+        const bool startOk = (pos == 0) || lower[pos - 1] == '/' || lower[pos - 1] == '\\';
+        const std::size_t end = pos + 4;
+        const bool endOk = (end >= lower.size()) || lower[end] == '/' || lower[end] == '\\';
+        if (startOk && endOk)
+            return romPath.substr(0, pos) + "thumbnails";
+        pos = end;
+    }
+    return "";
+}
+
+/* 匹配 RetroArch 缩略图（对齐 gfx_thumbnail_path.c 的匹配规则）：
+ * 根目录候选（lpl 推导 → roms 推导）→ 系统目录 → 名称三级回退
+ * （文件名 → label → 短label），首个真实存在的文件即为命中；
+ * 全部未命中返回空串 */
+std::string findRetroArchThumbnail(const std::string& dbName,
+                                   const std::string& lplStem,
+                                   const std::string& lplThumbRoot,
+                                   const std::string& romPath,
+                                   const std::string& romStem,
+                                   const std::string& label)
+{
+    const std::string systemDir = thumbnailSystemDir(dbName, lplStem, romPath);
+    if (systemDir.empty())
+        return "";
+
+    std::vector<std::string> roots;
+    if (!lplThumbRoot.empty())
+        roots.push_back(lplThumbRoot);
+    const std::string romsRoot = thumbnailRootFromRoms(romPath);
+    if (!romsRoot.empty() && romsRoot != lplThumbRoot)
+        roots.push_back(romsRoot);
+
+    std::string names[3];
+    names[0] = scrubThumbnailName(romStem) + ".png";
+    names[1] = thumbnailNameFromLabel(label, false);
+    names[2] = thumbnailNameFromLabel(label, true);
+
+    for (const auto& root : roots)
+    {
+        const fs::path base = fs::path(root) / systemDir / "Named_Snaps";
+        for (const auto& name : names)
+        {
+            if (name.empty())
+                continue;
+            const std::string candidate = (base / name).string();
+            std::error_code ec;
+            if (fs::exists(candidate, ec) && !ec)
+                return candidate;
+        }
+    }
+    return "";
 }
 
 std::string normalizeExtension(std::string ext)
@@ -1953,6 +2062,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
         importItems.push_back({
             item.value("path", ""),
             item.value("label", ""),
+            item.value("db_name", ""),
         });
     }
 
@@ -1962,7 +2072,10 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
     m_importing.store(true, std::memory_order_release);
 
     m_importThread = std::thread([this, importItems = std::move(importItems), config, lplPath]() {
-        std::string lplStem = stemFromPath(expandTilde(lplPath));
+        const std::string realLplPath = expandTilde(lplPath);
+        std::string lplStem = stemFromPath(realLplPath);
+        const std::string lplThumbRoot =
+            (fs::path(realLplPath).parent_path().parent_path() / "thumbnails").string();
         for (int i = 0; i < static_cast<int>(importItems.size()); ++i)
         {
             const auto& item = importItems[i];
@@ -1986,26 +2099,11 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             updateProgressName(item.label);
             std::string romStem = stemFromPath(romPath);
 
-            std::string logoPath;
-            std::string thumbPath = romPath;
-            size_t romsPos = thumbPath.find("roms");
-            if (romsPos != std::string::npos)
-            {
-                thumbPath.replace(romsPos, 4, "retroarch/thumbnails");
-                std::string thumbDir = parentPath(thumbPath);
-                std::string logoFile = thumbDir + "/Named_Snaps/" + romStem + ".png";
-#ifdef _WIN32
-                std::string altLogo = logoFile;
-                for (auto& c : altLogo)
-                    if (c == '/') c = '\\';
-                if (fs::exists(altLogo))
-                    logoPath = altLogo;
-                else
-#endif
-                    logoPath = logoFile;
-            }
+            std::string logoPath = findRetroArchThumbnail(
+                item.dbName, lplStem, lplThumbRoot,
+                romPath, romStem, item.label);
 
-            if (logoPath.empty() || !fs::exists(logoPath))
+            if (logoPath.empty())
             {
                 logoPath = beiklive::tools::getDefaultLogoPath(
                     static_cast<beiklive::enums::EmuPlatform>(config.platform),
