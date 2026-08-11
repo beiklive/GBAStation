@@ -1441,7 +1441,7 @@ const ScanPlatformConfig kScanPlatforms[] = {
     {L("GBC"),    beiklive::SettingKey::KEY_SCAN_PATH_GBC,    {"gbc"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC)},
     {L("GBA"),    beiklive::SettingKey::KEY_SCAN_PATH_GBA,    {"gba"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA)},
     {L("NDS"),    beiklive::SettingKey::KEY_SCAN_PATH_NDS,    {"nds"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)},
-    {L("3DS"),    beiklive::SettingKey::KEY_SCAN_PATH_3DS,    {"cia", "cci", "3ds"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)},
+    {L("3DS"),    beiklive::SettingKey::KEY_SCAN_PATH_3DS,    {"cci", "3ds"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)},
     {L("Arcade"), beiklive::SettingKey::KEY_SCAN_PATH_ARCADE, {"zip", "7z"},  material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade)},
     {L("DC"),     beiklive::SettingKey::KEY_SCAN_PATH_DC,     {"cdi", "gdi", "chd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)},
     {L("MD"),     beiklive::SettingKey::KEY_SCAN_PATH_GENESIS,{"md", "gen", "bin", "smd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)},
@@ -1733,6 +1733,21 @@ public:
                 : L("共处理 ") + std::to_string(total) + L(" 个游戏");
         }
         m_countLabel->setText(summary);
+        // 扫描时部分平台目录不可读：完成后一次性提示
+        if (p->m_progressTask == DataManagementPage::ProgressTask::Import &&
+            !p->m_completionShown)
+        {
+            std::string errMsg;
+            {
+                std::lock_guard<std::mutex> lock(p->m_statusMutex);
+                errMsg = p->m_errorMsg;
+            }
+            if (!errMsg.empty())
+            {
+                p->m_completionShown = true;
+                brls::Application::notify(errMsg);
+            }
+        }
         CloseAsync();
     }
 
@@ -2001,6 +2016,7 @@ void DataManagementPage::onSelectLpl(int platform)
 void DataManagementPage::startImport(const std::string& lplPath, int platform)
 {
     m_progressTask = ProgressTask::Import;
+    m_completionShown = false;
     showProgressDialog();
     finishWorker();
 
@@ -2328,7 +2344,7 @@ void DataManagementPage::startScanAll()
         {
             std::string dir;
             int platform;
-            std::vector<std::string> exts;
+            std::vector<fs::path> roms;
         };
         std::vector<Planned> plans;
         int total = 0;
@@ -2341,35 +2357,64 @@ void DataManagementPage::startScanAll()
             Planned p;
             p.dir = dir;
             p.platform = kScanPlatforms[i].platform;
-            p.exts.assign(kScanPlatforms[i].exts.begin(), kScanPlatforms[i].exts.end());
-            try
+
+            // 单次遍历收集匹配扩展名的文件（同时用于计数与导入）
+            std::vector<fs::path> roms;
+            std::error_code ec;
+            if (m_autoSubDir)
             {
-                if (m_autoSubDir)
+                fs::recursive_directory_iterator it(
+                    dir, fs::directory_options::skip_permission_denied, ec);
+                fs::recursive_directory_iterator itEnd;
+                if (ec)
                 {
-                    for (auto& e : fs::recursive_directory_iterator(dir))
-                    {
-                        if (!e.is_regular_file())
-                            continue;
-                        std::string ext = normalizeExtension(e.path().extension().string());
-                        if (std::find(p.exts.begin(), p.exts.end(), ext) != p.exts.end())
-                            ++total;
-                    }
+                    std::lock_guard<std::mutex> lock(m_statusMutex);
+                    m_errorMsg += (m_errorMsg.empty() ? "" : "\n")
+                        + dir + ": " + ec.message();
+                    continue;
                 }
-                else
+                for (; it != itEnd; it.increment(ec))
                 {
-                    for (auto& e : fs::directory_iterator(dir))
-                    {
-                        if (!e.is_regular_file())
-                            continue;
-                        std::string ext = normalizeExtension(e.path().extension().string());
-                        if (std::find(p.exts.begin(), p.exts.end(), ext) != p.exts.end())
-                            ++total;
-                    }
+                    if (ec)
+                        break;
+                    std::error_code fec;
+                    if (!it->is_regular_file(fec) || fec)
+                        continue;
+                    std::string ext = normalizeExtension(it->path().extension().string());
+                    if (std::find(kScanPlatforms[i].exts.begin(),
+                                  kScanPlatforms[i].exts.end(), ext)
+                        != kScanPlatforms[i].exts.end())
+                        roms.push_back(it->path());
                 }
             }
-            catch (...)
+            else
             {
+                fs::directory_iterator it(
+                    dir, fs::directory_options::skip_permission_denied, ec);
+                fs::directory_iterator itEnd;
+                if (ec)
+                {
+                    std::lock_guard<std::mutex> lock(m_statusMutex);
+                    m_errorMsg += (m_errorMsg.empty() ? "" : "\n")
+                        + dir + ": " + ec.message();
+                    continue;
+                }
+                for (; it != itEnd; it.increment(ec))
+                {
+                    if (ec)
+                        break;
+                    std::error_code fec;
+                    if (!it->is_regular_file(fec) || fec)
+                        continue;
+                    std::string ext = normalizeExtension(it->path().extension().string());
+                    if (std::find(kScanPlatforms[i].exts.begin(),
+                                  kScanPlatforms[i].exts.end(), ext)
+                        != kScanPlatforms[i].exts.end())
+                        roms.push_back(it->path());
+                }
             }
+            total += static_cast<int>(roms.size());
+            p.roms = std::move(roms);
             plans.push_back(std::move(p));
         }
         m_total.store(total, std::memory_order_release);
@@ -2377,54 +2422,20 @@ void DataManagementPage::startScanAll()
         int idx = 0;
         for (size_t i = 0; i < plans.size(); ++i)
         {
-            if (m_importError.load(std::memory_order_acquire))
-                break;
             const auto& p = plans[i];
-            idx += scanOnePlatform(p.dir, p.platform, p.exts, idx);
+            idx += scanOnePlatform(p.roms, p.dir, p.platform, idx);
         }
         m_importDone.store(true, std::memory_order_release);
     });
 }
 
-// 扫描单个机型的目录并导入（线程内调用）。返回本机型处理（含跳过）的文件数。
-int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform,
-                                        const std::vector<std::string>& exts,
+// 导入一个机型的文件列表（线程内调用）。返回本机型处理（含跳过）的文件数。
+int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
+                                        const std::string& dirPath,
+                                        int platform,
                                         int startIndex)
 {
-    // 归一化为绝对路径：配置里可能是相对路径（依赖工作目录），统一解析。
-    const fs::path absDir = fs::absolute(dirPath);
-    std::vector<fs::path> roms;
-    try
-    {
-        if (m_autoSubDir)
-        {
-            for (auto& entry : fs::recursive_directory_iterator(absDir))
-            {
-                if (!entry.is_regular_file())
-                    continue;
-                std::string ext = normalizeExtension(entry.path().extension().string());
-                if (std::find(exts.begin(), exts.end(), ext) != exts.end())
-                    roms.push_back(entry.path());
-            }
-        }
-        else
-        {
-            for (auto& entry : fs::directory_iterator(absDir))
-            {
-                if (!entry.is_regular_file())
-                    continue;
-                std::string ext = normalizeExtension(entry.path().extension().string());
-                if (std::find(exts.begin(), exts.end(), ext) != exts.end())
-                    roms.push_back(entry.path());
-            }
-        }
-    }
-    catch (const std::exception& e)
-    {
-        setErrorMessage(e.what());
-        m_importError.store(true, std::memory_order_release);
-        return 0;
-    }
+    ImportSharedConfig config = buildSharedConfig(platform);
 
     for (int i = 0; i < static_cast<int>(roms.size()); ++i)
     {
@@ -2452,7 +2463,6 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
             }
         }
         updateProgressName(displayName);
-        ImportSharedConfig config = buildSharedConfig(platform);
 
         beiklive::GameEntry entry;
         entry.path = path;
@@ -2460,8 +2470,23 @@ int DataManagementPage::scanOnePlatform(const std::string& dirPath, int platform
         entry.platform = platform;
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
             entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(path);
-        entry.logoPath = beiklive::tools::getDefaultLogoPath(
+
+        // 封面：ROM 同目录同名 png → 扫描根目录 logos/ 同名 png → 默认图。
+        std::string logoPath = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>(platform), path);
+        std::error_code coverEc;
+        fs::path coverPng = romPath.parent_path() / (romStem + ".png");
+        if (fs::exists(coverPng, coverEc) && !coverEc)
+            logoPath = coverPng.string();
+        else
+        {
+            coverEc.clear();
+            coverPng = fs::path(dirPath) / "logos" / (romStem + ".png");
+            if (fs::exists(coverPng, coverEc) && !coverEc)
+                logoPath = coverPng.string();
+        }
+        entry.logoPath = logoPath;
+
         std::string savePath = beiklive::tools::defaultGameSavePath(platform, path);
         try
         {

@@ -73,6 +73,22 @@ namespace beiklive
             return false;
         }
 
+        // 路径索引键：统一分隔符（\ → /），Windows 下再转小写，
+        // 使同一文件在不同写法（分隔符/大小写）下命中同一键。
+        std::string pathKey(const std::string& path)
+        {
+            std::string key = path;
+            for (auto& c : key)
+                if (c == '\\')
+                    c = '/';
+#ifdef _WIN32
+            for (auto& c : key)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+#endif
+            return key;
+        }
+
+
         std::vector<std::string> fallbackNdsShaderTypes()
         {
             return {"RetroArch_dot"};
@@ -813,7 +829,7 @@ namespace beiklive
     // ==================== 私有实现（无锁） ====================
     void GameDatabase::doUpsertByPath(const GameEntry &entry)
     {
-        auto it = pathIndex_.find(entry.path);
+        auto it = pathIndex_.find(pathKey(entry.path));
         if (it != pathIndex_.end())
         {
             int oldCrc32 = data_[it->second].crc32;
@@ -832,7 +848,7 @@ namespace beiklive
             size_t idx = data_.size() - 1;
             if (entry.crc32 != 0)
                 crc32Index_[entry.crc32] = idx;
-            pathIndex_[entry.path] = idx;
+            pathIndex_[pathKey(entry.path)] = idx;
         }
     }
 
@@ -848,8 +864,8 @@ namespace beiklive
             data_[it->second] = entry;
             if (oldPath != entry.path)
             {
-                pathIndex_.erase(oldPath);
-                pathIndex_[entry.path] = it->second;
+                pathIndex_.erase(pathKey(oldPath));
+                pathIndex_[pathKey(entry.path)] = it->second;
             }
         }
         else
@@ -858,7 +874,7 @@ namespace beiklive
             size_t idx = data_.size() - 1;
             if (entry.crc32 != 0)
                 crc32Index_[entry.crc32] = idx;
-            pathIndex_[entry.path] = idx;
+            pathIndex_[pathKey(entry.path)] = idx;
         }
     }
 
@@ -868,7 +884,7 @@ namespace beiklive
         if (it == crc32Index_.end())
             return false;
         size_t idx = it->second;
-        pathIndex_.erase(data_[idx].path);
+        pathIndex_.erase(pathKey(data_[idx].path));
         crc32Index_.erase(it);
         if (idx != data_.size() - 1)
         {
@@ -876,7 +892,7 @@ namespace beiklive
             const auto &moved = data_[idx];
             if (moved.crc32 != 0)
                 crc32Index_[moved.crc32] = idx;
-            pathIndex_[moved.path] = idx;
+            pathIndex_[pathKey(moved.path)] = idx;
         }
         data_.pop_back();
         return true;
@@ -884,7 +900,7 @@ namespace beiklive
 
     bool GameDatabase::doRemoveByPath(const std::string &path)
     {
-        auto it = pathIndex_.find(path);
+        auto it = pathIndex_.find(pathKey(path));
         if (it == pathIndex_.end())
             return false;
         size_t idx = it->second;
@@ -897,7 +913,7 @@ namespace beiklive
             const auto &moved = data_[idx];
             if (moved.crc32 != 0)
                 crc32Index_[moved.crc32] = idx;
-            pathIndex_[moved.path] = idx;
+            pathIndex_[pathKey(moved.path)] = idx;
         }
         data_.pop_back();
         return true;
@@ -913,7 +929,7 @@ namespace beiklive
 
     std::optional<GameEntry> GameDatabase::doFindByPath(const std::string &path) const
     {
-        auto it = pathIndex_.find(path);
+        auto it = pathIndex_.find(pathKey(path));
         if (it == pathIndex_.end())
             return std::nullopt;
         return data_[it->second];

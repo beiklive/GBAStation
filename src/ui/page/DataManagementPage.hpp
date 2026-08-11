@@ -92,8 +92,9 @@ namespace beiklive
         void showProgressDialog();
         std::string scanPathFor(int platformIndex) const;
         void setScanPath(int platformIndex, const std::string& path);
-        int scanOnePlatform(const std::string& dirPath, int platform,
-                            const std::vector<std::string>& exts,
+        int scanOnePlatform(const std::vector<std::filesystem::path>& roms,
+                            const std::string& dirPath,
+                            int platform,
                             int startIndex);
     };
 
