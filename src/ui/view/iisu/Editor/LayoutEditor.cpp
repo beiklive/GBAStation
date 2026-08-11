@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "../ImageWidget.hpp"
 #include "../LayoutManager.hpp"
 #include "../Widget.hpp"
 
@@ -120,6 +121,14 @@ namespace beiklive
             entry["y"] = item.y;
             entry["w"] = item.w;
             entry["h"] = item.h;
+            // ImageWidget(GIF) 播放速度倍率
+            if (item.widget && item.widget->typeName() == "image") {
+                if (auto* image =
+                        dynamic_cast<ImageWidget*>(item.widget.get())) {
+                    if (image->speed() != 1.f)
+                        entry["speed"] = image->speed();
+                }
+            }
             items.push_back(std::move(entry));
         }
         root["items"] = std::move(items);

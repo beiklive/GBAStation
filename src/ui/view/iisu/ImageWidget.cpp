@@ -29,11 +29,49 @@ namespace beiklive
         m_path = path;
         m_textureId = 0;
         m_textureRequested = false;
+        m_isGif = false;
+        m_gifFrame = 0;
+        m_gifTimeMs = 0.f;
     }
 
     std::string ImageWidget::displayName()
     {
         return beiklive::tools::getFileName(m_path);
+    }
+
+    void ImageWidget::update(float delta)
+    {
+        if (!m_isGif || !m_textures)
+            return;
+        const size_t count = m_textures->gifFrameCount(m_path);
+        if (count < 2)
+            return;
+
+        m_gifTimeMs += delta * 1000.f;
+        const bool loop = m_textures->gifLooping(m_path);
+        const float speed = m_speedMul > 0.01f ? m_speedMul : 1.f;
+        size_t guard = 0;
+        while (true) {
+            // 有效延迟 = 文件延迟 / 速度倍率
+            const uint32_t baseDelay =
+                m_textures->gifDelayMs(m_path, m_gifFrame);
+            const uint32_t effDelay = std::max<uint32_t>(
+                1u, static_cast<uint32_t>(baseDelay / speed));
+            if (m_gifTimeMs < effDelay)
+                break;
+            m_gifTimeMs -= static_cast<float>(effDelay);
+            if (m_gifFrame + 1 < count) {
+                ++m_gifFrame;
+            } else if (loop) {
+                m_gifFrame = 0;
+            } else {
+                // 不循环：停在末帧
+                m_gifTimeMs = 0.f;
+                break;
+            }
+            if (++guard > 64)
+                break;
+        }
     }
 
     void ImageWidget::draw(NVGcontext* vg, const GridRect& rect)
@@ -44,12 +82,20 @@ namespace beiklive
         // 首次绘制时延迟加载纹理
         if (!m_textureRequested) {
             m_textureRequested = true;
-            if (m_textures)
+            if (m_textures) {
                 m_textureId = m_textures->loadTexture(vg, m_path);
+                if (m_textures->isGifTexture(m_path)) {
+                    m_isGif = true;
+                    m_gifFrame = 0;
+                }
+            }
         }
 
-        
-        if (m_textureId <= 0) {
+        // GIF：直接使用当前帧的独立纹理（避免运行时更新纹理导致的闪烁）
+        const int drawTexture = m_isGif
+            ? m_textures->gifFrameTexture(m_path, m_gifFrame)
+            : m_textureId;
+        if (drawTexture <= 0) {
             // 加载失败占位：灰色底
             nvgBeginPath(vg);
             nvgRoundedRect(vg, rect.left, rect.top,
@@ -61,7 +107,7 @@ namespace beiklive
 
         int imageW = 0;
         int imageH = 0;
-        nvgImageSize(vg, m_textureId, &imageW, &imageH);
+        nvgImageSize(vg, drawTexture, &imageW, &imageH);
         if (imageW <= 0 || imageH <= 0)
             return;
 
@@ -78,7 +124,7 @@ namespace beiklive
         nvgRoundedRect(vg, rect.left, rect.top,
                        rect.width, rect.height, m_radius);
         NVGpaint paint = nvgImagePattern(
-            vg, drawX, drawY, drawW, drawH, 0.f, m_textureId, 1.f);
+            vg, drawX, drawY, drawW, drawH, 0.f, drawTexture, 1.f);
         nvgFillPaint(vg, paint);
         nvgFill(vg);
     }

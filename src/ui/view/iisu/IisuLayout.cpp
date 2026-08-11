@@ -272,10 +272,14 @@ namespace beiklive
                     std::cos(m_time * 7.f + phase) * 1.2f;
             }
         } else {
-            // 普通模式：偏移归零
+            // 普通模式：偏移归零（注意：若未来动画系统使用 Transform.offset
+            // 做位移动画，此处会覆盖其值，需要改为仅清理编辑抖动残留）
             for (auto& item : items) {
-                item.transform.offsetX = 0.f;
-                item.transform.offsetY = 0.f;
+                if (item.transform.offsetX != 0.f ||
+                    item.transform.offsetY != 0.f) {
+                    item.transform.offsetX = 0.f;
+                    item.transform.offsetY = 0.f;
+                }
             }
         }
     }
@@ -357,8 +361,12 @@ namespace beiklive
             return;
         }
 
-        // 卡片编辑占位面板：仅 B 返回
+        // 卡片编辑面板：左/右调整 GIF 速度，B 返回
         if (m_cardEditOpen) {
+            if (left && !m_prevLeft)
+                _adjustCardSpeed(-1);
+            if (right && !m_prevRight)
+                _adjustCardSpeed(1);
             if (b && !m_prevB)
                 _closeCardEditPanel();
             m_prevLeft = left;
@@ -400,6 +408,7 @@ namespace beiklive
             m_prevDown = down;
             m_prevA = a;
             m_prevB = b;
+            m_prevMinus = minus;
             _handleBack();
             return;
         }
@@ -412,6 +421,7 @@ namespace beiklive
             m_prevDown = down;
             m_prevA = a;
             m_prevB = b;
+            m_prevMinus = minus;
             _activateCurrent();
             return;
         }
@@ -718,7 +728,7 @@ namespace beiklive
         const bool a = state.buttons[static_cast<int>(brls::BUTTON_A)];
         const bool b = state.buttons[static_cast<int>(brls::BUTTON_B)];
 
-        constexpr int kActionCount = 4; // 启动游戏 / 加入收藏 / 修改名称 / 关闭
+        constexpr int kActionCount = 5; // 启动/收藏/名称/卡片设置/关闭
         if (up && !m_prevUp) {
             m_cardPanelSelected =
                 (m_cardPanelSelected + kActionCount - 1) % kActionCount;
@@ -730,7 +740,12 @@ namespace beiklive
         }
 
         if (a && !m_prevA) {
-            // 占位：前三个动作暂未实现，最后一项关闭
+            // 卡片设置：关闭本面板并打开卡片编辑面板
+            if (m_cardPanelSelected == 3) {
+                _closeCardPanel();
+                _openCardEditPanel();
+                return;
+            }
             if (m_cardPanelSelected == kActionCount - 1) {
                 _closeCardPanel();
             } else {
@@ -844,9 +859,10 @@ namespace beiklive
         constexpr float btnH = 46.f;
         constexpr float btnGap = 10.f;
         static const std::string kActions[] = {
-            L("启动游戏"), L("加入收藏"), L("修改名称"), L("关闭"),
+            L("启动游戏"), L("加入收藏"), L("修改名称"),
+            L("卡片设置"), L("关闭"),
         };
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 5; ++i) {
             const bool selected = i == m_cardPanelSelected;
             const float by = panelY + 26.f +
                 static_cast<float>(i) * (btnH + btnGap);
@@ -886,8 +902,56 @@ namespace beiklive
         if (!item || !item->widget)
             return;
         m_cardEditName = item->widget->displayName();
+        m_cardEditItem = item;
+        m_cardSpeedIndex = 0;
+        if (item->widget->typeName() == "image") {
+            if (auto* image = dynamic_cast<ImageWidget*>(item->widget.get()))
+                m_cardSpeedIndex = _snapSpeedIndex(image->speed());
+        }
         m_cardEditOpen = true;
         brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+    }
+
+    int IisuLayout::_snapSpeedIndex(float speed)
+    {
+        const std::vector<float>& options = _speedOptions();
+        int best = 0;
+        float bestDist = 1e9f;
+        for (size_t i = 0; i < options.size(); ++i) {
+            const float d = std::abs(options[i] - speed);
+            if (d < bestDist) {
+                bestDist = d;
+                best = static_cast<int>(i);
+            }
+        }
+        return best;
+    }
+
+    const std::vector<float>& IisuLayout::_speedOptions()
+    {
+        static const std::vector<float> kOptions = {
+            0.25f, 0.5f, 1.f, 2.f, 4.f,
+        };
+        return kOptions;
+    }
+
+    void IisuLayout::_adjustCardSpeed(int dir)
+    {
+        auto* item = m_cardEditItem;
+        if (!item || !item->widget || item->widget->typeName() != "image")
+            return;
+        auto* image = dynamic_cast<ImageWidget*>(item->widget.get());
+        if (!image)
+            return;
+
+        const std::vector<float>& options = _speedOptions();
+        const int count = static_cast<int>(options.size());
+        m_cardSpeedIndex =
+            (m_cardSpeedIndex + dir + count) % count;
+        image->setSpeed(options[static_cast<size_t>(m_cardSpeedIndex)]);
+        // 立即静默保存，保证速度持久化
+        m_editor.save("home.json");
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
     }
 
     void IisuLayout::_closeCardEditPanel()
@@ -895,6 +959,7 @@ namespace beiklive
         if (!m_cardEditOpen)
             return;
         m_cardEditOpen = false;
+        m_cardEditItem = nullptr;
         brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
     }
 
@@ -936,23 +1001,61 @@ namespace beiklive
         nvgFontSize(vg, 24.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(242, 245, 251, 240));
-        nvgText(vg, panelX + panelW * 0.5f, panelY + 70.f,
+        nvgText(vg, panelX + panelW * 0.5f, panelY + 58.f,
                 L("卡片设置").c_str(), nullptr);
 
         nvgFontSize(vg, 16.f);
         nvgFillColor(vg, nvgRGBA(200, 209, 225, 200));
-        nvgText(vg, panelX + panelW * 0.5f, panelY + 110.f,
+        nvgText(vg, panelX + panelW * 0.5f, panelY + 94.f,
                 m_cardEditName.c_str(), nullptr);
 
-        nvgFontSize(vg, 14.f);
-        nvgFillColor(vg, nvgRGBA(170, 180, 200, 160));
-        nvgText(vg, panelX + panelW * 0.5f, panelY + 150.f,
-                L("（占位功能，等待实现）").c_str(), nullptr);
+        // GIF 图片：播放速度调节
+        bool isGifImage = false;
+        float speed = 1.f;
+        if (m_cardEditItem && m_cardEditItem->widget &&
+            m_cardEditItem->widget->typeName() == "image") {
+            if (auto* image =
+                    dynamic_cast<ImageWidget*>(m_cardEditItem->widget.get())) {
+                isGifImage = m_uiContext.textures().isGifTexture(
+                    image->dataId());
+                speed = image->speed();
+            }
+        }
 
-        nvgFontSize(vg, 14.f);
-        nvgFillColor(vg, nvgRGBA(190, 200, 218, 180));
-        nvgText(vg, panelX + panelW * 0.5f, panelY + panelH - 26.f,
-                L("B 返回").c_str(), nullptr);
+        if (isGifImage) {
+            const std::string speedText = std::to_string(
+                static_cast<int>(speed * 100.f + 0.5f)) + "%";
+            nvgFontSize(vg, 22.f);
+            nvgFillColor(vg, nvgRGBA(91, 193, 255, 240));
+            nvgText(vg, panelX + panelW * 0.5f, panelY + 140.f,
+                    (L("播放速度: ") + speedText).c_str(), nullptr);
+
+            // 速度档位指示
+            nvgFontSize(vg, 13.f);
+            nvgFillColor(vg, nvgRGBA(170, 180, 200, 160));
+            const std::vector<float>& options = _speedOptions();
+            std::string bar;
+            for (size_t i = 0; i < options.size(); ++i)
+                bar += (i == static_cast<size_t>(m_cardSpeedIndex))
+                    ? "●  " : "○  ";
+            nvgText(vg, panelX + panelW * 0.5f, panelY + 172.f,
+                    bar.c_str(), nullptr);
+
+            nvgFontSize(vg, 14.f);
+            nvgFillColor(vg, nvgRGBA(190, 200, 218, 180));
+            nvgText(vg, panelX + panelW * 0.5f, panelY + panelH - 26.f,
+                    L("←/→ 调整速度  B 返回").c_str(), nullptr);
+        } else {
+            nvgFontSize(vg, 14.f);
+            nvgFillColor(vg, nvgRGBA(170, 180, 200, 160));
+            nvgText(vg, panelX + panelW * 0.5f, panelY + 150.f,
+                    L("（占位功能，等待实现）").c_str(), nullptr);
+
+            nvgFontSize(vg, 14.f);
+            nvgFillColor(vg, nvgRGBA(190, 200, 218, 180));
+            nvgText(vg, panelX + panelW * 0.5f, panelY + panelH - 26.f,
+                    L("B 返回").c_str(), nullptr);
+        }
     }
 
     void IisuLayout::_activateCurrent()

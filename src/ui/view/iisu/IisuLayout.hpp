@@ -94,6 +94,8 @@ namespace beiklive
         // 卡片编辑占位面板状态
         bool m_cardEditOpen = false;
         std::string m_cardEditName;
+        LayoutItem* m_cardEditItem = nullptr;
+        int m_cardSpeedIndex = 0;
         beiklive::GameList m_games;
         bool m_pico8ShortcutVisible = true;
         int m_fontId = -1;
@@ -148,6 +150,10 @@ namespace beiklive
         void _openCardEditPanel();
         void _closeCardEditPanel();
         void _drawCardEditPanel(NVGcontext* vg, float x, float y, float w, float h);
+        // GIF 播放速度调节
+        int _snapSpeedIndex(float speed);
+        static const std::vector<float>& _speedOptions();
+        void _adjustCardSpeed(int dir);
         // 圆角图片绘制（面板缩略图复用）
         void _drawRoundedImage(NVGcontext* vg, int texture, const GridRect& rect);
 

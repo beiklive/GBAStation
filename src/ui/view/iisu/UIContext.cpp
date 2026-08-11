@@ -5,6 +5,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "ImageWidget.hpp"
 #include "WidgetFactory.hpp"
 
 namespace beiklive
@@ -69,9 +70,13 @@ namespace beiklive
             case WidgetType::Folder:
                 item.widget = WidgetFactory::createFolder(desc.id);
                 break;
-            case WidgetType::Image:
+            case WidgetType::Image: {
                 item.widget = WidgetFactory::createImage(desc.path);
+                if (auto* image =
+                        dynamic_cast<ImageWidget*>(item.widget.get()))
+                    image->setSpeed(desc.speedMul);
                 break;
+            }
             case WidgetType::Live:
                 item.widget = WidgetFactory::createLive(desc.id);
                 break;
@@ -152,6 +157,7 @@ namespace beiklive
             desc.w = j.value("w", 1);
             desc.h = j.value("h", 1);
             desc.focusable = j.value("focusable", true);
+            desc.speedMul = j.value("speed", 1.f);
             items.push_back(std::move(desc));
         }
         if (items.empty())

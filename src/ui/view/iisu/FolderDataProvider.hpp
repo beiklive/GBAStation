@@ -28,6 +28,7 @@ namespace beiklive
         int w = 1;
         int h = 1;
         bool focusable = true;
+        float speedMul = 1.f; // Image(GIF) 播放速度倍率
     };
 
     /// 文件夹数据提供者抽象（子布局来源可替换）
