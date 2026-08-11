@@ -376,39 +376,6 @@ std::string normalizeExtension(std::string ext)
     return ext;
 }
 
-int platformFromExtension(const std::string& ext)
-{
-    if (ext == "gba") return static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA);
-    if (ext == "gbc") return static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC);
-    if (ext == "gb") return static_cast<int>(beiklive::enums::EmuPlatform::EmuGB);
-    if (ext == "nes" || ext == "fds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNES);
-    if (ext == "sfc" || ext == "smc") return static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES);
-    if (ext == "nds") return static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
-    if (ext == "cia" || ext == "cci" || ext == "3ds")
-        return static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS);
-    if (ext == "md" || ext == "gen" || ext == "bin" || ext == "smd")
-        return static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis);
-    if (ext == "zip" || ext == "7z")
-        return static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade);
-    if (ext == "cdi" || ext == "gdi" || ext == "chd" || ext == "cue")
-        return static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast);
-    if (ext == "iso" || ext == "cso")
-        return static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP);
-    return -1;
-}
-
-int platformFromExistingPath(const fs::path& path)
-{
-    int detected = beiklive::tools::detectGamePlatform(path);
-    if (detected >= 0)
-        return detected;
-
-    std::string ext = normalizeExtension(path.extension().string());
-    if (ext == "zip" || ext == "7z")
-        return -1;
-    return platformFromExtension(ext);
-}
-
 std::string overlayKeyForPlatform(int platform)
 {
     namespace sk = beiklive::SettingKey;
@@ -626,24 +593,6 @@ bool clearDirectoryContents(const fs::path& dir)
     }
 
     return ok;
-}
-
-int findUnexpectedLplPlatform(const json& items, int expectedPlatform)
-{
-    for (const auto& item : items)
-    {
-        std::string romPath = item.value("path", "");
-        if (romPath.empty())
-            continue;
-
-        fs::path path(romPath);
-        int detectedPlatform = fs::exists(path) ? platformFromExistingPath(path) :
-            platformFromExtension(normalizeExtension(path.extension().string()));
-        if (detectedPlatform >= 0 && detectedPlatform != expectedPlatform)
-            return detectedPlatform;
-    }
-
-    return -1;
 }
 
 } // namespace
@@ -2057,26 +2006,15 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
         return;
     }
 
-    int unexpectedPlatform = findUnexpectedLplPlatform(lplJson["items"], platform);
-    if (unexpectedPlatform >= 0)
-    {
-        rememberFocusBeforeModal();
-        auto* dialog = new brls::Dialog(
-            L("选择错误\n\n当前选择的是 ") +
-            beiklive::tools::platformName(platform) +
-            L(" 游戏的lpl导入按钮，但文件中的游戏类型是 ") +
-            beiklive::tools::platformName(unexpectedPlatform) +
-            L("。\n请返回后选择对应类型的按钮。"));
-        dialog->addButton("确认", [this]() { restoreFocusAfterModal(); });
-        dialog->open();
-        return;
-    }
-
     std::vector<ImportItem> importItems;
     for (const auto& item : lplJson["items"])
     {
+        std::string path = item.value("path", "");
+        // 3DS CIA 安装包跳过（与扫描导入一致）
+        if (normalizeExtension(fs::path(path).extension().string()) == "cia")
+            continue;
         importItems.push_back({
-            item.value("path", ""),
+            path,
             item.value("label", ""),
             item.value("db_name", ""),
         });
@@ -2097,7 +2035,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             const auto& item = importItems[i];
             std::string romPath = expandTilde(item.romPath);
 
-            if (romPath.empty() || item.label.empty() || !fs::exists(romPath))
+            if (romPath.empty() || !fs::exists(romPath))
             {
                 m_progress.store(i + 1, std::memory_order_release);
                 continue;
@@ -2112,8 +2050,8 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                 continue;
             }
 
-            updateProgressName(item.label);
             std::string romStem = stemFromPath(romPath);
+            updateProgressName(item.label.empty() ? romStem : item.label);
 
             std::string logoPath = findRetroArchThumbnail(
                 item.dbName, lplStem, lplThumbRoot,
@@ -2141,7 +2079,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
 
             beiklive::GameEntry entry;
             entry.path = romPath;
-            entry.title = item.label;
+            entry.title = item.label.empty() ? romStem : item.label;
             entry.platform = config.platform;
             if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
                 entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(romPath);
@@ -2174,6 +2112,29 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                     if (!icon.empty())
                         entry.logoPath = icon;
                 }
+            }
+            else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+            {
+                // NDS 内置图标：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
+                const std::string ndsIcon = beiklive::GetOrCreateNdsIconPath(romPath);
+                if (!ndsIcon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
+                    static_cast<beiklive::enums::EmuPlatform>(config.platform), romPath))
+                    entry.logoPath = ndsIcon;
+                // NDS 名称：ROM header 游戏名（仅当标题仍是默认文件名/映射名时）。
+                const std::string ndsTitle = beiklive::ExtractNdsHeaderTitle(romPath);
+                if (!ndsTitle.empty() && entry.title == GET_MAPPING_KEY_STR(romStem, romStem))
+                    entry.title = ndsTitle;
+            }
+            else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
+            {
+                // 3DS 内置图标（SMDH）：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
+                const std::string icon = beiklive::GetOrCreateThreeDsIconPath(romPath);
+                if (!icon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
+                    static_cast<beiklive::enums::EmuPlatform>(config.platform), romPath))
+                    entry.logoPath = icon;
+                const std::string title = beiklive::ExtractThreeDsTitle(romPath);
+                if (!title.empty() && entry.title == GET_MAPPING_KEY_STR(romStem, romStem))
+                    entry.title = title;
             }
             entry.savePath = savePath;
             entry.overlayPath = config.overlayPath;
