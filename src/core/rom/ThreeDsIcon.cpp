@@ -46,71 +46,92 @@ bool IsSmdh(const std::vector<uint8_t>& data)
            data[3] == 'H';
 }
 
-// 从 NCCH 字节中提取 SMDH（ExeFS/icon）。
-bool ExtractSmdhFromNcch(const std::vector<uint8_t>& data, std::vector<uint8_t>& smdh)
+// 流式读取辅助：只读取指定区间的字节，避免整文件载入大容量 3DS ROM。
+bool ReadRange(std::ifstream& in, std::streamoff offset, size_t length,
+               std::vector<uint8_t>& out)
 {
-    if (data.size() < 0x200)
-        return false;
-    if (!(data[0x100] == 'N' && data[0x101] == 'C' && data[0x102] == 'C' && data[0x103] == 'H'))
+    out.resize(length);
+    in.clear();
+    in.seekg(offset, std::ios::beg);
+    in.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(length));
+    return in.gcount() == static_cast<std::streamsize>(length);
+}
+
+bool IsNcchMagic(const std::vector<uint8_t>& head)
+{
+    return head.size() >= 0x104 && head[0x100] == 'N' && head[0x101] == 'C' &&
+           head[0x102] == 'C' && head[0x103] == 'H';
+}
+
+// 从 NCCH 区域流式提取 SMDH（ExeFS 中的 icon.bin）。
+// ncchStart 为该 NCCH 头在文件中的偏移，ncchHeader 为已读取的 0x200 字节头。
+bool ExtractSmdhFromNcchStream(std::ifstream& in, std::streamoff ncchStart,
+                               const std::vector<uint8_t>& ncchHeader,
+                               std::vector<uint8_t>& smdh)
+{
+    if (!IsNcchMagic(ncchHeader))
         return false;
 
-    const uint32_t exefsOff = ReadU32LE(data.data() + 0x118); // media units
-    const uint32_t exefsSize = ReadU32LE(data.data() + 0x11C);
+    const uint32_t exefsOff = ReadU32LE(ncchHeader.data() + 0x118); // media units
+    const uint32_t exefsSize = ReadU32LE(ncchHeader.data() + 0x11C);
     if (exefsOff == 0 || exefsSize < 0x200)
         return false;
-    const size_t exefsStart = static_cast<size_t>(exefsOff) * 0x200;
-    if (exefsStart + 0x200 > data.size())
+    const std::streamoff exefsStart =
+        ncchStart + static_cast<std::streamoff>(exefsOff) * 0x200;
+
+    std::vector<uint8_t> exefsHeader;
+    if (!ReadRange(in, exefsStart, 0x200, exefsHeader))
         return false;
 
-    const uint8_t* exefs = data.data() + exefsStart;
     for (int i = 0; i < 10; ++i)
     {
-        const uint8_t* entry = exefs + static_cast<size_t>(i) * 0x20;
+        const uint8_t* entry = exefsHeader.data() + static_cast<size_t>(i) * 0x20;
         if (std::memcmp(entry, "icon", 4) != 0)
             continue;
         const uint32_t fileOff = ReadU32LE(entry + 8);
         const uint32_t fileSize = ReadU32LE(entry + 12);
         if (fileSize < kSmdhSize)
             return false;
-        const size_t fileStart = exefsStart + 0x200 + fileOff;
-        if (fileStart + kSmdhSize > data.size())
+        std::vector<uint8_t> icon;
+        if (!ReadRange(in, exefsStart + 0x200 + fileOff, kSmdhSize, icon))
             return false;
-        smdh.assign(data.begin() + static_cast<std::ptrdiff_t>(fileStart),
-                    data.begin() + static_cast<std::ptrdiff_t>(fileStart + kSmdhSize));
+        smdh = std::move(icon);
         return IsSmdh(smdh);
     }
     return false;
 }
 
-// 从 NCSD（.3ds/.cci）字节提取 SMDH：分区 0 为 CXI（NCCH）。
-bool ExtractSmdhFromNcsd(const std::vector<uint8_t>& data, std::vector<uint8_t>& smdh)
+// 从 NCSD（.3ds/.cci）流式提取 SMDH：分区 0 为 CXI（NCCH）。
+bool ExtractSmdhFromNcsdStream(std::ifstream& in, const std::vector<uint8_t>& head,
+                               std::vector<uint8_t>& smdh)
 {
-    if (data.size() < 0x200)
-        return false;
-    if (!(data[0x100] == 'N' && data[0x101] == 'C' && data[0x102] == 'S' && data[0x103] == 'D'))
+    if (!(head.size() >= 0x104 && head[0x100] == 'N' && head[0x101] == 'C' &&
+          head[0x102] == 'S' && head[0x103] == 'D'))
         return false;
 
-    const uint32_t partOff = ReadU32LE(data.data() + 0x140); // 分区 0 偏移（media units）
+    const uint32_t partOff = ReadU32LE(head.data() + 0x140); // 分区 0 偏移（media units）
     if (partOff == 0)
         return false;
-    const size_t start = static_cast<size_t>(partOff) * 0x200;
-    if (start + 0x200 > data.size())
+    const std::streamoff ncchStart = static_cast<std::streamoff>(partOff) * 0x200;
+
+    std::vector<uint8_t> ncchHeader;
+    if (!ReadRange(in, ncchStart, 0x200, ncchHeader))
         return false;
-    const std::vector<uint8_t> ncch(data.begin() + static_cast<std::ptrdiff_t>(start), data.end());
-    return ExtractSmdhFromNcch(ncch, smdh);
+    return ExtractSmdhFromNcchStream(in, ncchStart, ncchHeader, smdh);
 }
 
-// 从 CIA 字节提取 SMDH：优先 meta chunk 内嵌的 SMDH，回退 content[0]（NCCH）。
-bool ExtractSmdhFromCia(const std::vector<uint8_t>& data, std::vector<uint8_t>& smdh)
+// 从 CIA 流式提取 SMDH：优先 meta chunk 内嵌的 SMDH，回退 content[0]（NCCH）。
+bool ExtractSmdhFromCiaStream(std::ifstream& in, const std::vector<uint8_t>& head,
+                              std::vector<uint8_t>& smdh)
 {
-    if (data.size() < 0x28)
+    if (head.size() < 0x28)
         return false;
-    const uint32_t headerSize = ReadU32LE(data.data() + 0x00);
-    const uint32_t certSize = ReadU32LE(data.data() + 0x08);
-    const uint32_t tikSize = ReadU32LE(data.data() + 0x0C);
-    const uint32_t tmdSize = ReadU32LE(data.data() + 0x10);
-    const uint32_t metaSize = ReadU32LE(data.data() + 0x14);
-    const uint64_t contentSize = ReadU64LE(data.data() + 0x18);
+    const uint32_t headerSize = ReadU32LE(head.data() + 0x00);
+    const uint32_t certSize = ReadU32LE(head.data() + 0x08);
+    const uint32_t tikSize = ReadU32LE(head.data() + 0x0C);
+    const uint32_t tmdSize = ReadU32LE(head.data() + 0x10);
+    const uint32_t metaSize = ReadU32LE(head.data() + 0x14);
+    const uint64_t contentSize = ReadU64LE(head.data() + 0x18);
     if (headerSize == 0 || headerSize > 0x2020)
         return false;
 
@@ -123,21 +144,24 @@ bool ExtractSmdhFromCia(const std::vector<uint8_t>& data, std::vector<uint8_t>& 
     if (metaSize >= 0x400 + kSmdhSize)
     {
         const size_t metaOff = Align64(contentOff + static_cast<size_t>(contentSize));
-        if (metaOff + 0x400 + kSmdhSize <= data.size())
+        std::vector<uint8_t> meta;
+        if (ReadRange(in, static_cast<std::streamoff>(metaOff + 0x400),
+                      kSmdhSize, meta))
         {
-            smdh.assign(data.begin() + static_cast<std::ptrdiff_t>(metaOff + 0x400),
-                        data.begin() + static_cast<std::ptrdiff_t>(metaOff + 0x400 + kSmdhSize));
-            if (IsSmdh(smdh))
+            if (IsSmdh(meta))
+            {
+                smdh = std::move(meta);
                 return true;
+            }
         }
     }
 
     // 回退：从第一个 content（.app/NCCH）的 ExeFS 提取 icon.bin。
-    if (contentOff + 0x200 > data.size())
+    std::vector<uint8_t> ncchHeader;
+    if (!ReadRange(in, static_cast<std::streamoff>(contentOff), 0x200, ncchHeader))
         return false;
-    const std::vector<uint8_t> ncch(data.begin() + static_cast<std::ptrdiff_t>(contentOff),
-                                    data.end());
-    return ExtractSmdhFromNcch(ncch, smdh);
+    return ExtractSmdhFromNcchStream(in, static_cast<std::streamoff>(contentOff),
+                                     ncchHeader, smdh);
 }
 
 std::string LowerExt(const std::string& path)
@@ -154,24 +178,19 @@ bool ExtractSmdh(const std::string& path, std::vector<uint8_t>& smdh)
     std::ifstream in(path, std::ios::binary);
     if (!in)
         return false;
-    in.seekg(0, std::ios::end);
-    const std::streamoff size = in.tellg();
-    if (size <= 0 || size > 4LL * 1024 * 1024 * 1024)
-        return false;
-    std::vector<uint8_t> data(static_cast<size_t>(size));
-    in.seekg(0, std::ios::beg);
-    in.read(reinterpret_cast<char*>(data.data()), size);
-    if (!in)
+
+    // 只读取文件头部判定格式，正文按偏移流式读取（不再整文件载入）。
+    std::vector<uint8_t> head;
+    if (!ReadRange(in, 0, 0x200, head))
         return false;
 
-    if (data.size() >= 0x104 &&
-        data[0x100] == 'N' && data[0x101] == 'C' && data[0x102] == 'C' && data[0x103] == 'H')
-        return ExtractSmdhFromNcch(data, smdh);
-    if (data.size() >= 0x104 &&
-        data[0x100] == 'N' && data[0x101] == 'C' && data[0x102] == 'S' && data[0x103] == 'D')
-        return ExtractSmdhFromNcsd(data, smdh);
+    if (IsNcchMagic(head))
+        return ExtractSmdhFromNcchStream(in, 0, head, smdh);
+    if (head.size() >= 0x104 &&
+        head[0x100] == 'N' && head[0x101] == 'C' && head[0x102] == 'S' && head[0x103] == 'D')
+        return ExtractSmdhFromNcsdStream(in, head, smdh);
     if (LowerExt(path) == ".cia")
-        return ExtractSmdhFromCia(data, smdh);
+        return ExtractSmdhFromCiaStream(in, head, smdh);
     return false;
 }
 

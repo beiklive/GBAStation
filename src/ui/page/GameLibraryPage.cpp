@@ -1590,7 +1590,7 @@ namespace beiklive
             [this, idx = m_libraryView->getSelectedIndex()](const beiklive::GameEntry& entry) {
                 const auto pickerLocation = beiklive::getGameCoverPickerLocation(entry);
                 _closeGameOptionsPanelAnimated([this, entry, idx, pickerLocation]() {
-                    beiklive::openFilePicker({"png", "jpg"},
+                    beiklive::openFilePicker({"png", "jpg", "jpeg"},
                         [this, entry, idx](const std::string& selectedPath) {
                             if (selectedPath.empty()) {
                                 m_libraryView->setInteractionDisabled(false);

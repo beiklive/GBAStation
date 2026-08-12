@@ -1,4 +1,4 @@
-#include "Tools.hpp"
+﻿#include "Tools.hpp"
 #include "enums.h"
 #include "miniz.h"
 
@@ -57,165 +57,6 @@ beiklive::enums::FileType fileTypeFromExtension(const std::string& ext, bool arc
     return beiklive::enums::FileType::NORMAL_FILE;
 }
 
-bool isIgnoredArchiveMember(const std::string& name)
-{
-    if (name.empty())
-        return true;
-    if (name.back() == '/' || name.back() == '\\')
-        return true;
-    fs::path memberPath(name);
-    std::string base = memberPath.filename().string();
-    if (base.empty())
-        return true;
-    if (base[0] == '.')
-        return true;
-    std::string ext = getFileExtension(memberPath);
-    return ext == "txt" || ext == "nfo" || ext == "m3u" || ext == "jpg" ||
-           ext == "jpeg" || ext == "png" || ext == "xml" || ext == "dat" || ext == "sav" ||
-           ext == "srm" || ext == "state";
-}
-
-std::vector<unsigned char> readArchiveProbeBytes(const fs::path& path)
-{
-    constexpr std::uintmax_t maxProbeSize = 8ull * 1024ull * 1024ull;
-    constexpr std::uintmax_t edgeProbeSize = maxProbeSize / 2;
-
-    std::ifstream in(path, std::ios::binary);
-    if (!in.is_open())
-        return {};
-
-    std::error_code ec;
-    std::uintmax_t size = fs::file_size(path, ec);
-    if (ec || size == 0)
-        return {};
-
-    if (size <= maxProbeSize)
-    {
-        std::vector<unsigned char> bytes(static_cast<size_t>(size));
-        in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-        bytes.resize(static_cast<size_t>(in.gcount()));
-        return bytes;
-    }
-
-    std::vector<unsigned char> bytes(static_cast<size_t>(maxProbeSize));
-    in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(edgeProbeSize));
-    size_t firstRead = static_cast<size_t>(in.gcount());
-    in.clear();
-    in.seekg(static_cast<std::streamoff>(size - edgeProbeSize), std::ios::beg);
-    in.read(reinterpret_cast<char*>(bytes.data() + firstRead), static_cast<std::streamsize>(edgeProbeSize));
-    bytes.resize(firstRead + static_cast<size_t>(in.gcount()));
-    return bytes;
-}
-
-bool containsAsciiExtension(const std::vector<unsigned char>& bytes, const std::string& ext)
-{
-    std::string needle = "." + ext;
-    if (bytes.size() < needle.size())
-        return false;
-
-    for (size_t i = 0; i + needle.size() <= bytes.size(); ++i)
-    {
-        bool matched = true;
-        for (size_t j = 0; j < needle.size(); ++j)
-        {
-            unsigned char c = bytes[i + j];
-            if (static_cast<char>(std::tolower(c)) != needle[j])
-            {
-                matched = false;
-                break;
-            }
-        }
-        if (matched)
-            return true;
-    }
-    return false;
-}
-
-bool containsUtf16LeExtension(const std::vector<unsigned char>& bytes, const std::string& ext)
-{
-    std::string needle = "." + ext;
-    const size_t byteLen = needle.size() * 2;
-    if (bytes.size() < byteLen)
-        return false;
-
-    for (size_t i = 0; i + byteLen <= bytes.size(); ++i)
-    {
-        bool matched = true;
-        for (size_t j = 0; j < needle.size(); ++j)
-        {
-            unsigned char lo = bytes[i + j * 2];
-            unsigned char hi = bytes[i + j * 2 + 1];
-            if (hi != 0 || static_cast<char>(std::tolower(lo)) != needle[j])
-            {
-                matched = false;
-                break;
-            }
-        }
-        if (matched)
-            return true;
-    }
-    return false;
-}
-
-bool archiveProbeContainsExtension(const std::vector<unsigned char>& bytes, const std::string& ext)
-{
-    return containsAsciiExtension(bytes, ext) || containsUtf16LeExtension(bytes, ext);
-}
-
-beiklive::enums::FileType fileTypeFromArchiveProbe(const std::vector<unsigned char>& bytes)
-{
-    if (archiveProbeContainsExtension(bytes, "cdi") ||
-        archiveProbeContainsExtension(bytes, "gdi") ||
-        archiveProbeContainsExtension(bytes, "chd") ||
-        archiveProbeContainsExtension(bytes, "cue"))
-        return beiklive::enums::FileType::DREAMCAST_ROM;
-
-    if (archiveProbeContainsExtension(bytes, "iso") ||
-        archiveProbeContainsExtension(bytes, "cso"))
-        return beiklive::enums::FileType::PSP_ROM;
-
-    if (archiveProbeContainsExtension(bytes, "md") ||
-        archiveProbeContainsExtension(bytes, "gen") ||
-        archiveProbeContainsExtension(bytes, "smd"))
-        return beiklive::enums::FileType::GENESIS_ROM;
-
-    if (archiveProbeContainsExtension(bytes, "gba"))
-        return beiklive::enums::FileType::GBA_ROM;
-    if (archiveProbeContainsExtension(bytes, "gbc"))
-        return beiklive::enums::FileType::GBC_ROM;
-    if (archiveProbeContainsExtension(bytes, "gb"))
-        return beiklive::enums::FileType::GB_ROM;
-    if (archiveProbeContainsExtension(bytes, "nes") ||
-        archiveProbeContainsExtension(bytes, "fds"))
-        return beiklive::enums::FileType::NES_ROM;
-    if (archiveProbeContainsExtension(bytes, "sfc") ||
-        archiveProbeContainsExtension(bytes, "smc"))
-        return beiklive::enums::FileType::SNES_ROM;
-    if (archiveProbeContainsExtension(bytes, "nds"))
-        return beiklive::enums::FileType::NDS_ROM;
-    if (archiveProbeContainsExtension(bytes, "cia") ||
-        archiveProbeContainsExtension(bytes, "cci") ||
-        archiveProbeContainsExtension(bytes, "3ds"))
-        return beiklive::enums::FileType::THREEDS_ROM;
-
-    return beiklive::enums::FileType::NORMAL_FILE;
-}
-
-beiklive::enums::FileType detectSevenZipFileType(const fs::path& path)
-{
-    auto bytes = readArchiveProbeBytes(path);
-    constexpr unsigned char signature[] = {0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C};
-    if (bytes.size() < sizeof(signature) ||
-        !std::equal(std::begin(signature), std::end(signature), bytes.begin()))
-        return beiklive::enums::FileType::ZIP_FILE;
-
-    auto probedType = fileTypeFromArchiveProbe(bytes);
-    if (probedType != beiklive::enums::FileType::NORMAL_FILE)
-        return probedType;
-
-    return beiklive::enums::FileType::ARCADE_ROM;
-}
-
 } // namespace
 
 uint64_t getDeviceId() {
@@ -258,79 +99,20 @@ beiklive::enums::FileType getFileType(const fs::path& path) {
 
     std::string ext = getFileExtension(path);
 
-    if (ext == "png")
+    if (ext == "png" || ext == "jpg" || ext == "jpeg")
         return beiklive::enums::FileType::IMAGE_FILE;
     if (ext == "zip" || ext == "7z")
-        return detectArchiveFileType(path);
+        return beiklive::enums::FileType::ZIP_FILE;
+    // 歧义后缀（多机种可运行）：展示层保持中性，启动时由机种选择弹窗决定。
+    if (ext == "iso" || ext == "bin" || ext == "cue" ||
+        ext == "chd" || ext == "pbp")
+        return beiklive::enums::FileType::NORMAL_FILE;
 
     auto type = fileTypeFromExtension(ext, false);
     if (type != beiklive::enums::FileType::NORMAL_FILE)
         return type;
 
     return beiklive::enums::FileType::NORMAL_FILE;
-}
-
-beiklive::enums::FileType detectArchiveFileType(const fs::path& path)
-{
-    std::string archiveExt = getFileExtension(path);
-    if (archiveExt == "7z")
-        return detectSevenZipFileType(path);
-    if (archiveExt != "zip")
-        return beiklive::enums::FileType::ZIP_FILE;
-
-    mz_zip_archive zip = {};
-    if (!mz_zip_reader_init_file(&zip, path.string().c_str(), 0))
-        return beiklive::enums::FileType::ZIP_FILE;
-
-    std::vector<std::string> contentExts;
-    std::set<beiklive::enums::FileType> clearTypes;
-    bool hasDreamcastDisc = false;
-    bool hasSingleBinCandidate = false;
-
-    const mz_uint numFiles = mz_zip_reader_get_num_files(&zip);
-    for (mz_uint i = 0; i < numFiles; ++i)
-    {
-        mz_zip_archive_file_stat stat = {};
-        if (!mz_zip_reader_file_stat(&zip, i, &stat))
-            continue;
-
-        std::string name = stat.m_filename;
-        if (isIgnoredArchiveMember(name))
-            continue;
-
-        fs::path memberPath(name);
-        std::string memberExt = getFileExtension(memberPath);
-        contentExts.push_back(memberExt);
-
-        if (memberExt == "cdi" || memberExt == "gdi" || memberExt == "chd" || memberExt == "cue")
-            hasDreamcastDisc = true;
-
-        if (memberExt == "bin")
-            hasSingleBinCandidate = true;
-
-        auto memberType = fileTypeFromExtension(memberExt, true);
-        if (memberType != beiklive::enums::FileType::NORMAL_FILE)
-            clearTypes.insert(memberType);
-    }
-
-    mz_zip_reader_end(&zip);
-
-    if (hasDreamcastDisc)
-        return beiklive::enums::FileType::DREAMCAST_ROM;
-
-    if (contentExts.empty())
-        return beiklive::enums::FileType::ZIP_FILE;
-
-    if (contentExts.size() == 1 && hasSingleBinCandidate)
-        return beiklive::enums::FileType::GENESIS_ROM;
-
-    if (clearTypes.size() == 1)
-        return *clearTypes.begin();
-
-    if (clearTypes.empty() && contentExts.size() >= 2)
-        return beiklive::enums::FileType::ARCADE_ROM;
-
-    return beiklive::enums::FileType::ZIP_FILE;
 }
 
 int platformFromFileType(beiklive::enums::FileType type)

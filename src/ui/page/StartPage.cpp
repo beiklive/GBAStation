@@ -2211,7 +2211,7 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
                 _closeGameOptionsPanelAnimated(
                     [this, game, pickerLocation]() {
                         beiklive::openFilePicker(
-                            {"png", "jpg"},
+                            {"png", "jpg", "jpeg"},
                             [this, game](const std::string& selectedPath) {
                                 if (selectedPath.empty())
                                     return;

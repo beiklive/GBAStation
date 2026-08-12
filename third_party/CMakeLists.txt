@@ -42,11 +42,17 @@ target_include_directories(giflib PUBLIC
 # programs, audio, filters, devices, encoders, muxers and network support.
 # =========================================================
 set(FFMPEG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/FFmpeg)
-# FFmpeg does not support an out-of-tree build when a prior configure attempt
-# left config.h in its source tree. Build in that tree; CMake only consumes
-# the four minimal static libraries produced by the script.
-set(FFMPEG_BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/FFmpeg)
+# FFmpeg's configure generates headers and objects in its source directory.
+# Keep a self-contained source copy under each CMake build directory so
+# Windows and Switch never share architecture-specific static archives.
+set(FFMPEG_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-minimal)
 set(FFMPEG_BUILD_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/configure_ffmpeg_minimal.sh)
+# The configured copy is regenerated whenever the vendored source changes.
+# Without this dependency CMake can retain archives from a prior platform or
+# source revision because custom-command OUTPUT paths themselves still exist.
+file(GLOB_RECURSE FFMPEG_SOURCE_FILES CONFIGURE_DEPENDS
+    ${FFMPEG_SOURCE_DIR}/*
+)
 
 if (WIN32)
     # CMake's MinGW compiler lives in <msys-root>/mingw64/bin.  Use the
@@ -79,11 +85,10 @@ set(FFMPEG_STATIC_LIBRARIES
 
 add_custom_command(
     OUTPUT ${FFMPEG_STATIC_LIBRARIES}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${FFMPEG_BUILD_DIR}
     COMMAND ${FFMPEG_SHELL} ${FFMPEG_BUILD_SCRIPT}
             ${FFMPEG_SOURCE_DIR} ${FFMPEG_BUILD_DIR}
             ${FFMPEG_CC} ${FFMPEG_AR} ${FFMPEG_RANLIB} ${FFMPEG_TARGET_KIND}
-    DEPENDS ${FFMPEG_SOURCE_DIR}/configure ${FFMPEG_BUILD_SCRIPT}
+    DEPENDS ${FFMPEG_SOURCE_FILES} ${FFMPEG_BUILD_SCRIPT}
     COMMENT "Building minimal FFmpeg (MP4/H.264 background decoder)"
     VERBATIM
 )
@@ -93,7 +98,9 @@ function(add_ffmpeg_static_library TARGET_NAME LIBRARY_PATH)
     add_library(${TARGET_NAME} STATIC IMPORTED GLOBAL)
     set_target_properties(${TARGET_NAME} PROPERTIES
         IMPORTED_LOCATION ${LIBRARY_PATH}
-        INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_BUILD_DIR};${FFMPEG_SOURCE_DIR}"
+        # Public FFmpeg headers are source files.  Generated configuration
+        # headers are consumed only while building the isolated static libs.
+        INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_SOURCE_DIR}"
     )
     add_dependencies(${TARGET_NAME} ffmpeg_minimal)
 endfunction()

@@ -281,25 +281,6 @@ std::string thumbnailNameFromLabel(const std::string& label, bool shorten)
     return scrubThumbnailName(name) + ".png";
 }
 
-/* 缩略图一级目录（系统名）：优先条目 db_name，其次 lpl 文件名，
- * 最后回退 ROM 所在目录名（对齐 RetroArch 规则） */
-std::string thumbnailSystemDir(const std::string& dbName,
-                               const std::string& lplStem,
-                               const std::string& romPath)
-{
-    if (!dbName.empty())
-    {
-        /* MAME 缩略图仓库只保留一个 MAME 目录 */
-        if (dbName.compare(0, 4, "MAME") == 0)
-            return "MAME";
-        const std::size_t pos = dbName.find('|');
-        return (pos == std::string::npos) ? dbName : dbName.substr(0, pos);
-    }
-    if (!lplStem.empty())
-        return lplStem;
-    return fs::path(romPath).parent_path().filename().string();
-}
-
 /* 从 ROM 路径推导缩略图根目录：大小写不敏感地整路径段匹配 "roms"，
  * 替换为 "thumbnails"（如 ...\retroarch\roms\<sys>\x.nes →
  * ...\retroarch\thumbnails） */
@@ -322,18 +303,18 @@ std::string thumbnailRootFromRoms(const std::string& romPath)
     return "";
 }
 
-/* 匹配 RetroArch 缩略图（对齐 gfx_thumbnail_path.c 的匹配规则）：
- * 根目录候选（lpl 推导 → roms 推导）→ 系统目录 → 名称三级回退
+/* 匹配 RetroArch 缩略图：系统目录直接用 ROM 所在文件夹名
+ * （整合包缩略图目录与 ROM 目录同名约定）；
+ * 根目录候选（lpl 推导 → roms 推导）→ 名称三级回退
  * （文件名 → label → 短label），首个真实存在的文件即为命中；
  * 全部未命中返回空串 */
-std::string findRetroArchThumbnail(const std::string& dbName,
-                                   const std::string& lplStem,
-                                   const std::string& lplThumbRoot,
+std::string findRetroArchThumbnail(const std::string& lplThumbRoot,
                                    const std::string& romPath,
                                    const std::string& romStem,
                                    const std::string& label)
 {
-    const std::string systemDir = thumbnailSystemDir(dbName, lplStem, romPath);
+    /* 系统目录 = ROM 所在文件夹名（如 /roms/FBNEO/x.zip → FBNEO） */
+    const std::string systemDir = fs::path(romPath).parent_path().filename().string();
     if (systemDir.empty())
         return "";
 
@@ -2068,8 +2049,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             updateProgressName(item.label.empty() ? romStem : item.label);
 
             std::string logoPath = findRetroArchThumbnail(
-                item.dbName, lplStem, lplThumbRoot,
-                romPath, romStem, item.label);
+                lplThumbRoot, romPath, romStem, item.label);
 
             if (logoPath.empty())
             {
@@ -2452,19 +2432,35 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
             entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(path);
 
-        // 封面：ROM 同目录同名 png → 扫描根目录 logos/ 同名 png → 默认图。
+        // 封面：ROM 同目录同名 png/jpg/jpeg → 扫描根目录 logos/ 同名 png/jpg/jpeg → 默认图。
         std::string logoPath = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>(platform), path);
         std::error_code coverEc;
-        fs::path coverPng = romPath.parent_path() / (romStem + ".png");
-        if (fs::exists(coverPng, coverEc) && !coverEc)
-            logoPath = coverPng.string();
-        else
+        const char* coverExts[] = {".png", ".jpg", ".jpeg"};
+        fs::path coverFile;
+        for (const char* ext : coverExts)
         {
             coverEc.clear();
-            coverPng = fs::path(dirPath) / "logos" / (romStem + ".png");
-            if (fs::exists(coverPng, coverEc) && !coverEc)
-                logoPath = coverPng.string();
+            coverFile = romPath.parent_path() / (romStem + ext);
+            if (fs::exists(coverFile, coverEc) && !coverEc)
+            {
+                logoPath = coverFile.string();
+                break;
+            }
+        }
+        if (logoPath == beiklive::tools::getDefaultLogoPath(
+            static_cast<beiklive::enums::EmuPlatform>(platform), path))
+        {
+            for (const char* ext : coverExts)
+            {
+                coverEc.clear();
+                coverFile = fs::path(dirPath) / "logos" / (romStem + ext);
+                if (fs::exists(coverFile, coverEc) && !coverEc)
+                {
+                    logoPath = coverFile.string();
+                    break;
+                }
+            }
         }
         entry.logoPath = logoPath;
 
