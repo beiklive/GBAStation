@@ -36,6 +36,9 @@ IEmulatorCore* CreateEmulatorCore(const beiklive::GameEntry& entry)
     case beiklive::enums::EmuPlatform::EmuArcade:
     case beiklive::enums::EmuPlatform::EmuDreamcast:
     case beiklive::enums::EmuPlatform::EmuPSP:
+    case beiklive::enums::EmuPlatform::EmuPS1:
+    case beiklive::enums::EmuPlatform::EmuSaturn:
+    case beiklive::enums::EmuPlatform::EmuDolphin:
         return nullptr;
     default:
         return nullptr;

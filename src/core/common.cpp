@@ -431,6 +431,12 @@ namespace beiklive
         SettingManager->SetDefault("dc.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         SettingManager->SetDefault("psp.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationPPSSPPStub.nro")));
         SettingManager->SetDefault("psp.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        SettingManager->SetDefault("ps1.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationDuckStationStub.nro")));
+        SettingManager->SetDefault("ps1.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        SettingManager->SetDefault("saturn.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationYabaSanshiroStub.nro")));
+        SettingManager->SetDefault("saturn.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        SettingManager->SetDefault("dolphin.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationDolphinStub.nro")));
+        SettingManager->SetDefault("dolphin.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         if (auto pathValue = SettingManager->Get("nds.externalNro.path"))
         {
             const auto path = pathValue->AsString().value_or("");
@@ -517,6 +523,20 @@ namespace beiklive
         SettingManager->SetDefault("core.flycast.display_mode", ConfigValue(std::string("Display")));
         SettingManager->SetDefault("core.flycast.display_size", ConfigValue(std::string("4:3")));
 
+        // DuckStation Stub 直接读取 ps1.*，确保启动器设置即时生效。
+        SettingManager->SetDefault("ps1.renderer", ConfigValue(std::string("deko3D")));
+        SettingManager->SetDefault("ps1.resolutionScale", ConfigValue(1));
+        SettingManager->SetDefault("ps1.aspectRatio", ConfigValue(std::string("Auto (Game Native)")));
+        SettingManager->SetDefault("ps1.fastBoot", ConfigValue(1));
+
+        SettingManager->SetDefault("core.saturn.emulated_bios", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.frame_skip", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.resolution_mode", ConfigValue(0));
+        SettingManager->SetDefault("core.dolphin.dolphin_cpu_clock_rate", ConfigValue(std::string("1.0")));
+        SettingManager->SetDefault("core.dolphin.dolphin_widescreen", ConfigValue(std::string("enabled")));
+        SettingManager->SetDefault("core.dolphin.dolphin_enable_rumble", ConfigValue(std::string("enabled")));
+        SettingManager->SetDefault("core.dolphin.dolphin_wiimote1_mode", ConfigValue(std::string("classic")));
+
         SettingManager->SetDefault("core.mgba_gb_model", ConfigValue(std::string("Autodetect")));
         SettingManager->SetDefault("core.mgba_use_bios", ConfigValue(std::string("ON")));
         SettingManager->SetDefault("core.mgba_skip_bios", ConfigValue(std::string("OFF")));
@@ -597,7 +617,7 @@ namespace beiklive
         SettingManager->SetDefault("cheat.dir", ConfigValue(std::string("")));
 
         // 按键绑定默认值。GBA 保持无前缀；GBC/GB 独立前缀首次默认继承旧的无前缀配置。
-        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds.", "md.", "arcade.", "dc.", "psp."};
+        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds.", "md.", "arcade.", "dc.", "psp.", "ps1.", "saturn.", "dolphin."};
         for (const auto& prefix : mappingPrefixes)
         {
             const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
@@ -674,6 +694,14 @@ namespace beiklive
                 beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey),
                 ConfigValue(turboBDefault));
         }
+
+        // Saturn hotkeys mirror the external-core layout from the migration
+        // design. They are separate from the generic defaults above so old
+        // installations retain any mappings the user already chose.
+        SettingManager->SetDefault("saturn.handle.fastforward", ConfigValue(std::string("PAD_RSB")));
+        SettingManager->SetDefault("saturn.hotkey.menu.pad", ConfigValue(std::string("PAD_LSB")));
+        SettingManager->SetDefault("saturn.hotkey.quicksave.pad", ConfigValue(std::string("PAD_LT+PAD_RT")));
+        SettingManager->SetDefault("saturn.hotkey.quickload.pad", ConfigValue(std::string("PAD_LB+PAD_RB")));
         // 3DS 独立运行时不支持倒带，清理旧版本可能写入的无效绑定。
         SettingManager->Remove("3ds.handle.rewind");
         SettingManager->Remove("core.azahar.swap_screens");

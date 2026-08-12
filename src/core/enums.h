@@ -61,7 +61,10 @@ namespace beiklive::enums
         EmuGenesis,
         EmuArcade,
         EmuDreamcast,
-        EmuPSP
+        EmuPSP,
+        EmuPS1,
+        EmuSaturn,
+        EmuDolphin
     };
     // 文件类型,用于文件浏览器
     enum class FileType
@@ -78,6 +81,9 @@ namespace beiklive::enums
         ARCADE_ROM, // Arcade文件
         DREAMCAST_ROM, // Dreamcast文件
         PSP_ROM, // PSP文件
+        PS1_ROM, // PlayStation 文件
+        SATURN_ROM, // Sega Saturn 文件
+        DOLPHIN_ROM, // GameCube / Wii 文件
 
         // 上面的顺序必须与EmuPlatform保持一致，方便后续通过平台类型直接转换为文件类型
 

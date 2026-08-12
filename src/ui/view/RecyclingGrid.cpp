@@ -1510,6 +1510,9 @@ NVGcolor GameGridView::_getBadgeColor(PlatformBadgeColor color) const
         case PlatformBadgeColor::ARCADE:  return nvgRGBA(236, 134, 44, 220);
         case PlatformBadgeColor::DREAMCAST: return nvgRGBA(0, 142, 180, 220);
         case PlatformBadgeColor::PSP:     return nvgRGBA(67, 118, 226, 220);
+        case PlatformBadgeColor::PS1:     return nvgRGBA(74, 74, 82, 220);
+        case PlatformBadgeColor::SATURN:  return nvgRGBA(68, 82, 150, 220);
+        case PlatformBadgeColor::DOLPHIN: return nvgRGBA(54, 102, 196, 220);
         default:                          return nvgRGBA(100, 100, 100, 200);
     }
 }

@@ -1026,6 +1026,9 @@ namespace beiklive
         bool hasArcade = false;
         bool hasDreamcast = false;
         bool hasPsp = false;
+        bool hasPs1 = false;
+        bool hasSaturn = false;
+        bool hasDolphin = false;
         for (const auto& entry : entries) {
             hasFavourite = hasFavourite || entry.favourite;
             switch (static_cast<beiklive::enums::EmuPlatform>(entry.platform)) {
@@ -1040,6 +1043,9 @@ namespace beiklive
                 case beiklive::enums::EmuPlatform::EmuArcade: hasArcade = true; break;
                 case beiklive::enums::EmuPlatform::EmuDreamcast: hasDreamcast = true; break;
                 case beiklive::enums::EmuPlatform::EmuPSP: hasPsp = true; break;
+                case beiklive::enums::EmuPlatform::EmuPS1: hasPs1 = true; break;
+                case beiklive::enums::EmuPlatform::EmuSaturn: hasSaturn = true; break;
+                case beiklive::enums::EmuPlatform::EmuDolphin: hasDolphin = true; break;
                 default: break;
             }
         }
@@ -1057,6 +1063,9 @@ namespace beiklive
         if (hasArcade) filters.push_back(PlatformFilter::ARCADE);
         if (hasDreamcast) filters.push_back(PlatformFilter::DREAMCAST);
         if (hasPsp) filters.push_back(PlatformFilter::PSP);
+        if (hasPs1) filters.push_back(PlatformFilter::PS1);
+        if (hasSaturn) filters.push_back(PlatformFilter::SATURN);
+        if (hasDolphin) filters.push_back(PlatformFilter::DOLPHIN);
         return filters;
     }
 
@@ -1177,7 +1186,7 @@ namespace beiklive
             if (!alive->load()) return;
             auto ae = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
             bool hG = false, hC = false, hB = false, hN = false, hS = false, hD = false, h3 = false;
-            bool hMD = false, hArcade = false, hDc = false, hPsp = false;
+            bool hMD = false, hArcade = false, hDc = false, hPsp = false, hPs1 = false, hSaturn = false, hDolphin = false;
             int favCount = 0;
             for (auto& e : ae) {
                 if (e.favourite) favCount++;
@@ -1193,10 +1202,13 @@ namespace beiklive
                     case beiklive::enums::EmuPlatform::EmuArcade: hArcade = true; break;
                     case beiklive::enums::EmuPlatform::EmuDreamcast: hDc = true; break;
                     case beiklive::enums::EmuPlatform::EmuPSP: hPsp = true; break;
+                    case beiklive::enums::EmuPlatform::EmuPS1: hPs1 = true; break;
+                    case beiklive::enums::EmuPlatform::EmuSaturn: hSaturn = true; break;
+                    case beiklive::enums::EmuPlatform::EmuDolphin: hDolphin = true; break;
                     default: break;
                 }
             }
-            brls::sync([this, alive, hG, hC, hB, hN, hS, hD, h3, hMD, hArcade, hDc, hPsp, favCount]() {
+            brls::sync([this, alive, hG, hC, hB, hN, hS, hD, h3, hMD, hArcade, hDc, hPsp, hPs1, hSaturn, hDolphin, favCount]() {
                 if (!alive->load()) return;
                 std::vector<std::string> opts;
                 std::vector<PlatformFilter> map;
@@ -1213,6 +1225,9 @@ namespace beiklive
                 if (hArcade) { opts.push_back("Arcade"); map.push_back(PlatformFilter::ARCADE); }
                 if (hDc) { opts.push_back("DC"); map.push_back(PlatformFilter::DREAMCAST); }
                 if (hPsp) { opts.push_back("PSP"); map.push_back(PlatformFilter::PSP); }
+                if (hPs1) { opts.push_back("PS1"); map.push_back(PlatformFilter::PS1); }
+                if (hSaturn) { opts.push_back("Saturn"); map.push_back(PlatformFilter::SATURN); }
+                if (hDolphin) { opts.push_back("GC / Wii"); map.push_back(PlatformFilter::DOLPHIN); }
                 int cur = 0;
                 for (size_t i = 0; i < map.size(); i++)
                     if (map[i] == m_platformFilter) { cur = (int)i; break; }
@@ -1252,6 +1267,9 @@ namespace beiklive
             case PlatformFilter::ARCADE:   fs = "Arcade"; break;
             case PlatformFilter::DREAMCAST: fs = "DC"; break;
             case PlatformFilter::PSP:      fs = "PSP"; break;
+            case PlatformFilter::PS1:      fs = "PS1"; break;
+            case PlatformFilter::SATURN:   fs = "Saturn"; break;
+            case PlatformFilter::DOLPHIN:  fs = "GC / Wii"; break;
             case PlatformFilter::FAVORITE: fs = L("收藏"); break;
         }
         this->getHeader()->setPath((m_isSearching ? L("搜索") : L("分类")) + (": " + fs));
@@ -1272,6 +1290,9 @@ namespace beiklive
                     case PlatformFilter::ARCADE: return "Arcade";
                     case PlatformFilter::DREAMCAST: return "DC";
                     case PlatformFilter::PSP: return "PSP";
+                    case PlatformFilter::PS1: return "PS1";
+                    case PlatformFilter::SATURN: return "Saturn";
+                    case PlatformFilter::DOLPHIN: return "GC / Wii";
                 }
                 return L("所有");
             };

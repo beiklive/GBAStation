@@ -144,6 +144,9 @@ beiklive::enums::FileType platformToFileType(int platform)
         case beiklive::enums::EmuPlatform::EmuArcade:    return beiklive::enums::FileType::ARCADE_ROM;
         case beiklive::enums::EmuPlatform::EmuDreamcast: return beiklive::enums::FileType::DREAMCAST_ROM;
         case beiklive::enums::EmuPlatform::EmuPSP:       return beiklive::enums::FileType::PSP_ROM;
+        case beiklive::enums::EmuPlatform::EmuPS1:       return beiklive::enums::FileType::PS1_ROM;
+        case beiklive::enums::EmuPlatform::EmuSaturn:    return beiklive::enums::FileType::SATURN_ROM;
+        case beiklive::enums::EmuPlatform::EmuDolphin:   return beiklive::enums::FileType::DOLPHIN_ROM;
         default: return beiklive::enums::FileType::NORMAL_FILE;
     }
 }
@@ -950,6 +953,36 @@ beiklive::enums::FileType platformToFileType(int platform)
             return dirItem.itemType == beiklive::enums::FileType::PSP_ROM;
         }
 
+        bool shouldUsePs1ExternalNro(const beiklive::GameEntry& entry)
+        {
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1);
+        }
+
+        bool shouldUsePs1ExternalNro(const beiklive::DirListData& dirItem)
+        {
+            return dirItem.itemType == beiklive::enums::FileType::PS1_ROM;
+        }
+
+        bool shouldUseSaturnExternalNro(const beiklive::GameEntry& entry)
+        {
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn);
+        }
+
+        bool shouldUseDolphinExternalNro(const beiklive::GameEntry& entry)
+        {
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin);
+        }
+
+        bool shouldUseSaturnExternalNro(const beiklive::DirListData& dirItem)
+        {
+            return dirItem.itemType == beiklive::enums::FileType::SATURN_ROM;
+        }
+
+        bool shouldUseDolphinExternalNro(const beiklive::DirListData& dirItem)
+        {
+            return dirItem.itemType == beiklive::enums::FileType::DOLPHIN_ROM;
+        }
+
         [[maybe_unused]] bool exportThreeDsCoreConfig()
         {
             if (!beiklive::SettingManager)
@@ -1073,10 +1106,10 @@ beiklive::enums::FileType platformToFileType(int platform)
             }
             if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)) {
                 // PSP ROM：文件浏览打开时提取真实游戏标题与 ICON0 封面
-                // （保存到该 ROM 的存档目录）。TITLE 仅在仍是默认文件名/映射名
-                // 时覆盖；封面仅当仍是默认资源图时替换。
+                // （保存到该 ROM 的存档目录）。TITLE 仅在仍是默认文件名
+                // 时覆盖（映射名优先保留）；封面仅当仍是默认资源图时替换。
                 const std::string realTitle = beiklive::psp_meta::ExtractTitle(entry.path);
-                if (!realTitle.empty() && entry.title == GET_MAPPING_KEY_STR(stem, stem)) {
+                if (!realTitle.empty() && entry.title == stem) {
                     entry.title = realTitle;
                     changed = true;
                 }
@@ -1440,6 +1473,42 @@ beiklive::enums::FileType platformToFileType(int platform)
             return false;
 #endif
         }
+        if (shouldUsePs1ExternalNro(entry))
+        {
+#ifdef __SWITCH__
+            return launchExternalCoreNro(entry.path, entry.title, "PS1",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
+                "ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
+                "ps1.externalNro.returnPath");
+#else
+            brls::Application::notify(L("PS1 独立运行时仅支持 Switch"));
+            return false;
+#endif
+        }
+        if (shouldUseSaturnExternalNro(entry))
+        {
+#ifdef __SWITCH__
+            return launchExternalCoreNro(entry.path, entry.title, "Saturn",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn),
+                "saturn.externalNro.path", "/GBAStation/core/GBAStationYabaSanshiroStub.nro",
+                "saturn.externalNro.returnPath");
+#else
+            brls::Application::notify(L("Saturn 独立运行时仅支持 Switch"));
+            return false;
+#endif
+        }
+        if (shouldUseDolphinExternalNro(entry))
+        {
+#ifdef __SWITCH__
+            return launchExternalCoreNro(entry.path, entry.title, "GC / Wii",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin),
+                "dolphin.externalNro.path", "/GBAStation/core/GBAStationDolphinStub.nro",
+                "dolphin.externalNro.returnPath");
+#else
+            brls::Application::notify(L("Dolphin 独立运行时仅支持 Switch"));
+            return false;
+#endif
+        }
 
         auto* gamePage = new beiklive::GamePage(entry);
         m_gamePage = gamePage;
@@ -1523,6 +1592,48 @@ void StartPage::_launchDirItem(const beiklive::DirListData& dirItem, beiklive::B
             return;
 #else
             brls::Application::notify(L("PSP 独立运行时仅支持 Switch"));
+            return;
+#endif
+        }
+        if (shouldUsePs1ExternalNro(dirItem))
+        {
+            ensureGameDbEntryForFileLaunch(dirItem);
+#ifdef __SWITCH__
+            launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "PS1",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
+                "ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
+                "ps1.externalNro.returnPath");
+            return;
+#else
+            brls::Application::notify(L("PS1 独立运行时仅支持 Switch"));
+            return;
+#endif
+        }
+        if (shouldUseSaturnExternalNro(dirItem))
+        {
+            ensureGameDbEntryForFileLaunch(dirItem);
+#ifdef __SWITCH__
+            launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "Saturn",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn),
+                "saturn.externalNro.path", "/GBAStation/core/GBAStationYabaSanshiroStub.nro",
+                "saturn.externalNro.returnPath");
+            return;
+#else
+            brls::Application::notify(L("Saturn 独立运行时仅支持 Switch"));
+            return;
+#endif
+        }
+        if (shouldUseDolphinExternalNro(dirItem))
+        {
+            ensureGameDbEntryForFileLaunch(dirItem);
+#ifdef __SWITCH__
+            launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "GC / Wii",
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin),
+                "dolphin.externalNro.path", "/GBAStation/core/GBAStationDolphinStub.nro",
+                "dolphin.externalNro.returnPath");
+            return;
+#else
+            brls::Application::notify(L("Dolphin 独立运行时仅支持 Switch"));
             return;
 #endif
         }

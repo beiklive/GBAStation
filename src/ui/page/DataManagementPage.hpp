@@ -54,6 +54,9 @@ namespace beiklive
         std::string m_scanPathDC;
         std::string m_scanPathGenesis;
         std::string m_scanPathPSP;
+        std::string m_scanPathPS1;
+        std::string m_scanPathSaturn;
+        std::string m_scanPathDolphin;
         int m_scanTabIndex = 1; // Canvas 标签页顺序：bundle=0, scan=1, process=2
 
         std::thread m_importThread;

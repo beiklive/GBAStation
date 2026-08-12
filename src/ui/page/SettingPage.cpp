@@ -1653,6 +1653,12 @@ private:
                 [this]() { _openFlycastCore(); });
         addCore(L("PSP 核心"), "PPSSPP", 0xE30F,
                 [this]() { _openPpssppCore(); });
+        addCore(L("PS1 核心"), "DuckStation", 0xE30F,
+                [this]() { _openDuckStationCore(); });
+        addCore(L("Saturn 核心"), "YabaSanshiro", 0xE30F,
+                [this]() { _openYabaSanshiroCore(); });
+        addCore(L("GC / Wii 核心"), "Dolphin", 0xE30F,
+                [this]() { _openDolphinCore(); });
 
         emulator.push_back(_section(L("存档与封面")));
         emulator.push_back(_selector(L("SRAM 存档目录"), L("选择 SRAM 与 ROM 同目录或模拟器统一目录"), beiklive::material::STORAGE,
@@ -2713,6 +2719,103 @@ private:
             []() { return std::string(L("进入配置  >")); },
             [this]() { _openMappingPage(L("PSP 按键映射"), "psp.", false); }));
         _finishCorePage(L("PPSSPP 核心设置"));
+    }
+
+    void _openDuckStationCore()
+    {
+        m_coreItems.clear();
+        m_coreItems.push_back(_section(L("外部核心")));
+        _appendExternalCorePaths(
+            "DuckStation", "ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
+            "ps1.externalNro.returnPath");
+
+        m_coreItems.push_back(_section(L("画面与启动")));
+        const std::vector<std::string> resolutionValues = {"1", "2", "3", "4"};
+        m_coreItems.push_back(_selector(
+            L("内部渲染分辨率"), L("倍率越高画面越清晰，但性能开销也越大"), 0xE8FF,
+            {"1x", "2x", "3x", "4x"},
+            [resolutionValues]() {
+                return findIndex(resolutionValues, std::to_string(cfgGetInt("ps1.resolutionScale", 1)));
+            },
+            [resolutionValues](int i) {
+                if (i >= 0 && i < static_cast<int>(resolutionValues.size()))
+                    cfgSetInt("ps1.resolutionScale", std::stoi(resolutionValues[static_cast<size_t>(i)]));
+            }, "ps1.resolutionScale"));
+        const std::vector<std::string> aspectValues = {
+            "Auto (Game Native)", "4:3", "16:9", "Stretch To Fill"};
+        m_coreItems.push_back(_selector(
+            L("画面比例"), L("按游戏原始比例显示，或选择固定拉伸比例"), 0xE3F4,
+            {L("自动（游戏原始比例）"), "4:3", "16:9", L("拉伸填满")},
+            [aspectValues]() { return findIndex(aspectValues, cfgGetStr("ps1.aspectRatio", "Auto (Game Native)")); },
+            [aspectValues](int i) {
+                if (i >= 0 && i < static_cast<int>(aspectValues.size()))
+                    cfgSetStr("ps1.aspectRatio", aspectValues[static_cast<size_t>(i)]);
+            }, "ps1.aspectRatio"));
+        m_coreItems.push_back(_toggle(
+            L("快速启动"), L("跳过 PlayStation BIOS 动画，关闭可获得更接近原机的启动过程"), 0xE8B5,
+            []() { return cfgGetBool("ps1.fastBoot", true); },
+            [](bool value) { cfgSetBool("ps1.fastBoot", value); }, "ps1.fastBoot"));
+
+        m_coreItems.push_back(_section(L("按键")));
+        m_coreItems.push_back(_action(
+            L("PS1 按键映射"), L("配置 DuckStation 外部核心使用的 config.cfg 映射"), 0xE30F,
+            []() { return std::string(L("进入配置  >")); },
+            [this]() { _openMappingPage(L("PS1 按键映射"), "ps1.", false); }));
+        _finishCorePage(L("DuckStation 核心设置"));
+    }
+
+    void _openYabaSanshiroCore()
+    {
+        m_coreItems.clear();
+        m_coreItems.push_back(_section(L("外部核心")));
+        _appendExternalCorePaths(
+            "YabaSanshiro", "saturn.externalNro.path", "/GBAStation/core/GBAStationYabaSanshiroStub.nro",
+            "saturn.externalNro.returnPath");
+        m_coreItems.push_back(_section(L("系统")));
+        m_coreItems.push_back(_toggle(
+            L("使用 HLE BIOS"), L("没有 Saturn BIOS 文件时使用内置高层模拟，兼容性较低"), 0xE8B5,
+            []() { return cfgGetBool("core.saturn.emulated_bios", false); },
+            [](bool value) { cfgSetBool("core.saturn.emulated_bios", value); }, "core.saturn.emulated_bios"));
+        m_coreItems.push_back(_selector(
+            L("渲染分辨率"), L("原生分辨率最稳定；更高倍率会增加 GPU 负担"), 0xE8FF,
+            {L("原生"), "4x", "2x", L("原始输出")},
+            []() { return std::clamp(cfgGetInt("core.saturn.resolution_mode", 0), 0, 3); },
+            [](int value) { cfgSetInt("core.saturn.resolution_mode", std::clamp(value, 0, 3)); }, "core.saturn.resolution_mode"));
+        m_coreItems.push_back(_section(L("按键")));
+        m_coreItems.push_back(_action(
+            L("Saturn 按键映射"), L("Switch A/B/X/Y/L/R/ZL/ZR 对应 Saturn 六键手柄"), 0xE30F,
+            []() { return std::string(L("进入配置  >")); },
+            [this]() { _openMappingPage(L("Saturn 按键映射"), "saturn.", false); }));
+        _finishCorePage(L("YabaSanshiro 核心设置"));
+    }
+
+    void _openDolphinCore()
+    {
+        m_coreItems.clear();
+        m_coreItems.push_back(_section(L("外部核心")));
+        _appendExternalCorePaths(
+            "Dolphin", "dolphin.externalNro.path", "/GBAStation/core/GBAStationDolphinStub.nro",
+            "dolphin.externalNro.returnPath");
+        m_coreItems.push_back(_section(L("GameCube / Wii")));
+        m_coreItems.push_back(_toggle(
+            L("宽屏"), L("为支持的 GameCube 和 Wii 游戏启用宽屏补丁"), 0xE3F4,
+            []() { return cfgGetStr("core.dolphin.dolphin_widescreen", "enabled") == "enabled"; },
+            [](bool value) { cfgSetStr("core.dolphin.dolphin_widescreen", value ? "enabled" : "disabled"); },
+            "core.dolphin.dolphin_widescreen"));
+        m_coreItems.push_back(_toggle(
+            L("手柄震动"), L("启用 GameCube / Wii Classic Controller 震动"), 0xE8B8,
+            []() { return cfgGetStr("core.dolphin.dolphin_enable_rumble", "enabled") == "enabled"; },
+            [](bool value) { cfgSetStr("core.dolphin.dolphin_enable_rumble", value ? "enabled" : "disabled"); },
+            "core.dolphin.dolphin_enable_rumble"));
+        m_coreItems.push_back(_selector(
+            L("Wii 控制器"), L("第一阶段使用 Classic Controller 模拟，不启用体感"), 0xE30F,
+            {L("Classic Controller")}, []() { return 0; }, [](int) {}, "core.dolphin.dolphin_wiimote1_mode"));
+        m_coreItems.push_back(_section(L("按键")));
+        m_coreItems.push_back(_action(
+            L("GC / Wii 按键映射"), L("Dolphin 会根据游戏自动选择 GameCube 或 Wii Classic Controller"), 0xE30F,
+            []() { return std::string(L("进入配置  >")); },
+            [this]() { _openMappingPage(L("GC / Wii 按键映射"), "dolphin.", false); }));
+        _finishCorePage(L("Dolphin 核心设置"));
     }
 
     void _openGenesisCore()

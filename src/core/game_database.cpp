@@ -488,6 +488,9 @@ namespace beiklive
                 (int)beiklive::enums::EmuPlatform::EmuArcade,
                 (int)beiklive::enums::EmuPlatform::EmuDreamcast,
                 (int)beiklive::enums::EmuPlatform::EmuPSP,
+                (int)beiklive::enums::EmuPlatform::EmuPS1,
+                (int)beiklive::enums::EmuPlatform::EmuSaturn,
+                (int)beiklive::enums::EmuPlatform::EmuDolphin,
             };
             std::error_code ec;
             for (int p : platforms)
@@ -511,6 +514,9 @@ namespace beiklive
         case (int)beiklive::enums::EmuPlatform::EmuArcade: return beiklive::path::DATA_BASE_FILE_ARCADE;
         case (int)beiklive::enums::EmuPlatform::EmuDreamcast: return beiklive::path::DATA_BASE_FILE_DC;
         case (int)beiklive::enums::EmuPlatform::EmuPSP: return beiklive::path::DATA_BASE_FILE_PSP;
+        case (int)beiklive::enums::EmuPlatform::EmuPS1: return beiklive::path::DATA_BASE_FILE_PS1;
+        case (int)beiklive::enums::EmuPlatform::EmuSaturn: return beiklive::path::DATA_BASE_FILE_SATURN;
+        case (int)beiklive::enums::EmuPlatform::EmuDolphin: return beiklive::path::DATA_BASE_FILE_DOLPHIN;
         default: return beiklive::path::DATA_BASE_FILE;
         }
     }
@@ -534,6 +540,9 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuArcade,
             (int)beiklive::enums::EmuPlatform::EmuDreamcast,
             (int)beiklive::enums::EmuPlatform::EmuPSP,
+            (int)beiklive::enums::EmuPlatform::EmuPS1,
+            (int)beiklive::enums::EmuPlatform::EmuSaturn,
+            (int)beiklive::enums::EmuPlatform::EmuDolphin,
         };
 
         for (int platform : platforms)
@@ -629,6 +638,9 @@ namespace beiklive
             (int)beiklive::enums::EmuPlatform::EmuArcade,
             (int)beiklive::enums::EmuPlatform::EmuDreamcast,
             (int)beiklive::enums::EmuPlatform::EmuPSP,
+            (int)beiklive::enums::EmuPlatform::EmuPS1,
+            (int)beiklive::enums::EmuPlatform::EmuSaturn,
+            (int)beiklive::enums::EmuPlatform::EmuDolphin,
         };
         for (int platform : platforms)
             platformData[platform] = nlohmann::json::array();

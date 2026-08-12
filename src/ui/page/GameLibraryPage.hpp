@@ -30,6 +30,9 @@ enum class PlatformFilter : int
     ARCADE = (int)beiklive::enums::EmuPlatform::EmuArcade,
     DREAMCAST = (int)beiklive::enums::EmuPlatform::EmuDreamcast,
     PSP = (int)beiklive::enums::EmuPlatform::EmuPSP,
+    PS1 = (int)beiklive::enums::EmuPlatform::EmuPS1,
+    SATURN = (int)beiklive::enums::EmuPlatform::EmuSaturn,
+    DOLPHIN = (int)beiklive::enums::EmuPlatform::EmuDolphin,
     FAVORITE = 999,
 };
 

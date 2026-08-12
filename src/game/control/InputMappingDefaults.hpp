@@ -15,7 +15,10 @@ namespace beiklive::input_mapping
     inline constexpr unsigned kPlatformArcade = 1u << 6;
     inline constexpr unsigned kPlatformDreamcast = 1u << 7;
     inline constexpr unsigned kPlatformPsp = 1u << 8;
-    inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp;
+    inline constexpr unsigned kPlatformPs1 = 1u << 9;
+    inline constexpr unsigned kPlatformSaturn = 1u << 10;
+    inline constexpr unsigned kPlatformDolphin = 1u << 11;
+    inline constexpr unsigned kPlatformAll = kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp | kPlatformPs1 | kPlatformSaturn | kPlatformDolphin;
     inline constexpr unsigned kPlatformExplicitRightStick =
         kPlatformGbFamily | kPlatformNes | kPlatformSfc | kPlatformThreeDs | kPlatformGenesis;
 
@@ -30,18 +33,20 @@ namespace beiklive::input_mapping
     inline constexpr GameButtonDefault kGameButtonDefaults[] = {
         {"A键", "a", "PAD_A", kPlatformAll},
         {"B键", "b", "PAD_B", kPlatformAll},
-        {"X键", "x", "PAD_X", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
-        {"Y键", "y", "PAD_Y", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
+        {"X键", "x", "PAD_X", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp | kPlatformSaturn | kPlatformDolphin},
+        {"Y键", "y", "PAD_Y", kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp | kPlatformSaturn | kPlatformDolphin},
+        {"C键", "c", "PAD_X", kPlatformSaturn},
+        {"Z键", "z", "PAD_RB", kPlatformSaturn},
         {"方向键上", "up", "PAD_UP", kPlatformAll},
         {"方向键下", "down", "PAD_DOWN", kPlatformAll},
         {"方向键左", "left", "PAD_LEFT", kPlatformAll},
         {"方向键右", "right", "PAD_RIGHT", kPlatformAll},
-        {"L键", "l", "PAD_LB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
-        {"R键", "r", "PAD_RB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp},
+        {"L键", "l", "PAD_LB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp | kPlatformSaturn | kPlatformDolphin},
+        {"R键", "r", "PAD_RB", kPlatformGbFamily | kPlatformSfc | kPlatformNds | kPlatformThreeDs | kPlatformGenesis | kPlatformArcade | kPlatformDreamcast | kPlatformPsp | kPlatformSaturn | kPlatformDolphin},
         // ZL/ZR only exist on the 3DS; the external cores use these physical
         // buttons for their own inputs (arcade button 7/8 on FBNeo).
-        {"ZL键", "l2", "PAD_LT", kPlatformThreeDs | kPlatformArcade},
-        {"ZR键", "r2", "PAD_RT", kPlatformThreeDs | kPlatformArcade},
+        {"ZL键", "l2", "PAD_LT", kPlatformThreeDs | kPlatformArcade | kPlatformPs1 | kPlatformSaturn | kPlatformDolphin},
+        {"ZR键", "r2", "PAD_RT", kPlatformThreeDs | kPlatformArcade | kPlatformPs1 | kPlatformSaturn | kPlatformDolphin},
         {"开始键", "start", "PAD_START", kPlatformAll},
         {"选择键", "select", "PAD_BACK", kPlatformAll},
         {"左摇杆上", "lstick_up", "PAD_LEFTSTICKUP", kPlatformThreeDs},
@@ -115,6 +120,12 @@ namespace beiklive::input_mapping
             return "dc.";
         case beiklive::enums::EmuPlatform::EmuPSP:
             return "psp.";
+        case beiklive::enums::EmuPlatform::EmuPS1:
+            return "ps1.";
+        case beiklive::enums::EmuPlatform::EmuSaturn:
+            return "saturn.";
+        case beiklive::enums::EmuPlatform::EmuDolphin:
+            return "dolphin.";
         default:
             return "";
         }
@@ -140,6 +151,12 @@ namespace beiklive::input_mapping
             return kPlatformDreamcast;
         case beiklive::enums::EmuPlatform::EmuPSP:
             return kPlatformPsp;
+        case beiklive::enums::EmuPlatform::EmuPS1:
+            return kPlatformPs1;
+        case beiklive::enums::EmuPlatform::EmuSaturn:
+            return kPlatformSaturn;
+        case beiklive::enums::EmuPlatform::EmuDolphin:
+            return kPlatformDolphin;
         case beiklive::enums::EmuPlatform::EmuGBA:
         case beiklive::enums::EmuPlatform::EmuGBC:
         case beiklive::enums::EmuPlatform::EmuGB:
@@ -166,12 +183,30 @@ namespace beiklive::input_mapping
             return kPlatformDreamcast;
         if (prefix == "psp.")
             return kPlatformPsp;
+        if (prefix == "ps1.")
+            return kPlatformPs1;
+        if (prefix == "saturn.")
+            return kPlatformSaturn;
+        if (prefix == "dolphin.")
+            return kPlatformDolphin;
         return kPlatformGbFamily;
     }
 
     inline const char* gameButtonLabelForPrefix(const std::string& prefix,
                                                 const GameButtonDefault& entry)
     {
+        if (prefix == "saturn.")
+        {
+            const std::string suffix = entry.suffix;
+            if (suffix == "a") return "Saturn A键";
+            if (suffix == "b") return "Saturn B键";
+            if (suffix == "c") return "Saturn C键";
+            if (suffix == "x") return "Saturn X键";
+            if (suffix == "y") return "Saturn Y键";
+            if (suffix == "z") return "Saturn Z键";
+            if (suffix == "l") return "Saturn L键";
+            if (suffix == "r") return "Saturn R键";
+        }
         if (prefix != "md.")
             return entry.label;
 
@@ -222,6 +257,17 @@ namespace beiklive::input_mapping
                                                    const std::string& suffix,
                                                    const char* fallback = "none")
     {
+        if (prefix == "saturn.")
+        {
+            if (suffix == "a") return "PAD_B";
+            if (suffix == "b") return "PAD_A";
+            if (suffix == "c") return "PAD_X";
+            if (suffix == "x") return "PAD_Y";
+            if (suffix == "y") return "PAD_LB";
+            if (suffix == "z") return "PAD_RB";
+            if (suffix == "l") return "PAD_LT";
+            if (suffix == "r") return "PAD_RT";
+        }
         if (requiresExplicitRightStickMapping(prefix) && isRightStickMapping(suffix))
             return "none";
         return defaultHandleValue(suffix, fallback);

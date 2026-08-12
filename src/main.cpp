@@ -61,7 +61,10 @@ bool isLibraryRomType(beiklive::enums::FileType type)
 		   type == beiklive::enums::FileType::THREEDS_ROM ||
 		   type == beiklive::enums::FileType::ARCADE_ROM ||
 		   type == beiklive::enums::FileType::DREAMCAST_ROM ||
-		   type == beiklive::enums::FileType::PSP_ROM;
+		   type == beiklive::enums::FileType::PSP_ROM ||
+		   type == beiklive::enums::FileType::PS1_ROM ||
+		   type == beiklive::enums::FileType::SATURN_ROM ||
+		   type == beiklive::enums::FileType::DOLPHIN_ROM;
 }
 
 std::optional<std::string> parseDirectLaunchRom(int argc, char* argv[])
@@ -145,9 +148,9 @@ void ensureDirectGameDbEntry(const std::string& romPath, beiklive::enums::FileTy
 	if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP))
 	{
 		// PSP ROM：入库时提取真实游戏标题与 ICON0 封面（保存到该 ROM 的存档目录）。
-		// TITLE 仅在仍是默认文件名/映射名时覆盖；封面仅当仍是默认资源图时替换。
+		// TITLE 仅在仍是默认文件名时覆盖（映射名优先保留）；封面仅当仍是默认资源图时替换。
 		const std::string realTitle = beiklive::psp_meta::ExtractTitle(entry.path);
-		if (!realTitle.empty() && entry.title == GET_MAPPING_KEY_STR(stem, stem))
+		if (!realTitle.empty() && entry.title == stem)
 		{
 			entry.title = realTitle;
 			changed = true;
@@ -287,6 +290,27 @@ bool launchDirectGameActivity(const std::string& romPath)
 			static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP),
 			"psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro",
 			"psp.externalNro.returnPath");
+	}
+	if (fileType == beiklive::enums::FileType::PS1_ROM)
+	{
+		return launchExternalCore("PS1",
+			static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
+			"ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
+			"ps1.externalNro.returnPath");
+	}
+	if (fileType == beiklive::enums::FileType::SATURN_ROM)
+	{
+		return launchExternalCore("Saturn",
+			static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn),
+			"saturn.externalNro.path", "/GBAStation/core/GBAStationYabaSanshiroStub.nro",
+			"saturn.externalNro.returnPath");
+	}
+	if (fileType == beiklive::enums::FileType::DOLPHIN_ROM)
+	{
+		return launchExternalCore("GC / Wii",
+			static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin),
+			"dolphin.externalNro.path", "/GBAStation/core/GBAStationDolphinStub.nro",
+			"dolphin.externalNro.returnPath");
 	}
 #endif
 

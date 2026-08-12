@@ -62,6 +62,9 @@ inline std::string GetRootPath()
     constexpr const char *DATA_BASE_FILE_ARCADE  = "GameData_Arcade.json";  ///< Arcade 平台数据库文件
     constexpr const char *DATA_BASE_FILE_DC      = "GameData_DC.json";      ///< Dreamcast 平台数据库文件
     constexpr const char *DATA_BASE_FILE_PSP     = "GameData_PSP.json";     ///< PSP 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_PS1     = "GameData_PS1.json";     ///< PlayStation 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_SATURN  = "GameData_Saturn.json";  ///< Sega Saturn 平台数据库文件
+    constexpr const char *DATA_BASE_FILE_DOLPHIN = "GameData_Dolphin.json"; ///< GameCube / Wii 平台数据库文件
 
     namespace 
     {
@@ -103,6 +106,9 @@ inline std::string GetRootPath()
             case 9: return DATA_BASE_FILE_ARCADE;   // EmuPlatform::EmuArcade
             case 10: return DATA_BASE_FILE_DC;       // EmuPlatform::EmuDreamcast
             case 11: return DATA_BASE_FILE_PSP;      // EmuPlatform::EmuPSP
+            case 12: return DATA_BASE_FILE_PS1;      // EmuPlatform::EmuPS1
+            case 13: return DATA_BASE_FILE_SATURN;   // EmuPlatform::EmuSaturn
+            case 14: return DATA_BASE_FILE_DOLPHIN;  // EmuPlatform::EmuDolphin
             default: return DATA_BASE_FILE;
             }
         }
@@ -209,6 +215,9 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_SCAN_PATH_DC     ="scan.path.dc";
     constexpr const char *KEY_SCAN_PATH_GENESIS="scan.path.md";
     constexpr const char *KEY_SCAN_PATH_PSP    ="scan.path.psp";
+    constexpr const char *KEY_SCAN_PATH_PS1    ="scan.path.ps1";
+    constexpr const char *KEY_SCAN_PATH_SATURN ="scan.path.saturn";
+    constexpr const char *KEY_SCAN_PATH_DOLPHIN="scan.path.dolphin";
 
     // 着色器设置（全局默认）
     constexpr const char *KEY_DISPLAY_SHADER_ENABLED   ="display.shaderEnabled";   ///< 着色器总开关（true=启用）

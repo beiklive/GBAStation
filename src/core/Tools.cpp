@@ -43,6 +43,13 @@ beiklive::enums::FileType fileTypeFromExtension(const std::string& ext, bool arc
         return beiklive::enums::FileType::DREAMCAST_ROM;
     if (ext == "iso" || ext == "cso" || ext == "pbp")
         return beiklive::enums::FileType::PSP_ROM;
+    if (ext == "gcm" || ext == "rvz" || ext == "wbfs" || ext == "wad" || ext == "ciso")
+        return beiklive::enums::FileType::DOLPHIN_ROM;
+    if (ext == "ccd")
+        return beiklive::enums::FileType::SATURN_ROM;
+    // .m3u is an unambiguous multi-disc playlist format for DuckStation.
+    if (ext == "m3u")
+        return beiklive::enums::FileType::PS1_ROM;
     if (ext == "nds")
         return beiklive::enums::FileType::NDS_ROM;
     if (ext == "cia" || ext == "cci" || ext == "3ds")
@@ -352,6 +359,12 @@ int platformFromFileType(beiklive::enums::FileType type)
             return static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast);
         case beiklive::enums::FileType::PSP_ROM:
             return static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP);
+        case beiklive::enums::FileType::PS1_ROM:
+            return static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1);
+        case beiklive::enums::FileType::SATURN_ROM:
+            return static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn);
+        case beiklive::enums::FileType::DOLPHIN_ROM:
+            return static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin);
         default:
             return -1;
     }
@@ -372,13 +385,26 @@ std::vector<int> candidatePlatformsForExtension(const std::string& ext)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     if (lower == "iso")
         return {static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)};
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn)};
     if (lower == "bin")
-        return {static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)};
+        return {static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn)};
     if (lower == "cue")
-        return {static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)};
+        return {static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn)};
+    if (lower == "chd")
+        return {static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn)};
+    if (lower == "pbp")
+        return {static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)};
     if (lower == "zip" || lower == "7z")
     {
         return {static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA),
@@ -391,7 +417,10 @@ std::vector<int> candidatePlatformsForExtension(const std::string& ext)
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis),
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade),
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)};
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin)};
     }
     return {};
 }
@@ -468,6 +497,9 @@ std::string getIconPath(beiklive::enums::FileType type) {
         case beiklive::enums::FileType::GENESIS_ROM:
         case beiklive::enums::FileType::ARCADE_ROM:
         case beiklive::enums::FileType::DREAMCAST_ROM:
+        case beiklive::enums::FileType::PS1_ROM:
+        case beiklive::enums::FileType::SATURN_ROM:
+        case beiklive::enums::FileType::DOLPHIN_ROM:
             return BK_RES(path_prefix + "icon_gba.png");
         default:
             return BK_RES(path_prefix + "wenjian.png");
@@ -507,6 +539,9 @@ std::string getIconPathWithPrefix(beiklive::enums::FileType type, const std::str
         case beiklive::enums::FileType::ARCADE_ROM:
         case beiklive::enums::FileType::DREAMCAST_ROM:
         case beiklive::enums::FileType::PSP_ROM:
+        case beiklive::enums::FileType::PS1_ROM:
+        case beiklive::enums::FileType::SATURN_ROM:
+        case beiklive::enums::FileType::DOLPHIN_ROM:
             return BK_RES(prefix + "icon_gba.png");
         default:
             return BK_RES(prefix + "wenjian.png");
@@ -539,6 +574,12 @@ std::string getDefaultLogoPath(beiklive::enums::EmuPlatform platform)
             return BK_RES(path_prefix + "dreamcast.png");
         case beiklive::enums::EmuPlatform::EmuPSP:
             return BK_RES(path_prefix + "psp.png");
+        case beiklive::enums::EmuPlatform::EmuPS1:
+            return BK_RES(path_prefix + "ps1.png");
+        case beiklive::enums::EmuPlatform::EmuSaturn:
+            return BK_RES(path_prefix + "saturn.png");
+        case beiklive::enums::EmuPlatform::EmuDolphin:
+            return BK_RES(path_prefix + "wii.png");
         default:
             return BK_RES(path_prefix + "gba.png");
     }
@@ -783,6 +824,9 @@ std::string platformName(int platform) {
         case beiklive::enums::EmuPlatform::EmuArcade: return "Arcade";
         case beiklive::enums::EmuPlatform::EmuDreamcast: return "DC";
         case beiklive::enums::EmuPlatform::EmuPSP: return "PSP";
+        case beiklive::enums::EmuPlatform::EmuPS1: return "PS1";
+        case beiklive::enums::EmuPlatform::EmuSaturn: return "Saturn";
+        case beiklive::enums::EmuPlatform::EmuDolphin: return "GC / Wii";
         default: return "";
     }
 }
@@ -799,6 +843,10 @@ std::string platformOverlayKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuArcade: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_ARCADE_PATH;
         case beiklive::enums::EmuPlatform::EmuDreamcast: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_DC_PATH;
         case beiklive::enums::EmuPlatform::EmuPSP: return beiklive::SettingKey::KEY_DISPLAY_OVERLAY_PSP_PATH;
+        // DuckStation owns PS1 presentation, so launcher overlays are not applied.
+        case beiklive::enums::EmuPlatform::EmuPS1: return "";
+        case beiklive::enums::EmuPlatform::EmuSaturn: return "";
+        case beiklive::enums::EmuPlatform::EmuDolphin: return "";
         default: return "";
     }
 }
@@ -815,6 +863,10 @@ std::string platformShaderKey(int platform) {
         case beiklive::enums::EmuPlatform::EmuArcade: return beiklive::SettingKey::KEY_DISPLAY_SHADER_ARCADE_PATH;
         case beiklive::enums::EmuPlatform::EmuDreamcast: return beiklive::SettingKey::KEY_DISPLAY_SHADER_DC_PATH;
         case beiklive::enums::EmuPlatform::EmuPSP: return beiklive::SettingKey::KEY_DISPLAY_SHADER_PSP_PATH;
+        // DuckStation owns PS1 presentation, so launcher shaders are not applied.
+        case beiklive::enums::EmuPlatform::EmuPS1: return "";
+        case beiklive::enums::EmuPlatform::EmuSaturn: return "";
+        case beiklive::enums::EmuPlatform::EmuDolphin: return "";
         default: return "";
     }
 }
@@ -846,6 +898,9 @@ std::string platformBadgeName(int platform) {
         case beiklive::enums::EmuPlatform::EmuArcade: return "Arcade";
         case beiklive::enums::EmuPlatform::EmuDreamcast: return "DC";
         case beiklive::enums::EmuPlatform::EmuPSP: return "PSP";
+        case beiklive::enums::EmuPlatform::EmuPS1: return "PS1";
+        case beiklive::enums::EmuPlatform::EmuSaturn: return "Saturn";
+        case beiklive::enums::EmuPlatform::EmuDolphin: return "GC / Wii";
         default: return "";
     }
 }

@@ -172,6 +172,15 @@ namespace beiklive // 全局功能函数
         static const std::vector<CoreOption> pspCores = {
             {"ppsspp-external", "PPSSPP", CoreType::Mgba},
         };
+        static const std::vector<CoreOption> ps1Cores = {
+            {"duckstation-external", "DuckStation", CoreType::Mgba},
+        };
+        static const std::vector<CoreOption> saturnCores = {
+            {"yabasanshiro-external", "YabaSanshiro", CoreType::Mgba},
+        };
+        static const std::vector<CoreOption> dolphinCores = {
+            {"dolphin-external", "Dolphin (GC / Wii)", CoreType::Mgba},
+        };
         static const std::vector<CoreOption> emptyCores;
 
         switch (platform)
@@ -197,6 +206,12 @@ namespace beiklive // 全局功能函数
             return dreamcastCores;
         case (int)beiklive::enums::EmuPlatform::EmuPSP:
             return pspCores;
+        case (int)beiklive::enums::EmuPlatform::EmuPS1:
+            return ps1Cores;
+        case (int)beiklive::enums::EmuPlatform::EmuSaturn:
+            return saturnCores;
+        case (int)beiklive::enums::EmuPlatform::EmuDolphin:
+            return dolphinCores;
         default:
             return emptyCores;
         }
@@ -226,6 +241,12 @@ namespace beiklive // 全局功能函数
             return "flycast-external";
         case (int)beiklive::enums::EmuPlatform::EmuPSP:
             return "ppsspp-external";
+        case (int)beiklive::enums::EmuPlatform::EmuPS1:
+            return "duckstation-external";
+        case (int)beiklive::enums::EmuPlatform::EmuSaturn:
+            return "yabasanshiro-external";
+        case (int)beiklive::enums::EmuPlatform::EmuDolphin:
+            return "dolphin-external";
         default:
             return "";
         }
@@ -286,6 +307,9 @@ namespace beiklive // 全局功能函数
         case (int)beiklive::enums::EmuPlatform::EmuArcade:
         case (int)beiklive::enums::EmuPlatform::EmuDreamcast:
         case (int)beiklive::enums::EmuPlatform::EmuPSP:
+        case (int)beiklive::enums::EmuPlatform::EmuPS1:
+        case (int)beiklive::enums::EmuPlatform::EmuSaturn:
+        case (int)beiklive::enums::EmuPlatform::EmuDolphin:
             return "";  // 大型核心走独立 NRO 配置
         default:
             return "";

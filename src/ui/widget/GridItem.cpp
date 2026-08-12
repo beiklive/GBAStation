@@ -233,6 +233,9 @@ namespace beiklive
             case PlatformBadgeColor::ARCADE:  return nvgRGBA(236, 134, 44, 220);
             case PlatformBadgeColor::DREAMCAST: return nvgRGBA(0, 142, 180, 220);
             case PlatformBadgeColor::PSP:     return nvgRGBA(67, 118, 226, 220);
+            case PlatformBadgeColor::PS1:     return nvgRGBA(74, 74, 82, 220);
+            case PlatformBadgeColor::SATURN:  return nvgRGBA(68, 82, 150, 220);
+            case PlatformBadgeColor::DOLPHIN: return nvgRGBA(54, 102, 196, 220);
             default:                          return nvgRGBA(100, 100, 100, 200);
         }
     }
@@ -288,6 +291,9 @@ namespace beiklive
         case beiklive::enums::EmuPlatform::EmuArcade: item.badgeColor = PlatformBadgeColor::ARCADE; break;
         case beiklive::enums::EmuPlatform::EmuDreamcast: item.badgeColor = PlatformBadgeColor::DREAMCAST; break;
         case beiklive::enums::EmuPlatform::EmuPSP: item.badgeColor = PlatformBadgeColor::PSP; break;
+        case beiklive::enums::EmuPlatform::EmuPS1: item.badgeColor = PlatformBadgeColor::PS1; break;
+        case beiklive::enums::EmuPlatform::EmuSaturn: item.badgeColor = PlatformBadgeColor::SATURN; break;
+        case beiklive::enums::EmuPlatform::EmuDolphin: item.badgeColor = PlatformBadgeColor::DOLPHIN; break;
         default: item.badgeColor = PlatformBadgeColor::NONE; break;
     }
         item.badgeText = badgeText;

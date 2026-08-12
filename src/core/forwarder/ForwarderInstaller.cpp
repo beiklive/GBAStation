@@ -198,6 +198,12 @@ InstallResult installGame(const beiklive::GameEntry& entry)
         entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast);
     const bool isPsp =
         entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP);
+    const bool isPs1 =
+        entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1);
+    const bool isSaturn =
+        entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn);
+    const bool isDolphin =
+        entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin);
     const std::string mainNro = "sdmc:/switch/GBAStation.nro";
     std::string nroPath = mainNro;
     if (isNds)
@@ -215,6 +221,15 @@ InstallResult installGame(const beiklive::GameEntry& entry)
     else if (isPsp)
         nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
             "psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro"));
+    else if (isPs1)
+        nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
+            "ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro"));
+    else if (isSaturn)
+        nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
+            "saturn.externalNro.path", "/GBAStation/core/GBAStationYabaSanshiroStub.nro"));
+    else if (isDolphin)
+        nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
+            "dolphin.externalNro.path", "/GBAStation/core/GBAStationDolphinStub.nro"));
 
     std::string args = quoteArgument(entry.path);
     std::string legacyArgs;
@@ -223,7 +238,7 @@ InstallResult installGame(const beiklive::GameEntry& entry)
         legacyArgs = args + " --return " + quoteArgument(mainNro);
         args += " --exit-to-home";
     }
-    else if (isArcade || isDreamcast || isPsp)
+    else if (isArcade || isDreamcast || isPsp || isPs1 || isSaturn || isDolphin)
     {
         legacyArgs = args + " --return " + quoteArgument(mainNro);
     }

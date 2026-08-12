@@ -391,6 +391,7 @@ std::string overlayKeyForPlatform(int platform)
     case beiklive::enums::EmuPlatform::EmuArcade: return sk::KEY_DISPLAY_OVERLAY_ARCADE_PATH;
     case beiklive::enums::EmuPlatform::EmuDreamcast: return sk::KEY_DISPLAY_OVERLAY_DC_PATH;
     case beiklive::enums::EmuPlatform::EmuPSP: return sk::KEY_DISPLAY_OVERLAY_PSP_PATH;
+    case beiklive::enums::EmuPlatform::EmuPS1: return "";
     default: return "";
     }
 }
@@ -410,6 +411,7 @@ std::string shaderKeyForPlatform(int platform)
     case beiklive::enums::EmuPlatform::EmuArcade: return sk::KEY_DISPLAY_SHADER_ARCADE_PATH;
     case beiklive::enums::EmuPlatform::EmuDreamcast: return sk::KEY_DISPLAY_SHADER_DC_PATH;
     case beiklive::enums::EmuPlatform::EmuPSP: return sk::KEY_DISPLAY_SHADER_PSP_PATH;
+    case beiklive::enums::EmuPlatform::EmuPS1: return "";
     default: return "";
     }
 }
@@ -1395,6 +1397,9 @@ const ScanPlatformConfig kScanPlatforms[] = {
     {L("DC"),     beiklive::SettingKey::KEY_SCAN_PATH_DC,     {"cdi", "gdi", "chd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)},
     {L("MD"),     beiklive::SettingKey::KEY_SCAN_PATH_GENESIS,{"md", "gen", "bin", "smd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)},
     {L("PSP"),    beiklive::SettingKey::KEY_SCAN_PATH_PSP,    {"iso", "cso", "pbp"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)},
+    {L("PS1"),    beiklive::SettingKey::KEY_SCAN_PATH_PS1,    {"cue", "bin", "chd", "pbp", "m3u"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1)},
+    {L("Saturn"), beiklive::SettingKey::KEY_SCAN_PATH_SATURN, {"cue", "bin", "chd", "m3u", "ccd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn)},
+    {L("GC / Wii"), beiklive::SettingKey::KEY_SCAN_PATH_DOLPHIN, {"iso", "gcm", "rvz", "wbfs", "wad", "ciso"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin)},
 };
 constexpr size_t kScanPlatformCount = sizeof(kScanPlatforms) / sizeof(kScanPlatforms[0]);
 
@@ -1426,6 +1431,9 @@ void DataManagementPage::init()
         {L("导入 街机 lpl文件"), "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade)},
         {L("导入 DC lpl文件"), "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast)},
         {L("导入 PSP lpl文件"), "PSP · .lpl", static_cast<int>(enums::EmuPlatform::EmuPSP)},
+        {L("导入 PS1 lpl文件"), "PS1 · .lpl", static_cast<int>(enums::EmuPlatform::EmuPS1)},
+        {L("导入 Saturn lpl文件"), "Saturn · .lpl", static_cast<int>(enums::EmuPlatform::EmuSaturn)},
+        {L("导入 GC / Wii lpl文件"), "GC / Wii · .lpl", static_cast<int>(enums::EmuPlatform::EmuDolphin)},
     };
     for (const auto& platform : bundlePlatforms)
     {
@@ -1456,6 +1464,9 @@ void DataManagementPage::init()
     m_scanPathDC     = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_SCAN_PATH_DC, "");
     m_scanPathGenesis= GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_SCAN_PATH_GENESIS, "");
     m_scanPathPSP    = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_SCAN_PATH_PSP, "");
+    m_scanPathPS1    = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_SCAN_PATH_PS1, "");
+    m_scanPathSaturn = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_SCAN_PATH_SATURN, "");
+    m_scanPathDolphin= GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_SCAN_PATH_DOLPHIN, "");
 
     Canvas::Tab scan;
     scan.title = L("扫描导入");
@@ -1804,6 +1815,9 @@ brls::View* DataManagementPage::buildBundleImportTab()
         {L("选择Arcade游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade)},
         {L("选择DC游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)},
         {L("选择PSP游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)},
+        {L("选择PS1游戏的lpl文件"),  "img/ui/icon_gba.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1)},
+        {L("选择Saturn游戏的lpl文件"),  "img/ui/saturn.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn)},
+        {L("选择GC / Wii游戏的lpl文件"),  "img/ui/wii.png", static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin)},
     };
     
     box->addView(makeHint(L("lpl 文件通常位于 RetroArch 的 playlists 目录下，不懂lpl文件语法规则不要自行删改")));
@@ -2120,9 +2134,9 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                 if (!ndsIcon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
                     static_cast<beiklive::enums::EmuPlatform>(config.platform), romPath))
                     entry.logoPath = ndsIcon;
-                // NDS 名称：ROM header 游戏名（仅当标题仍是默认文件名/映射名时）。
+                // NDS 名称：ROM header 游戏名（仅当标题仍是默认文件名时，映射名优先保留）。
                 const std::string ndsTitle = beiklive::ExtractNdsHeaderTitle(romPath);
-                if (!ndsTitle.empty() && entry.title == GET_MAPPING_KEY_STR(romStem, romStem))
+                if (!ndsTitle.empty() && entry.title == romStem)
                     entry.title = ndsTitle;
             }
             else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
@@ -2133,7 +2147,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                     static_cast<beiklive::enums::EmuPlatform>(config.platform), romPath))
                     entry.logoPath = icon;
                 const std::string title = beiklive::ExtractThreeDsTitle(romPath);
-                if (!title.empty() && entry.title == GET_MAPPING_KEY_STR(romStem, romStem))
+                if (!title.empty() && entry.title == romStem)
                     entry.title = title;
             }
             entry.savePath = savePath;
@@ -2173,6 +2187,9 @@ std::string DataManagementPage::scanPathFor(int platformIndex) const
         case 8: return m_scanPathDC;
         case 9: return m_scanPathGenesis;
         case 10: return m_scanPathPSP;
+        case 11: return m_scanPathPS1;
+        case 12: return m_scanPathSaturn;
+        case 13: return m_scanPathDolphin;
         default: return "";
     }
 }
@@ -2192,6 +2209,9 @@ void DataManagementPage::setScanPath(int platformIndex, const std::string& path)
         case 8: m_scanPathDC = path; break;
         case 9: m_scanPathGenesis = path; break;
         case 10: m_scanPathPSP = path; break;
+        case 11: m_scanPathPS1 = path; break;
+        case 12: m_scanPathSaturn = path; break;
+        case 13: m_scanPathDolphin = path; break;
         default: return;
     }
     if (platformIndex >= 0 && platformIndex < static_cast<int>(kScanPlatformCount))
@@ -2481,10 +2501,10 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
             if (!ndsIcon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
                 static_cast<beiklive::enums::EmuPlatform>(platform), path))
                 entry.logoPath = ndsIcon;
-            // NDS 名称：ROM header 游戏名（仅当标题仍是默认文件名/映射名时）。
-            const std::string ndsTitle = beiklive::ExtractNdsHeaderTitle(path);
-            if (!ndsTitle.empty() && entry.title == GET_MAPPING_KEY_STR(romStem, romStem))
-                entry.title = ndsTitle;
+                // NDS 名称：ROM header 游戏名（仅当标题仍是默认文件名时，映射名优先保留）。
+                const std::string ndsTitle = beiklive::ExtractNdsHeaderTitle(path);
+                if (!ndsTitle.empty() && entry.title == romStem)
+                    entry.title = ndsTitle;
         }
         else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
         {
@@ -2493,9 +2513,9 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
             if (!icon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
                 static_cast<beiklive::enums::EmuPlatform>(platform), path))
                 entry.logoPath = icon;
-            const std::string title = beiklive::ExtractThreeDsTitle(path);
-            if (!title.empty() && entry.title == GET_MAPPING_KEY_STR(romStem, romStem))
-                entry.title = title;
+                const std::string title = beiklive::ExtractThreeDsTitle(path);
+                if (!title.empty() && entry.title == romStem)
+                    entry.title = title;
         }
 
         entry.overlayEnabled = config.overlayEnabled;
