@@ -30,4 +30,8 @@ namespace beiklive::material
     constexpr char32_t CLOUD_DOWNLOAD     = 0xE2C4;
     constexpr char32_t PHOTO_LIBRARY      = 0xE413;
     constexpr char32_t FOLDER             = 0xE2C7;
+    constexpr char32_t GAMES              = 0xE30F;
+    constexpr char32_t SPORTS_ESPORTS     = 0xEAE2;
+    constexpr char32_t VIDEOGAME_ASSET    = 0xEA1F;
+    constexpr char32_t PHONE_ANDROID      = 0xE324;
 }

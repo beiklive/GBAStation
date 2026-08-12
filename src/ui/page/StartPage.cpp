@@ -152,7 +152,7 @@ beiklive::enums::FileType platformToFileType(int platform)
 }
 
     // 机种选择弹窗：歧义后缀（iso/bin/cue/zip/7z 等）从文件列表启动时，
-    // 列出候选机种供选择（深色卡片 + 图标行 + 焦点框，与文件列表风格一致）。
+    // 使用与文件浏览一致的深色卡片网格展示候选机种。
 #ifdef ABSOLUTE
 #undef ABSOLUTE
 #endif
@@ -222,8 +222,21 @@ beiklive::enums::FileType platformToFileType(int platform)
             m_closing = false;
             m_progress = 0.f;
             m_lastFrame = std::chrono::steady_clock::now();
-            m_prevUp = m_prevDown = m_prevLeft = m_prevRight = false;
-            m_prevA = m_prevB = m_prevStart = false;
+            // The A press that opened this picker may still be held on the
+            // first frame.  Seed the edge detector from the live state so it
+            // cannot immediately confirm the default (GBA) entry.
+            const auto& st = brls::Application::getControllerState();
+            m_prevUp = st.buttons[brls::BUTTON_UP] ||
+                       st.buttons[brls::BUTTON_NAV_UP];
+            m_prevDown = st.buttons[brls::BUTTON_DOWN] ||
+                         st.buttons[brls::BUTTON_NAV_DOWN];
+            m_prevLeft = st.buttons[brls::BUTTON_LEFT] ||
+                         st.buttons[brls::BUTTON_NAV_LEFT];
+            m_prevRight = st.buttons[brls::BUTTON_RIGHT] ||
+                          st.buttons[brls::BUTTON_NAV_RIGHT];
+            m_prevA = st.buttons[brls::BUTTON_A];
+            m_prevB = st.buttons[brls::BUTTON_B];
+            m_prevStart = st.buttons[brls::BUTTON_START];
             setVisibility(brls::Visibility::VISIBLE);
             brls::Application::giveFocus(this);
         }
@@ -277,16 +290,14 @@ beiklive::enums::FileType platformToFileType(int platform)
             nvgSave(vg);
             nvgGlobalAlpha(vg, alpha);
 
-            // 遮罩（底部留出 hint 栏）
-            nvgBeginPath(vg);
-            nvgRect(vg, x, y, w, h - 56.f);
-            nvgFillColor(vg, nvgRGBA(0, 0, 0,
-                static_cast<unsigned char>(205.f * alpha)));
-            nvgFill(vg);
-
-            const float rowH = 56.f;
-            const float panelW = 640.f;
-            const float panelH = 96.f + static_cast<float>(m_candidates.size()) * rowH + 34.f;
+            constexpr int columns = 3;
+            constexpr float cardW = 246.f;
+            constexpr float cardH = 90.f;
+            constexpr float cardGap = 12.f;
+            const int rows = static_cast<int>((m_candidates.size() + columns - 1) / columns);
+            const float panelW = 3.f * cardW + 2.f * cardGap + 44.f;
+            const float panelH = 92.f + static_cast<float>(rows) * cardH +
+                                 static_cast<float>(std::max(0, rows - 1)) * cardGap + 28.f;
             const float panelX = x + (w - panelW) * 0.5f;
             const float panelY = y + (h - panelH) * 0.5f + (1.f - eased) * 42.f;
 
@@ -313,116 +324,133 @@ beiklive::enums::FileType platformToFileType(int platform)
             nvgStrokeWidth(vg, 1.f);
             nvgStroke(vg);
 
-            // 标题
+            // 标题区与文件浏览器保持同样的层级：标题、文件名、分隔线。
             nvgFontFaceId(vg, m_defaultFont);
-            nvgFontSize(vg, 17.f);
+            nvgFontSize(vg, 25.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(215, 222, 233, 235));
-            nvgText(vg, panelX + 28.f, panelY + 34.f, L("选择机种").c_str(), nullptr);
+            nvgFillColor(vg, nvgRGBA(235, 240, 248, 245));
+            nvgText(vg, panelX + 28.f, panelY + 37.f, L("选择机种").c_str(), nullptr);
             nvgFontSize(vg, 15.f);
+            nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, nvgRGBA(170, 178, 190, 190));
             std::string fileTitle = m_fileName;
-            if (fileTitle.size() > 34)
-                fileTitle = fileTitle.substr(0, 34) + "...";
-            nvgText(vg, panelX + panelW - 28.f, panelY + 34.f, fileTitle.c_str(), nullptr);
+            if (fileTitle.size() > 42)
+                fileTitle = fileTitle.substr(0, 42) + "...";
+            nvgText(vg, panelX + panelW - 28.f, panelY + 38.f, fileTitle.c_str(), nullptr);
 
             // 分隔线
             nvgBeginPath(vg);
-            nvgMoveTo(vg, panelX + 26.f, panelY + 60.f);
-            nvgLineTo(vg, panelX + panelW - 26.f, panelY + 60.f);
+            nvgMoveTo(vg, panelX + 26.f, panelY + 66.f);
+            nvgLineTo(vg, panelX + panelW - 26.f, panelY + 66.f);
             nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 26));
             nvgStrokeWidth(vg, 1.f);
             nvgStroke(vg);
 
-            // 机种行
-            const std::string pathPrefix = "img/ui/" + std::string(
-                brls::Application::getPlatform()->getThemeVariant() ==
-                        brls::ThemeVariant::DARK
-                    ? "light/"
-                    : "dark/");
+            // 三列卡片网格。全部使用 Material Icons，避免混用平台图片资源。
             for (size_t i = 0; i < m_candidates.size(); ++i)
             {
-                const float rowX = panelX + 18.f;
-                const float rowY = panelY + 72.f + static_cast<float>(i) * rowH;
-                const float rowW = panelW - 36.f;
+                const int column = static_cast<int>(i % columns);
+                const int row = static_cast<int>(i / columns);
+                const float cardX = panelX + 22.f + static_cast<float>(column) * (cardW + cardGap);
+                const float cardY = panelY + 82.f + static_cast<float>(row) * (cardH + cardGap);
                 const bool focused = static_cast<int>(i) == m_selected;
 
                 nvgBeginPath(vg);
-                nvgRoundedRect(vg, rowX, rowY, rowW, rowH - 8.f, 8.f);
+                nvgRoundedRect(vg, cardX, cardY, cardW, cardH, 10.f);
                 nvgFillColor(vg, focused
-                    ? nvgRGBA(79, 193, 255, 32)
-                    : nvgRGBA(255, 255, 255, 5));
+                    ? nvgRGBA(79, 193, 255, 38)
+                    : nvgRGBA(255, 255, 255, 9));
                 nvgFill(vg);
                 if (focused)
                 {
                     nvgBeginPath(vg);
-                    nvgRoundedRect(vg, rowX + 0.5f, rowY + 0.5f,
-                                   rowW - 1.f, rowH - 9.f, 7.5f);
-                    nvgStrokeColor(vg, nvgRGBA(79, 193, 255, 150));
+                    nvgRoundedRect(vg, cardX + 0.5f, cardY + 0.5f,
+                                   cardW - 1.f, cardH - 1.f, 9.5f);
+                    nvgStrokeColor(vg, nvgRGBA(99, 202, 255, 190));
                     nvgStrokeWidth(vg, 1.5f);
                     nvgStroke(vg);
                 }
-
-                // 平台图标
-                const beiklive::enums::FileType fileType = platformToFileType(m_candidates[i]);
-                const std::string iconPath =
-                    beiklive::tools::getIconPathWithPrefix(fileType, pathPrefix);
-                int imageHandle = _iconHandle(fileType, iconPath, vg);
-                if (imageHandle > 0)
+                else
                 {
-                    int iw = 0, ih = 0;
-                    nvgImageSize(vg, imageHandle, &iw, &ih);
-                    if (iw > 0 && ih > 0)
-                    {
-                        float drawW = 34.f;
-                        float drawH = drawW * static_cast<float>(ih) / iw;
-                        const NVGpaint ip = nvgImagePattern(
-                            vg, rowX + 14.f, rowY + (rowH - 8.f) * 0.5f - drawH * 0.5f,
-                            drawW, drawH, 0.f, imageHandle, alpha);
-                        nvgBeginPath(vg);
-                        nvgRoundedRect(vg, rowX + 14.f,
-                                       rowY + (rowH - 8.f) * 0.5f - drawH * 0.5f,
-                                       drawW, drawH, 6.f);
-                        nvgFillPaint(vg, ip);
-                        nvgFill(vg);
-                    }
+                    nvgBeginPath(vg);
+                    nvgRoundedRect(vg, cardX + 0.5f, cardY + 0.5f,
+                                   cardW - 1.f, cardH - 1.f, 9.5f);
+                    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 26));
+                    nvgStrokeWidth(vg, 1.f);
+                    nvgStroke(vg);
                 }
 
-                // 平台名
+                nvgFontFaceId(vg, m_materialFont);
+                nvgFontSize(vg, 32.f);
+                nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, focused
+                    ? nvgRGBA(125, 211, 252, 255)
+                    : nvgRGBA(183, 194, 210, 220));
+                const std::string icon = _utf8(_platformIcon(m_candidates[i]));
+                nvgText(vg, cardX + 37.f, cardY + cardH * 0.5f, icon.c_str(), nullptr);
+
                 nvgFontFaceId(vg, m_defaultFont);
-                nvgFontSize(vg, 20.f);
+                nvgFontSize(vg, 18.f);
                 nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, focused
                     ? nvgRGBA(255, 255, 255, 255)
                     : nvgRGBA(226, 232, 240, 220));
                 const std::string name =
                     beiklive::tools::platformName(m_candidates[i]);
-                nvgText(vg, rowX + 62.f, rowY + (rowH - 8.f) * 0.5f,
-                        name.c_str(), nullptr);
+                nvgText(vg, cardX + 67.f, cardY + 35.f, name.c_str(), nullptr);
 
-                // 右侧提示
-                nvgFontSize(vg, 14.f);
+                nvgFontSize(vg, 13.f);
                 nvgFillColor(vg, focused
-                    ? nvgRGBA(79, 193, 255, 235)
-                    : nvgRGBA(150, 158, 172, 150));
-                nvgText(vg, rowX + rowW - 14.f, rowY + (rowH - 8.f) * 0.5f,
-                        focused ? L("按 A 启动").c_str() : L("选择").c_str(), nullptr);
+                    ? nvgRGBA(125, 211, 252, 235)
+                    : nvgRGBA(152, 163, 180, 185));
+                nvgText(vg, cardX + 67.f, cardY + 59.f,
+                        focused ? L("已选中 · A 启动").c_str() : L("可启动").c_str(), nullptr);
             }
 
             nvgRestore(vg);
         }
 
     private:
-        int _iconHandle(beiklive::enums::FileType fileType, const std::string& path, NVGcontext* vg)
+        static char32_t _platformIcon(int platform)
         {
-            const auto it = m_iconCache.find(path);
-            if (it != m_iconCache.end())
-                return it->second;
-            int handle = nvgCreateImage(vg, path.c_str(), 0);
-            if (handle == 0)
-                handle = -1;
-            m_iconCache[path] = handle;
-            return handle;
+            using beiklive::enums::EmuPlatform;
+            switch (static_cast<EmuPlatform>(platform))
+            {
+                case EmuPlatform::EmuNDS:
+                case EmuPlatform::Emu3DS:
+                case EmuPlatform::EmuPSP:
+                    return beiklive::material::PHONE_ANDROID;
+                case EmuPlatform::EmuArcade:
+                    return beiklive::material::VIDEOGAME_ASSET;
+                case EmuPlatform::EmuNES:
+                case EmuPlatform::EmuSNES:
+                case EmuPlatform::EmuGenesis:
+                case EmuPlatform::EmuDreamcast:
+                case EmuPlatform::EmuPS1:
+                case EmuPlatform::EmuSaturn:
+                    return beiklive::material::SPORTS_ESPORTS;
+                default:
+                    return beiklive::material::GAMES;
+            }
+        }
+
+        static std::string _utf8(char32_t codepoint)
+        {
+            std::string out;
+            if (codepoint <= 0x7F)
+                out.push_back(static_cast<char>(codepoint));
+            else if (codepoint <= 0x7FF)
+            {
+                out.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+                out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            }
+            else
+            {
+                out.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+                out.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+                out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+            }
+            return out;
         }
 
         void _pollInput()
@@ -441,13 +469,13 @@ beiklive::enums::FileType platformToFileType(int platform)
             const bool start = st.buttons[brls::BUTTON_START];
 
             if (up && !m_prevUp)
-                _move(-1);
+                _moveGrid(0, -1);
             if (down && !m_prevDown)
-                _move(1);
+                _moveGrid(0, 1);
             if (left && !m_prevLeft)
-                _move(-1);
+                _moveGrid(-1, 0);
             if (right && !m_prevRight)
-                _move(1);
+                _moveGrid(1, 0);
             if (a && !m_prevA)
                 _finish(m_selected);
             if ((b && !m_prevB) || (start && !m_prevStart))
@@ -462,12 +490,21 @@ beiklive::enums::FileType platformToFileType(int platform)
             m_prevStart = start;
         }
 
-        void _move(int dir)
+        void _moveGrid(int columnDelta, int rowDelta)
         {
             if (m_candidates.empty())
                 return;
-            m_selected = (m_selected + dir + static_cast<int>(m_candidates.size())) %
-                         static_cast<int>(m_candidates.size());
+            constexpr int columns = 3;
+            const int row = m_selected / columns;
+            const int column = m_selected % columns;
+            const int targetRow = row + rowDelta;
+            const int targetColumn = column + columnDelta;
+            if (targetRow < 0 || targetColumn < 0 || targetColumn >= columns)
+                return;
+            const int target = targetRow * columns + targetColumn;
+            if (target < 0 || target >= static_cast<int>(m_candidates.size()))
+                return;
+            m_selected = target;
             brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
             invalidate();
         }
@@ -504,7 +541,6 @@ beiklive::enums::FileType platformToFileType(int platform)
         bool m_prevA = false;
         bool m_prevB = false;
         bool m_prevStart = false;
-        std::unordered_map<std::string, int> m_iconCache;
     };
 
 
