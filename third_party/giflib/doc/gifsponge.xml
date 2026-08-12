@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE refentry PUBLIC
+   "-//OASIS//DTD DocBook XML V4.1.2//EN"
+   "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd" [
+<!ENTITY email         "david.sephirot@gmail.com">
+]>
+<refentry id='gifsponge.1'>
+<refentryinfo><date>20 Dec 2020</date></refentryinfo>
+<refmeta>
+<refentrytitle>gifsponge</refentrytitle>
+<manvolnum>1</manvolnum>
+<refmiscinfo class="source">GIFLIB</refmiscinfo>
+<refmiscinfo class="manual">GIFLIB Documentation</refmiscinfo>
+</refmeta>
+<refnamediv id='name'>
+<refname>gifsponge</refname>
+<refpurpose>expensive GIF copy, a model for slurp utilities</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv id='synopsis'>
+
+<cmdsynopsis>
+  <command>gifsponge</command>
+</cmdsynopsis>
+</refsynopsisdiv>
+
+<refsect1><title>Description</title>
+
+<para>Slurp a GIF into core, operate on it, spew it out again.
+This is an expensive way to copy a GIF.  The source is included
+as a skeleton for more sophisticated slurp utilities.  See the source in the
+util directory for details.</para>
+
+</refsect1>
+<refsect1><title>Author</title>
+
+<para>David Suárez <email>&email;</email></para>
+
+</refsect1>
+</refentry>

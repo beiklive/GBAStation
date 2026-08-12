@@ -22,7 +22,7 @@ namespace beiklive
         bool looping = true;
     };
 
-    /// GIF89a 解码器（手写，无外部依赖）
+    /// 基于 giflib 的 GIF87a/GIF89a 解码器
     class GifDecoder
     {
     public:

@@ -1,0 +1,53 @@
+#! /bin/sh
+#
+# tapdiffer - Render diff between input and checkfile as a TAP report
+#
+# Usage: tapdiffer LEGEND CHECKFILE
+#
+# Output is a TAP report, ok if the diff is empty and not ok otherwise.
+# A nonempty diff is shipped as a TAP YAML block following "not ok" 
+# unless QUIET=1 in the environment.
+#
+# This code is intended to be embedded in your project. The author
+# grants permission for it to be distributed under the prevailing
+# license of your project if you choose, provided that license is
+# OSD-compliant; otherwise the following SPDX tag incorporates the
+# MIT No Attribution license by reference.
+#
+# SPDX-FileCopyrightText: (C) Eric S. Raymond <esr@thyrsus.com>
+# SPDX-License-Identifier: MIT-0
+#
+# A newer version may be available at https://gitlab.com/esr/tapview
+# Check your last commit dqte for this file against the commit list
+# there to see if it might be a good idea to update.
+#
+diffopts=-u
+while getopts bn opt
+do
+    case $opt in
+	b) diffopts=-ub;;
+	*) echo "tapdiffer: unknown option ${opt}."; exit 1;;
+    esac
+done
+# shellcheck disable=SC2004
+shift $(($OPTIND - 1))
+
+legend=$1
+checkfile=$2
+
+trap 'rm /tmp/tapdiff$$' EXIT HUP INT QUIT TERM
+
+if diff --text "${diffopts}" "${checkfile}" - >/tmp/tapdiff$$
+then
+	echo "ok - ${legend}"
+else
+	echo "not ok - ${legend}"
+	if [ ! "${QUIET}" = 1 ]
+	then
+		echo "  --- |"
+		sed </tmp/tapdiff$$ -e 's/^/  /'
+		echo "  ..."
+	fi
+fi
+
+# end

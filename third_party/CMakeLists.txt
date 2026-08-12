@@ -20,6 +20,93 @@ option(BUILD_MELONDS_CORE "Build the embedded melonDS native core" OFF)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/borealis/library)
 
 # =========================================================
+# giflib - GIF87a/GIF89a decoder used by UI image widgets
+# =========================================================
+add_library(giflib STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/giflib/dgif_lib.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/giflib/gifalloc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/giflib/gif_err.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/giflib/gif_hash.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/giflib/openbsd-reallocarray.c
+)
+target_include_directories(giflib PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/giflib
+)
+
+# =========================================================
+# FFmpeg - background MP4 playback only
+#
+# Do not use the system FFmpeg executable or shared libraries.  The custom
+# target configures an isolated, static build with just MOV/MP4 demuxing,
+# H.264 decoding, file input and RGBA scaling.  In particular it excludes
+# programs, audio, filters, devices, encoders, muxers and network support.
+# =========================================================
+set(FFMPEG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/FFmpeg)
+# FFmpeg does not support an out-of-tree build when a prior configure attempt
+# left config.h in its source tree. Build in that tree; CMake only consumes
+# the four minimal static libraries produced by the script.
+set(FFMPEG_BUILD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/FFmpeg)
+set(FFMPEG_BUILD_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/configure_ffmpeg_minimal.sh)
+
+if (WIN32)
+    # CMake's MinGW compiler lives in <msys-root>/mingw64/bin.  Use the
+    # matching MSYS shell so configure and GNU make see a consistent PATH.
+    get_filename_component(_ffmpeg_mingw_bin "${CMAKE_C_COMPILER}" DIRECTORY)
+    get_filename_component(_ffmpeg_mingw_root "${_ffmpeg_mingw_bin}" DIRECTORY)
+    get_filename_component(_ffmpeg_msys_root "${_ffmpeg_mingw_root}" DIRECTORY)
+    set(FFMPEG_SHELL "${_ffmpeg_msys_root}/usr/bin/bash.exe")
+    set(FFMPEG_CC "${_ffmpeg_mingw_bin}/gcc.exe")
+    set(FFMPEG_AR "${_ffmpeg_mingw_bin}/ar.exe")
+    set(FFMPEG_RANLIB "${_ffmpeg_mingw_bin}/ranlib.exe")
+else()
+    find_program(FFMPEG_SHELL NAMES bash sh REQUIRED)
+    set(FFMPEG_CC ${CMAKE_C_COMPILER})
+    set(FFMPEG_AR ${CMAKE_AR})
+    set(FFMPEG_RANLIB ${CMAKE_RANLIB})
+endif()
+if (PLATFORM_SWITCH)
+    set(FFMPEG_TARGET_KIND switch)
+else()
+    set(FFMPEG_TARGET_KIND native)
+endif()
+
+set(FFMPEG_STATIC_LIBRARIES
+    ${FFMPEG_BUILD_DIR}/libavutil/libavutil.a
+    ${FFMPEG_BUILD_DIR}/libavcodec/libavcodec.a
+    ${FFMPEG_BUILD_DIR}/libavformat/libavformat.a
+    ${FFMPEG_BUILD_DIR}/libswscale/libswscale.a
+)
+
+add_custom_command(
+    OUTPUT ${FFMPEG_STATIC_LIBRARIES}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${FFMPEG_BUILD_DIR}
+    COMMAND ${FFMPEG_SHELL} ${FFMPEG_BUILD_SCRIPT}
+            ${FFMPEG_SOURCE_DIR} ${FFMPEG_BUILD_DIR}
+            ${FFMPEG_CC} ${FFMPEG_AR} ${FFMPEG_RANLIB} ${FFMPEG_TARGET_KIND}
+    DEPENDS ${FFMPEG_SOURCE_DIR}/configure ${FFMPEG_BUILD_SCRIPT}
+    COMMENT "Building minimal FFmpeg (MP4/H.264 background decoder)"
+    VERBATIM
+)
+add_custom_target(ffmpeg_minimal DEPENDS ${FFMPEG_STATIC_LIBRARIES})
+
+function(add_ffmpeg_static_library TARGET_NAME LIBRARY_PATH)
+    add_library(${TARGET_NAME} STATIC IMPORTED GLOBAL)
+    set_target_properties(${TARGET_NAME} PROPERTIES
+        IMPORTED_LOCATION ${LIBRARY_PATH}
+        INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_BUILD_DIR};${FFMPEG_SOURCE_DIR}"
+    )
+    add_dependencies(${TARGET_NAME} ffmpeg_minimal)
+endfunction()
+
+add_ffmpeg_static_library(ffmpeg_avutil ${FFMPEG_BUILD_DIR}/libavutil/libavutil.a)
+add_ffmpeg_static_library(ffmpeg_avcodec ${FFMPEG_BUILD_DIR}/libavcodec/libavcodec.a)
+add_ffmpeg_static_library(ffmpeg_avformat ${FFMPEG_BUILD_DIR}/libavformat/libavformat.a)
+add_ffmpeg_static_library(ffmpeg_swscale ${FFMPEG_BUILD_DIR}/libswscale/libswscale.a)
+target_link_libraries(ffmpeg_avcodec INTERFACE ffmpeg_avutil)
+target_link_libraries(ffmpeg_avformat INTERFACE ffmpeg_avcodec ffmpeg_avutil)
+target_link_libraries(ffmpeg_swscale INTERFACE ffmpeg_avutil)
+
+# =========================================================
 # mGBA 模拟器  –  源码 native 静态库构建
 # =========================================================
 set(BUILD_LIBRETRO OFF CACHE BOOL "" FORCE)

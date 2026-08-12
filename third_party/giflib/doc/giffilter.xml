@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE refentry PUBLIC
+   "-//OASIS//DTD DocBook XML V4.1.2//EN"
+   "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd" [
+<!ENTITY email         "esr@thyrsus.com">
+]>
+<refentry id='giffilter.1'>
+<refentryinfo><date>2 May 2012</date></refentryinfo>
+<refmeta>
+<refentrytitle>giffilter</refentrytitle>
+<manvolnum>1</manvolnum>
+<refmiscinfo class="source">GIFLIB</refmiscinfo>
+<refmiscinfo class="manual">GIFLIB Documentation</refmiscinfo>
+</refmeta>
+<refnamediv id='name'>
+<refname>giffilter</refname>
+<refpurpose>expensive GIF copy, a model for filter utilities</refpurpose>
+</refnamediv>
+
+<refsynopsisdiv id='synopsis'>
+
+<cmdsynopsis>
+  <command>giffilter</command>
+</cmdsynopsis>
+</refsynopsisdiv>
+
+<refsect1><title>Description</title>
+
+<para>This is an expensive way to copy a GIF.  The source is included
+as a skeleton for more sophisticated filters.  See the source in the
+util directory for details.</para>
+
+<para>Also has some utility as a test of the sequential GIF record I/O
+routines.  The output should be bytewise identical to the input.</para>
+
+</refsect1>
+<refsect1><title>Author</title>
+
+<para>Eric S. Raymond <email>&email;</email></para>
+
+</refsect1>
+</refentry>

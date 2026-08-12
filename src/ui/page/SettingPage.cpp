@@ -1714,18 +1714,36 @@ private:
                     ? (int)beiklive::enums::ThemeLayout::IISU_THEME
                     : (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
             }));
-        emulator.push_back(_toggle(L("启用背景图片"), L("在动态背景上显示自定义 PNG 图片"), beiklive::material::IMAGE,
+        emulator.push_back(_toggle(L("启用背景图片"), L("在动态背景上显示自定义 PNG、GIF 或 MP4 图片"), beiklive::material::IMAGE,
             []() { return cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false); },
             [this](bool v) { cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); if (m_host.showBackground) m_host.showBackground(v); }));
-        emulator.push_back(_action(L("背景图片路径"), L("从文件浏览器选择 PNG 图片"), beiklive::material::IMAGE,
+        emulator.push_back(_action(L("背景图片路径"), L("从文件浏览器选择 PNG、GIF 或 MP4 图片"), beiklive::material::IMAGE,
             []() { const auto path = cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""); return path.empty() ? L("未设置") : beiklive::tools::getFileName(path); },
             [this]() {
                 const std::filesystem::path current(cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""));
-                beiklive::openFilePicker({"png"}, [this](const std::string& path) {
+                beiklive::openFilePicker({"png", "gif", "mp4"}, [this](const std::string& path) {
                     cfgSetStr(KEY_UI_BG_IMAGE_PATH, path);
                     if (m_host.setBackgroundImage) m_host.setBackgroundImage(path);
                     invalidate();
                 }, current.parent_path().string(), current.filename().string());
+            }));
+        emulator.push_back(_selector(L("动画背景播放速度"), L("影响 GIF 和 MP4 背景；切换后立即生效"), 0xE8D5,
+            {"0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x"},
+            []() {
+                static constexpr float speeds[] = {0.5f, 0.75f, 1.f, 1.25f, 1.5f, 2.f};
+                const float current = GET_SETTING_KEY_FLOAT(KEY_UI_BG_GIF_SPEED, 1.f);
+                int best = 2;
+                float distance = std::fabs(current - speeds[best]);
+                for (int i = 0; i < 6; ++i) {
+                    const float candidate = std::fabs(current - speeds[i]);
+                    if (candidate < distance) { best = i; distance = candidate; }
+                }
+                return best;
+            },
+            [](int index) {
+                static constexpr float speeds[] = {0.5f, 0.75f, 1.f, 1.25f, 1.5f, 2.f};
+                if (index >= 0 && index < 6)
+                    SET_SETTING_KEY_FLOAT(KEY_UI_BG_GIF_SPEED, speeds[index]);
             }));
         emulator.push_back(_toggle(L("文件列表滚动动画"), L("关闭后文件列表会直接跳转"), 0xE8D5,
             []() { return cfgGetBool(KEY_FILE_LIST_SCROLL_ANIM, true); },
@@ -4446,7 +4464,7 @@ brls::View *SettingPage::buildUITab()
         bgPathCell->registerAction(L("选择"), brls::BUTTON_A,
             [this, bgPathCell](brls::View*) -> bool {
                 std::filesystem::path currentPath(cfgGetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, ""));
-                beiklive::openFilePicker({"png"},
+                beiklive::openFilePicker({"png", "gif", "mp4"},
                     [this, bgPathCell](const std::string& path) {
                         cfgSetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, path);
                         bgPathCell->setDetailText(beiklive::tools::getFileName(path));
@@ -4457,6 +4475,27 @@ brls::View *SettingPage::buildUITab()
                 return true;
             });
         box->addView(bgPathCell);
+
+        auto *gifSpeedCell = new brls::SelectorCell();
+        static constexpr float gifSpeeds[] = {0.5f, 0.75f, 1.f, 1.25f, 1.5f, 2.f};
+        const float currentGifSpeed = GET_SETTING_KEY_FLOAT(
+            beiklive::SettingKey::KEY_UI_BG_GIF_SPEED, 1.f);
+        int gifSpeedIndex = 2;
+        float gifSpeedDistance = std::fabs(currentGifSpeed - gifSpeeds[gifSpeedIndex]);
+        for (int i = 0; i < 6; ++i) {
+            const float distance = std::fabs(currentGifSpeed - gifSpeeds[i]);
+            if (distance < gifSpeedDistance) { gifSpeedIndex = i; gifSpeedDistance = distance; }
+        }
+        gifSpeedCell->init(L("动画背景播放速度"),
+                           {"0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x"},
+                           gifSpeedIndex,
+                           [](int index) {
+                               if (index >= 0 && index < 6)
+                                   SET_SETTING_KEY_FLOAT(
+                                       beiklive::SettingKey::KEY_UI_BG_GIF_SPEED,
+                                       gifSpeeds[index]);
+                           });
+        box->addView(gifSpeedCell);
     }
 
     // 文件列表滚动动画

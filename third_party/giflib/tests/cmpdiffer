@@ -1,0 +1,32 @@
+#! /bin/sh
+#
+# cmpdiffer - Render binary cm[ between input and checkfile as a TAP report
+#
+# Usage: cmpdiffer LEGEND CHECKFILE
+#
+# Output is a TAP report, ok if the cmp is empty and not ok otherwise.
+#
+# This code is intended to be embedded in your project. The author
+# grants permission for it to be distributed under the prevailing
+# license of your project if you choose, provided that license is
+# OSD-compliant; otherwise the following SPDX tag incorporates the
+# MIT No Attribution license by reference.
+#
+# SPDX-FileCopyrightText: (C) Eric S. Raymond <esr@thyrsus.com>
+# SPDX-License-Identifier: MIT-0
+#
+# A newer version may be available at https://gitlab.com/esr/tapview
+# Check your last commit dqte for this file against the commit list
+# there to see if it might be a good idea to update.
+#
+legend=$1
+checkfile=$2
+
+if cmp "${checkfile}" -
+then
+	echo "ok - ${legend}"
+else
+	echo "not ok - ${legend}"
+fi
+
+# end

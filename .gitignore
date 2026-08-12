@@ -47,5 +47,12 @@ build
 build_*
 build-*
 
+# FFmpeg configure output is recreated by third_party/configure_ffmpeg_minimal.sh.
+third_party/FFmpeg/config.h
+third_party/FFmpeg/config_components.h
+third_party/FFmpeg/ffbuild/config.*
+third_party/FFmpeg/libav*/avconfig.h
+third_party/FFmpeg/libav*/lib*.version
+
 AGENTS.md
 .DS_Store

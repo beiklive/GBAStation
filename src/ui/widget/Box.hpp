@@ -4,6 +4,8 @@
 #include <borealis/core/animation.hpp>
 #include "Header.hpp"
 #include "DynamicBackgroundBox.hpp"
+#include "GifBackgroundView.hpp"
+#include "VideoBackgroundView.hpp"
 
 namespace beiklive
 {
@@ -39,7 +41,11 @@ namespace beiklive
         void setupBackgroundLayer();
         void ensureBackgroundImageLoaded();
         brls::Image* backgroundLayer = nullptr;
+        beiklive::GifBackgroundView* backgroundGifLayer = nullptr;
+        beiklive::VideoBackgroundView* backgroundVideoLayer = nullptr;
         bool backgroundImageLoaded = false;
+        bool backgroundIsGif = false;
+        bool backgroundIsVideo = false;
         // Shader层
         void setupShaderLayer();
         beiklive::DynamicBackgroundBox* shaderLayer = nullptr;

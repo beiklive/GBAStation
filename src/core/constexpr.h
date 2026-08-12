@@ -177,6 +177,7 @@ namespace beiklive::SettingKey
     // UI 背景图片设置
     constexpr const char *KEY_UI_SHOW_BG_IMAGE      = "UI.showBgImage";            ///< 是否显示背景图片
     constexpr const char *KEY_UI_BG_IMAGE_PATH      = "UI.bgImagePath";            ///< 背景图片路径
+    constexpr const char *KEY_UI_BG_GIF_SPEED       = "UI.bgGifSpeed";             ///< GIF 背景播放速度倍率
     constexpr const char *KEY_UI_BG_BLUR_ENABLED    = "UI.bgBlurEnabled";          ///< 是否开启背景模糊
     constexpr const char *KEY_UI_BG_BLUR_RADIUS     = "UI.bgBlurRadius";           ///< 背景模糊半径
 

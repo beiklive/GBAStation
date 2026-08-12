@@ -1,0 +1,1194 @@
+/*
+ * HW decode acceleration through NVDEC
+ *
+ * Copyright (c) 2016 Anton Khirnov
+ *
+ * This file is part of FFmpeg.
+ *
+ * FFmpeg is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * FFmpeg is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with FFmpeg; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
+#include "config.h"
+#include "config_components.h"
+
+#include <stdatomic.h>
+
+#include "libavutil/avassert.h"
+#include "libavutil/common.h"
+#include "libavutil/error.h"
+#include "libavutil/hwcontext.h"
+#include "libavutil/hwcontext_cuda_internal.h"
+#include "libavutil/cuda_check.h"
+#include "libavutil/mem.h"
+#include "libavutil/pixdesc.h"
+#include "libavutil/pixfmt.h"
+
+#include "avcodec.h"
+#include "decode.h"
+#include "nvdec.h"
+#include "internal.h"
+#include "libavutil/refstruct.h"
+
+#if !NVDECAPI_CHECK_VERSION(9, 0)
+#define cudaVideoSurfaceFormat_YUV444 2
+#define cudaVideoSurfaceFormat_YUV444_16Bit 3
+#endif
+
+typedef struct NVDECDecoder {
+    CUvideodecoder decoder;
+
+    AVBufferRef *hw_device_ref;
+    AVBufferRef *decode_hw_frames_ref;
+    AVBufferRef *real_hw_frames_ref;
+    CUcontext    cuda_ctx;
+    CUstream     stream;
+
+    CudaFunctions *cudl;
+    CuvidFunctions *cvdl;
+
+    int unsafe_output;
+    int opaque_output;
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+    atomic_int *surface_in_use;
+    int          num_surfaces;
+#endif
+} NVDECDecoder;
+
+typedef struct NVDECFramePool {
+    unsigned int dpb_size;
+    unsigned int nb_allocated;
+} NVDECFramePool;
+
+#define CHECK_CU(x) FF_CUDA_CHECK_DL(logctx, decoder->cudl, x)
+
+static int map_avcodec_id(enum AVCodecID id)
+{
+    switch (id) {
+#if CONFIG_AV1_NVDEC_HWACCEL
+    case AV_CODEC_ID_AV1:        return cudaVideoCodec_AV1;
+#endif
+    case AV_CODEC_ID_H264:       return cudaVideoCodec_H264;
+    case AV_CODEC_ID_HEVC:       return cudaVideoCodec_HEVC;
+    case AV_CODEC_ID_MJPEG:      return cudaVideoCodec_JPEG;
+    case AV_CODEC_ID_MPEG1VIDEO: return cudaVideoCodec_MPEG1;
+    case AV_CODEC_ID_MPEG2VIDEO: return cudaVideoCodec_MPEG2;
+    case AV_CODEC_ID_MPEG4:      return cudaVideoCodec_MPEG4;
+    case AV_CODEC_ID_VC1:        return cudaVideoCodec_VC1;
+    case AV_CODEC_ID_VP8:        return cudaVideoCodec_VP8;
+    case AV_CODEC_ID_VP9:        return cudaVideoCodec_VP9;
+    case AV_CODEC_ID_WMV3:       return cudaVideoCodec_VC1;
+    }
+    return -1;
+}
+
+static int map_chroma_format(enum AVPixelFormat pix_fmt)
+{
+    int shift_h = 0, shift_v = 0;
+
+    if (av_pix_fmt_count_planes(pix_fmt) == 1)
+        return cudaVideoChromaFormat_Monochrome;
+
+    av_pix_fmt_get_chroma_sub_sample(pix_fmt, &shift_h, &shift_v);
+
+    if (shift_h == 1 && shift_v == 1)
+        return cudaVideoChromaFormat_420;
+    else if (shift_h == 1 && shift_v == 0)
+        return cudaVideoChromaFormat_422;
+    else if (shift_h == 0 && shift_v == 0)
+        return cudaVideoChromaFormat_444;
+
+    return -1;
+}
+
+static int nvdec_test_capabilities(NVDECDecoder *decoder,
+                                   CUVIDDECODECREATEINFO *params, void *logctx)
+{
+    int ret;
+    CUVIDDECODECAPS caps = { 0 };
+
+    caps.eCodecType      = params->CodecType;
+    caps.eChromaFormat   = params->ChromaFormat;
+    caps.nBitDepthMinus8 = params->bitDepthMinus8;
+
+    if (!decoder->cvdl->cuvidGetDecoderCaps) {
+        av_log(logctx, AV_LOG_WARNING, "Used Nvidia driver is too old to perform a capability check.\n");
+        av_log(logctx, AV_LOG_WARNING, "The minimum required version is "
+#if defined(_WIN32) || defined(__CYGWIN__)
+            "378.66"
+#else
+            "378.13"
+#endif
+            ". Continuing blind.\n");
+        return 0;
+    }
+
+    ret = CHECK_CU(decoder->cvdl->cuvidGetDecoderCaps(&caps));
+    if (ret < 0)
+        return ret;
+
+    av_log(logctx, AV_LOG_VERBOSE, "NVDEC capabilities:\n");
+    av_log(logctx, AV_LOG_VERBOSE, "format supported: %s, max_mb_count: %d\n",
+           caps.bIsSupported ? "yes" : "no", caps.nMaxMBCount);
+    av_log(logctx, AV_LOG_VERBOSE, "min_width: %d, max_width: %d\n",
+           caps.nMinWidth, caps.nMaxWidth);
+    av_log(logctx, AV_LOG_VERBOSE, "min_height: %d, max_height: %d\n",
+           caps.nMinHeight, caps.nMaxHeight);
+
+    if (!caps.bIsSupported) {
+        av_log(logctx, AV_LOG_ERROR, "Hardware is lacking required capabilities\n");
+        return AVERROR(EINVAL);
+    }
+
+    if (params->ulWidth > caps.nMaxWidth || params->ulWidth < caps.nMinWidth) {
+        av_log(logctx, AV_LOG_ERROR, "Video width %d not within range from %d to %d\n",
+               (int)params->ulWidth, caps.nMinWidth, caps.nMaxWidth);
+        return AVERROR(EINVAL);
+    }
+
+    if (params->ulHeight > caps.nMaxHeight || params->ulHeight < caps.nMinHeight) {
+        av_log(logctx, AV_LOG_ERROR, "Video height %d not within range from %d to %d\n",
+               (int)params->ulHeight, caps.nMinHeight, caps.nMaxHeight);
+        return AVERROR(EINVAL);
+    }
+
+    if ((params->ulWidth * params->ulHeight) / 256 > caps.nMaxMBCount) {
+        av_log(logctx, AV_LOG_ERROR, "Video macroblock count %d exceeds maximum of %d\n",
+               (int)(params->ulWidth * params->ulHeight) / 256, caps.nMaxMBCount);
+        return AVERROR(EINVAL);
+    }
+
+    return 0;
+}
+
+static void nvdec_decoder_free(AVRefStructOpaque unused, void *obj)
+{
+    NVDECDecoder *decoder = obj;
+    void *logctx = decoder->hw_device_ref ? decoder->hw_device_ref->data : NULL;
+
+    if (decoder->decoder) {
+        CUcontext dummy;
+        CHECK_CU(decoder->cudl->cuCtxPushCurrent(decoder->cuda_ctx));
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+        if (decoder->opaque_output) {
+            /*
+             * Every opaque output frame holds a reference to this decoder
+             * (NVDECOpaqueRelease.decoder, attached as frame->buf[0]) and only
+             * clears its surface_in_use slot when that buffer is released. This
+             * RefStruct free callback therefore cannot run until all surfaces
+             * have been handed back, so the decoder always outlives its
+             * surfaces and is safe to destroy unconditionally. The check below
+             * is purely a guard against a future regression of that invariant;
+             * it must never defer destruction (which would leak the decoder).
+             */
+            decoder->cudl->cuCtxSynchronize();
+            if (decoder->surface_in_use) {
+                int busy = 0;
+                for (int i = 0; i < decoder->num_surfaces; i++)
+                    busy += atomic_load_explicit(&decoder->surface_in_use[i],
+                                                 memory_order_acquire) != 0;
+                if (busy)
+                    av_log(logctx, AV_LOG_ERROR,
+                           "%d CUarray surface(s) unexpectedly still in use at "
+                           "decoder teardown; destroying anyway\n", busy);
+            }
+        }
+#endif
+        CHECK_CU(decoder->cvdl->cuvidDestroyDecoder(decoder->decoder));
+        CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+    }
+
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+    av_freep(&decoder->surface_in_use);
+#endif
+    av_buffer_unref(&decoder->decode_hw_frames_ref);
+    av_buffer_unref(&decoder->real_hw_frames_ref);
+    av_buffer_unref(&decoder->hw_device_ref);
+
+    cuvid_free_functions(&decoder->cvdl);
+}
+
+static int nvdec_decoder_create(NVDECDecoder **out, AVBufferRef *hw_device_ref,
+                                CUVIDDECODECREATEINFO *params, void *logctx)
+{
+    AVHWDeviceContext  *hw_device_ctx = (AVHWDeviceContext*)hw_device_ref->data;
+    AVCUDADeviceContext *device_hwctx = hw_device_ctx->hwctx;
+
+    NVDECDecoder *decoder;
+
+    CUcontext dummy;
+    int ret;
+
+    decoder = av_refstruct_alloc_ext(sizeof(*decoder), 0,
+                                     NULL, nvdec_decoder_free);
+    if (!decoder)
+        return AVERROR(ENOMEM);
+
+    decoder->hw_device_ref = av_buffer_ref(hw_device_ref);
+    if (!decoder->hw_device_ref) {
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
+    decoder->cuda_ctx = device_hwctx->cuda_ctx;
+    decoder->cudl = device_hwctx->internal->cuda_dl;
+    decoder->stream = device_hwctx->stream;
+
+    ret = cuvid_load_functions(&decoder->cvdl, logctx);
+    if (ret < 0) {
+        av_log(logctx, AV_LOG_ERROR, "Failed loading nvcuvid.\n");
+        goto fail;
+    }
+
+    ret = CHECK_CU(decoder->cudl->cuCtxPushCurrent(decoder->cuda_ctx));
+    if (ret < 0)
+        goto fail;
+
+    ret = nvdec_test_capabilities(decoder, params, logctx);
+    if (ret < 0) {
+        CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+        goto fail;
+    }
+
+    ret = CHECK_CU(decoder->cvdl->cuvidCreateDecoder(&decoder->decoder, params));
+
+    CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+
+    if (ret < 0) {
+        goto fail;
+    }
+
+    *out = decoder;
+
+    return 0;
+fail:
+    av_refstruct_unref(&decoder);
+    return ret;
+}
+
+static int nvdec_decoder_frame_init(AVRefStructOpaque opaque, void *obj)
+{
+    NVDECFramePool *pool = opaque.nc;
+    unsigned int *intp = obj;
+
+    if (pool->nb_allocated >= pool->dpb_size)
+        return AVERROR(ENOMEM);
+
+    *intp = pool->nb_allocated++;
+
+    return 0;
+}
+
+static void nvdec_decoder_frame_pool_free(AVRefStructOpaque opaque)
+{
+    av_free(opaque.nc);
+}
+
+int ff_nvdec_decode_uninit(AVCodecContext *avctx)
+{
+    NVDECContext *ctx = avctx->internal->hwaccel_priv_data;
+
+    av_freep(&ctx->bitstream_internal);
+    ctx->bitstream           = NULL;
+    ctx->bitstream_len       = 0;
+    ctx->bitstream_allocated = 0;
+
+    av_freep(&ctx->slice_offsets);
+    ctx->nb_slices               = 0;
+    ctx->slice_offsets_allocated = 0;
+
+    av_refstruct_unref(&ctx->decoder);
+    av_refstruct_pool_uninit(&ctx->decoder_pool);
+
+    return 0;
+}
+
+static void nvdec_free_dummy(struct AVHWFramesContext *ctx)
+{
+    av_buffer_pool_uninit(&ctx->pool);
+}
+
+static AVBufferRef *nvdec_alloc_dummy(size_t size)
+{
+    return av_buffer_create(NULL, 0, NULL, NULL, 0);
+}
+
+static int nvdec_init_hwframes(AVCodecContext *avctx, AVBufferRef **out_frames_ref, int dummy)
+{
+    AVHWFramesContext *frames_ctx;
+    int ret;
+
+    ret = avcodec_get_hw_frames_parameters(avctx,
+                                           avctx->hw_device_ctx,
+                                           avctx->hwaccel->pix_fmt,
+                                           out_frames_ref);
+    if (ret < 0)
+        return ret;
+
+    frames_ctx = (AVHWFramesContext*)(*out_frames_ref)->data;
+
+    if (dummy) {
+        // Copied from ff_decode_get_hw_frames_ctx for compatibility
+        frames_ctx->initial_pool_size += 3;
+
+        frames_ctx->free = nvdec_free_dummy;
+        frames_ctx->pool = av_buffer_pool_init(0, nvdec_alloc_dummy);
+
+        if (!frames_ctx->pool) {
+            av_buffer_unref(out_frames_ref);
+            return AVERROR(ENOMEM);
+        }
+    } else {
+        // This is normally not used to actually allocate frames from
+        frames_ctx->initial_pool_size = 0;
+    }
+
+    ret = av_hwframe_ctx_init(*out_frames_ref);
+    if (ret < 0) {
+        av_buffer_unref(out_frames_ref);
+        return ret;
+    }
+
+    return 0;
+}
+
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+void ff_nvdec_fill_cuarray_desc(CUDA_ARRAY3D_DESCRIPTOR *desc,
+                                AVCodecContext *avctx,
+                                cudaVideoSurfaceFormat output_format)
+{
+    CUarray_format arr_fmt;
+
+    switch (output_format) {
+    case cudaVideoSurfaceFormat_NV12:
+    case cudaVideoSurfaceFormat_NV12_Opaque:           arr_fmt = CU_AD_FORMAT_NV12; break;
+    case cudaVideoSurfaceFormat_P016:
+    case cudaVideoSurfaceFormat_P016_Opaque:           arr_fmt = CU_AD_FORMAT_P016; break;
+    case cudaVideoSurfaceFormat_NV16:
+    case cudaVideoSurfaceFormat_NV16_Opaque:           arr_fmt = CU_AD_FORMAT_NV16; break;
+    case cudaVideoSurfaceFormat_P216:
+    case cudaVideoSurfaceFormat_P216_Opaque:           arr_fmt = CU_AD_FORMAT_P216; break;
+    case cudaVideoSurfaceFormat_YUV444:
+    case cudaVideoSurfaceFormat_YUV444_Opaque:         arr_fmt = CU_AD_FORMAT_YUV444_8BIT_SEMIPLANAR; break;
+    case cudaVideoSurfaceFormat_YUV444_16Bit:
+    case cudaVideoSurfaceFormat_YUV444_16Bit_Opaque:   arr_fmt = CU_AD_FORMAT_YUV444_16BIT_SEMIPLANAR; break;
+    default:
+        /* The caller's bit-depth/chroma switch only ever yields the formats
+         * handled above (and errors out otherwise), so this is unreachable;
+         * assert rather than silently producing a wrong descriptor. */
+        av_assert0(0);
+    }
+
+    memset(desc, 0, sizeof(*desc));
+    desc->Width       = avctx->coded_width;
+    desc->Height      = avctx->coded_height;
+    desc->Depth       = 0;
+    desc->Format      = arr_fmt;
+    desc->NumChannels = 3;
+    desc->Flags       = CUDA_ARRAY3D_SURFACE_LDST |
+                        CUDA_ARRAY3D_VIDEO_ENCODE_DECODE;
+}
+
+#endif
+
+int ff_nvdec_decode_init(AVCodecContext *avctx)
+{
+    NVDECContext *ctx = avctx->internal->hwaccel_priv_data;
+
+    NVDECDecoder        *decoder;
+    AVBufferRef         *decode_hw_frames_ref = NULL;
+    AVBufferRef         *real_hw_frames_ref = NULL;
+    NVDECFramePool      *pool;
+    AVHWFramesContext   *frames_ctx;
+    const AVPixFmtDescriptor *sw_desc;
+
+    CUVIDDECODECREATEINFO params = { 0 };
+
+    cudaVideoSurfaceFormat output_format;
+    int cuvid_codec_type, cuvid_chroma_format, chroma_444;
+    int ret = 0;
+    int need_real_hwframes = 0;
+
+    int unsafe_output = !!(avctx->hwaccel_flags & AV_HWACCEL_FLAG_UNSAFE_OUTPUT);
+
+    int opaque_output = 0;
+    int decode_pool_size;
+
+    sw_desc = av_pix_fmt_desc_get(avctx->sw_pix_fmt);
+    if (!sw_desc)
+        return AVERROR_BUG;
+
+    cuvid_codec_type = map_avcodec_id(avctx->codec_id);
+    if (cuvid_codec_type < 0) {
+        av_log(avctx, AV_LOG_ERROR, "Unsupported codec ID\n");
+        return AVERROR_BUG;
+    }
+
+    cuvid_chroma_format = map_chroma_format(avctx->sw_pix_fmt);
+    if (cuvid_chroma_format < 0) {
+        av_log(avctx, AV_LOG_ERROR, "Unsupported chroma format\n");
+        return AVERROR(ENOSYS);
+    }
+    chroma_444 = ctx->supports_444 && cuvid_chroma_format == cudaVideoChromaFormat_444;
+
+    if (!avctx->hw_frames_ctx) {
+        ret = nvdec_init_hwframes(avctx, &avctx->hw_frames_ctx, 1);
+        if (ret < 0)
+            return ret;
+        need_real_hwframes = 1;
+    }
+
+    frames_ctx = (AVHWFramesContext*)avctx->hw_frames_ctx->data;
+
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+    if (frames_ctx->format == AV_PIX_FMT_CUARRAY) {
+        opaque_output = 1;
+    }
+#else
+    if (frames_ctx->format == AV_PIX_FMT_CUARRAY) {
+        av_log(avctx, AV_LOG_ERROR,
+               "CUarray opaque output requires Video Codec SDK 13.1 or later\n");
+        return AVERROR(ENOSYS);
+    }
+#endif
+
+    decode_pool_size = frames_ctx->initial_pool_size;
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+    if (opaque_output) {
+        if (unsafe_output) {
+            decode_pool_size = FFMIN(frames_ctx->initial_pool_size + 16, MAX_NUM_REGISTERED_DECODE_SURFACES);
+            av_log(avctx, AV_LOG_VERBOSE, "unsafe_output + cuarray: %d decode surfaces (pool=%d, max=%d)\n",
+                   decode_pool_size, frames_ctx->initial_pool_size, MAX_NUM_REGISTERED_DECODE_SURFACES);
+        } else if (avctx->extra_hw_frames > 0) {
+            decode_pool_size = FFMAX(frames_ctx->initial_pool_size - avctx->extra_hw_frames, 1);
+            av_log(avctx, AV_LOG_VERBOSE, "Opaque copy mode: %d decode surfaces, %d extra surfaces reserved for output pool\n",
+                   decode_pool_size, avctx->extra_hw_frames);
+        }
+    }
+#endif
+
+    switch (sw_desc->comp[0].depth) {
+    case 8:
+        if (chroma_444) {
+            output_format = cudaVideoSurfaceFormat_YUV444;
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+            if (opaque_output) output_format = cudaVideoSurfaceFormat_YUV444_Opaque;
+#endif
+#ifdef NVDEC_HAVE_422_SUPPORT
+        } else if (cuvid_chroma_format == cudaVideoChromaFormat_422) {
+            output_format = cudaVideoSurfaceFormat_NV16;
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+            if (opaque_output) output_format = cudaVideoSurfaceFormat_NV16_Opaque;
+#endif
+#endif
+        } else {
+            output_format = cudaVideoSurfaceFormat_NV12;
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+            if (opaque_output) output_format = cudaVideoSurfaceFormat_NV12_Opaque;
+#endif
+        }
+        break;
+    case 10:
+    case 12:
+        if (chroma_444) {
+            output_format = cudaVideoSurfaceFormat_YUV444_16Bit;
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+            if (opaque_output) output_format = cudaVideoSurfaceFormat_YUV444_16Bit_Opaque;
+#endif
+#ifdef NVDEC_HAVE_422_SUPPORT
+        } else if (cuvid_chroma_format == cudaVideoChromaFormat_422) {
+            output_format = cudaVideoSurfaceFormat_P216;
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+            if (opaque_output) output_format = cudaVideoSurfaceFormat_P216_Opaque;
+#endif
+#endif
+        } else {
+            output_format = cudaVideoSurfaceFormat_P016;
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+            if (opaque_output) output_format = cudaVideoSurfaceFormat_P016_Opaque;
+#endif
+        }
+        break;
+    default:
+        av_log(avctx, AV_LOG_ERROR, "Unsupported bit depth\n");
+        return AVERROR(ENOSYS);
+    }
+
+    if (need_real_hwframes) {
+        if (frames_ctx->format == AV_PIX_FMT_CUARRAY) {
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+            AVHWFramesContext *real_ctx;
+            AVCUDAFramesContext *cuda_priv;
+
+            ret = avcodec_get_hw_frames_parameters(avctx, avctx->hw_device_ctx,
+                                                   avctx->hwaccel->pix_fmt,
+                                                   &real_hw_frames_ref);
+            if (ret < 0)
+                goto fail;
+
+            real_ctx = (AVHWFramesContext*)real_hw_frames_ref->data;
+            real_ctx->initial_pool_size = 0;
+
+            cuda_priv = real_ctx->hwctx;
+            ff_nvdec_fill_cuarray_desc(&cuda_priv->cuarray_desc, avctx, output_format);
+            cuda_priv->cuarray_num_surfaces = unsafe_output ? decode_pool_size
+                                                            : frames_ctx->initial_pool_size;
+
+            ret = av_hwframe_ctx_init(real_hw_frames_ref);
+            if (ret < 0)
+                goto fail;
+
+            if (unsafe_output) {
+                decode_hw_frames_ref = av_buffer_ref(real_hw_frames_ref);
+                if (!decode_hw_frames_ref) {
+                    ret = AVERROR(ENOMEM);
+                    goto fail;
+                }
+            } else {
+                ret = avcodec_get_hw_frames_parameters(avctx, avctx->hw_device_ctx,
+                                                       avctx->hwaccel->pix_fmt,
+                                                       &decode_hw_frames_ref);
+                if (ret < 0)
+                    goto fail;
+
+                real_ctx = (AVHWFramesContext*)decode_hw_frames_ref->data;
+                real_ctx->initial_pool_size = 0;
+
+                cuda_priv = real_ctx->hwctx;
+                ff_nvdec_fill_cuarray_desc(&cuda_priv->cuarray_desc, avctx, output_format);
+                cuda_priv->cuarray_num_surfaces = decode_pool_size;
+
+                ret = av_hwframe_ctx_init(decode_hw_frames_ref);
+                if (ret < 0)
+                    goto fail;
+            }
+#endif
+        } else {
+            ret = nvdec_init_hwframes(avctx, &real_hw_frames_ref, 0);
+            if (ret < 0)
+                goto fail;
+        }
+    } else {
+        real_hw_frames_ref = av_buffer_ref(avctx->hw_frames_ctx);
+        if (!real_hw_frames_ref)
+            return AVERROR(ENOMEM);
+
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+        if (frames_ctx->format == AV_PIX_FMT_CUARRAY) {
+            if (unsafe_output) {
+                decode_hw_frames_ref = av_buffer_ref(real_hw_frames_ref);
+            } else {
+                AVHWFramesContext *real_ctx;
+                AVCUDAFramesContext *cuda_priv;
+
+                ret = avcodec_get_hw_frames_parameters(avctx, frames_ctx->device_ref,
+                                                       avctx->hwaccel->pix_fmt,
+                                                       &decode_hw_frames_ref);
+                if (ret < 0)
+                    goto fail;
+
+                real_ctx = (AVHWFramesContext*)decode_hw_frames_ref->data;
+                real_ctx->initial_pool_size = 0;
+
+                cuda_priv = real_ctx->hwctx;
+                ff_nvdec_fill_cuarray_desc(&cuda_priv->cuarray_desc, avctx, output_format);
+                cuda_priv->cuarray_num_surfaces = decode_pool_size;
+
+                ret = av_hwframe_ctx_init(decode_hw_frames_ref);
+                if (ret < 0)
+                    goto fail;
+            }
+
+            if (!decode_hw_frames_ref) {
+                av_buffer_unref(&real_hw_frames_ref);
+                return AVERROR(ENOMEM);
+            }
+        }
+#endif
+    }
+
+    params.ulWidth             = avctx->coded_width;
+    params.ulHeight            = avctx->coded_height;
+    params.ulTargetWidth       = avctx->coded_width;
+    params.ulTargetHeight      = avctx->coded_height;
+    params.bitDepthMinus8      = sw_desc->comp[0].depth - 8;
+    params.OutputFormat        = output_format;
+    params.CodecType           = cuvid_codec_type;
+    params.ChromaFormat        = cuvid_chroma_format;
+    params.ulNumDecodeSurfaces = FFMIN(decode_pool_size, 32);
+    params.ulNumOutputSurfaces = opaque_output ? 0 : (unsafe_output ? FFMIN(frames_ctx->initial_pool_size, 64) : 1);
+
+    ret = nvdec_decoder_create(&ctx->decoder, frames_ctx->device_ref, &params, avctx);
+    if (ret < 0) {
+        if (params.ulNumDecodeSurfaces > 32) {
+            av_log(avctx, AV_LOG_WARNING, "Using more than 32 (%d) decode surfaces might cause nvdec to fail.\n",
+                   (int)params.ulNumDecodeSurfaces);
+            av_log(avctx, AV_LOG_WARNING, "Try lowering the amount of threads. Using %d right now.\n",
+                   avctx->thread_count);
+        }
+        goto fail;
+    }
+
+    decoder = ctx->decoder;
+    decoder->unsafe_output = unsafe_output;
+    decoder->opaque_output = opaque_output;
+
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+    if (opaque_output) {
+        void *logctx = avctx;
+        AVHWFramesContext *real_ctx = (AVHWFramesContext*)decode_hw_frames_ref->data;
+        AVCUDAFramesContext *cuda_priv = real_ctx->hwctx;
+        CUVIDREGISTERDECODESURFACESINFO reg_info = { 0 };
+        CUcontext dummy;
+
+        if (!decoder->cvdl->cuvidRegisterDecodeSurfaces) {
+            av_log(logctx, AV_LOG_ERROR, "Driver lacking CUarray output support.\n");
+            ret = AVERROR(ENOSYS);
+            goto fail;
+        }
+
+        ret = CHECK_CU(decoder->cudl->cuCtxPushCurrent(decoder->cuda_ctx));
+        if (ret < 0)
+            goto fail;
+
+        reg_info.ulNumDecodeSurfaces = FFMIN(cuda_priv->cuarray_num_surfaces,
+                                             (unsigned)decode_pool_size);
+        reg_info.pDecodeSurfaces     = cuda_priv->cuarray_surfaces;
+        ret = CHECK_CU(decoder->cvdl->cuvidRegisterDecodeSurfaces(decoder->decoder, &reg_info));
+        CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+        if (ret < 0)
+            goto fail;
+
+        decoder->num_surfaces = reg_info.ulNumDecodeSurfaces;
+        decoder->surface_in_use = av_calloc(decoder->num_surfaces,
+                                            sizeof(*decoder->surface_in_use));
+        if (!decoder->surface_in_use) {
+            ret = AVERROR(ENOMEM);
+            goto fail;
+        }
+    }
+#endif
+
+    decoder->decode_hw_frames_ref = decode_hw_frames_ref;
+    decode_hw_frames_ref = NULL;
+    decoder->real_hw_frames_ref = real_hw_frames_ref;
+    real_hw_frames_ref = NULL;
+
+    pool = av_mallocz(sizeof(*pool));
+    if (!pool) {
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
+    pool->dpb_size = FFMIN(decode_pool_size, 32);
+
+    ctx->decoder_pool = av_refstruct_pool_alloc_ext(sizeof(unsigned int), 0, pool,
+                                                    nvdec_decoder_frame_init,
+                                                    NULL, NULL, nvdec_decoder_frame_pool_free);
+    if (!ctx->decoder_pool) {
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
+
+    ret = 0;
+
+fail:
+    av_buffer_unref(&decode_hw_frames_ref);
+    av_buffer_unref(&real_hw_frames_ref);
+
+    if (ret < 0)
+        ff_nvdec_decode_uninit(avctx);
+
+    return ret;
+}
+
+static void nvdec_fdd_priv_free(void *priv)
+{
+    NVDECFrame *cf = priv;
+
+    if (!cf)
+        return;
+
+    av_refstruct_unref(&cf->idx_ref);
+    av_refstruct_unref(&cf->ref_idx_ref);
+    av_refstruct_unref(&cf->decoder);
+
+    av_freep(&priv);
+}
+
+static void nvdec_unmap_mapped_frame(void *opaque, uint8_t *data)
+{
+    NVDECFrame *unmap_data = (NVDECFrame*)data;
+    NVDECDecoder *decoder = unmap_data->decoder;
+    void *logctx = decoder->hw_device_ref->data;
+    CUdeviceptr devptr = (CUdeviceptr)opaque;
+    int ret;
+    CUcontext dummy;
+
+    ret = CHECK_CU(decoder->cudl->cuCtxPushCurrent(decoder->cuda_ctx));
+    if (ret < 0)
+        goto finish;
+
+    CHECK_CU(decoder->cvdl->cuvidUnmapVideoFrame(decoder->decoder, devptr));
+
+    CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+
+finish:
+    av_refstruct_unref(&unmap_data->idx_ref);
+    av_refstruct_unref(&unmap_data->ref_idx_ref);
+    av_refstruct_unref(&unmap_data->decoder);
+    av_free(unmap_data);
+}
+
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+typedef struct NVDECOpaqueRelease {
+    NVDECDecoder  *decoder;
+    int            idx;
+    unsigned int  *idx_ref;     ///< RefStruct reference keeping the surface index locked
+} NVDECOpaqueRelease;
+
+static void nvdec_opaque_release_slot(void *opaque, uint8_t *data)
+{
+    NVDECOpaqueRelease *r = (NVDECOpaqueRelease *)opaque;
+    if (r->decoder->surface_in_use)
+        atomic_store_explicit(&r->decoder->surface_in_use[r->idx], 0,
+                              memory_order_release);
+    av_refstruct_unref(&r->idx_ref);
+    av_refstruct_unref(&r->decoder);
+    av_free(r);
+}
+#endif
+
+static int nvdec_retrieve_data(void *logctx, AVFrame *frame)
+{
+    FrameDecodeData  *fdd = frame->private_ref;
+    NVDECFrame        *cf = (NVDECFrame*)fdd->hwaccel_priv;
+    NVDECDecoder *decoder = cf->decoder;
+
+    AVHWFramesContext *hwctx = (AVHWFramesContext *)frame->hw_frames_ctx->data;
+
+    CUVIDPROCPARAMS vpp = { 0 };
+    NVDECFrame *unmap_data = NULL;
+
+    CUcontext dummy;
+    CUdeviceptr devptr;
+
+    unsigned int pitch, i;
+    unsigned int offset = 0;
+    int shift_h = 0, shift_v = 0;
+    int ret = 0;
+
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+    if (decoder->opaque_output) {
+        AVHWFramesContext *decode_ctx = (AVHWFramesContext *)decoder->decode_hw_frames_ref->data;
+        AVCUDAFramesContext *cuda_priv = decode_ctx->hwctx;
+
+        if (cf->idx >= (unsigned)cuda_priv->cuarray_num_surfaces) {
+            av_log(logctx, AV_LOG_ERROR,
+                   "NVDEC opaque surface index %u out of range (%d surfaces)\n",
+                   cf->idx, cuda_priv->cuarray_num_surfaces);
+            return AVERROR_BUG;
+        }
+
+        {
+            CUarray arr = cuda_priv->cuarray_surfaces[cf->idx];
+            AVBufferRef *buf0;
+            NVDECOpaqueRelease *rel;
+
+            rel = av_malloc(sizeof(*rel));
+            if (!rel)
+                return AVERROR(ENOMEM);
+            rel->decoder = av_refstruct_ref(decoder);
+            rel->idx     = cf->idx;
+            rel->idx_ref = av_refstruct_ref(cf->idx_ref);
+            buf0 = av_buffer_create((uint8_t *)arr, 0,
+                                    nvdec_opaque_release_slot, rel,
+                                    AV_BUFFER_FLAG_READONLY);
+            if (!buf0) {
+                av_refstruct_unref(&rel->idx_ref);
+                av_refstruct_unref(&rel->decoder);
+                av_free(rel);
+                return AVERROR(ENOMEM);
+            }
+
+            /*
+             * Mark the surface in use only now that buf0 owns rel:
+             * nvdec_opaque_release_slot (buf0's free callback) is the sole path
+             * that clears the flag, so deferring the set until buf0 exists keeps
+             * every set paired with a clear, even on a later error return.
+             */
+            if (decoder->surface_in_use)
+                atomic_store_explicit(&decoder->surface_in_use[cf->idx], 1,
+                                      memory_order_release);
+
+            ret = av_buffer_replace(&frame->hw_frames_ctx,
+                                    decoder->unsafe_output
+                                        ? decoder->decode_hw_frames_ref
+                                        : decoder->real_hw_frames_ref);
+            if (ret < 0) {
+                av_buffer_unref(&buf0);
+                return ret;
+            }
+
+            av_buffer_unref(&frame->buf[0]);
+            frame->buf[0] = buf0;
+            frame->data[0] = (uint8_t *)arr;
+
+            {
+                CUcontext dummy;
+                ret = CHECK_CU(decoder->cudl->cuCtxPushCurrent(decoder->cuda_ctx));
+                if (ret < 0) {
+                    return ret;
+                }
+                for (int p = 0; p < FF_ARRAY_ELEMS(frame->linesize); p++) {
+                    CUDA_ARRAY3D_DESCRIPTOR plane_desc = { 0 };
+                    CUarray plane_array;
+                    int elem_size;
+                    CUresult cures = decoder->cudl->cuArrayGetPlane(&plane_array, arr, p);
+                    if (cures == CUDA_ERROR_INVALID_VALUE)
+                        break;
+                    if (cures != CUDA_SUCCESS) {
+                        CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+                        return AVERROR_EXTERNAL;
+                    }
+                    ret = CHECK_CU(decoder->cudl->cuArray3DGetDescriptor(&plane_desc, plane_array));
+                    if (ret < 0) {
+                        CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+                        return ret;
+                    }
+                    elem_size = ff_cuda_cuarray_elem_size(plane_desc.Format);
+                    if (elem_size <= 0)
+                        elem_size = 1;
+                    frame->linesize[p] = plane_desc.Width * plane_desc.NumChannels * elem_size;
+                }
+                CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+            }
+
+            frame->format = AV_PIX_FMT_CUARRAY;
+
+            if (decoder->unsafe_output)
+                return 0;
+
+            return av_frame_make_writable(frame);
+        }
+    }
+#endif
+
+    vpp.progressive_frame = 1;
+    vpp.output_stream = decoder->stream;
+
+    ret = CHECK_CU(decoder->cudl->cuCtxPushCurrent(decoder->cuda_ctx));
+    if (ret < 0)
+        return ret;
+
+    ret = CHECK_CU(decoder->cvdl->cuvidMapVideoFrame(decoder->decoder,
+                                                     cf->idx, &devptr,
+                                                     &pitch, &vpp));
+    if (ret < 0)
+        goto finish;
+
+    unmap_data = av_mallocz(sizeof(*unmap_data));
+    if (!unmap_data) {
+        ret = AVERROR(ENOMEM);
+        goto copy_fail;
+    }
+
+    frame->buf[1] = av_buffer_create((uint8_t *)unmap_data, sizeof(*unmap_data),
+                                     nvdec_unmap_mapped_frame, (void*)devptr,
+                                     AV_BUFFER_FLAG_READONLY);
+    if (!frame->buf[1]) {
+        ret = AVERROR(ENOMEM);
+        goto copy_fail;
+    }
+
+    ret = av_buffer_replace(&frame->hw_frames_ctx, decoder->real_hw_frames_ref);
+    if (ret < 0)
+        goto copy_fail;
+
+    unmap_data->idx = cf->idx;
+    unmap_data->decoder = av_refstruct_ref(cf->decoder);
+
+    av_pix_fmt_get_chroma_sub_sample(hwctx->sw_format, &shift_h, &shift_v);
+    for (i = 0; frame->linesize[i]; i++) {
+        frame->data[i] = (uint8_t*)(devptr + offset);
+        frame->linesize[i] = pitch;
+        offset += pitch * (frame->height >> (i ? shift_v : 0));
+    }
+
+    goto finish;
+
+copy_fail:
+    if (!frame->buf[1]) {
+        CHECK_CU(decoder->cvdl->cuvidUnmapVideoFrame(decoder->decoder, devptr));
+        av_freep(&unmap_data);
+    } else {
+        av_buffer_unref(&frame->buf[1]);
+    }
+
+finish:
+    CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+
+    if (ret < 0 || decoder->unsafe_output)
+        return ret;
+
+    return av_frame_make_writable(frame);
+}
+
+int ff_nvdec_start_frame(AVCodecContext *avctx, AVFrame *frame)
+{
+    NVDECContext *ctx = avctx->internal->hwaccel_priv_data;
+    FrameDecodeData *fdd = frame->private_ref;
+    NVDECFrame *cf = NULL;
+    int ret;
+
+    ctx->bitstream_len = 0;
+    ctx->nb_slices     = 0;
+
+    if (fdd->hwaccel_priv)
+        return 0;
+
+    cf = av_mallocz(sizeof(*cf));
+    if (!cf)
+        return AVERROR(ENOMEM);
+
+    cf->decoder = av_refstruct_ref(ctx->decoder);
+
+    cf->idx_ref = av_refstruct_pool_get(ctx->decoder_pool);
+    if (!cf->idx_ref) {
+        av_log(avctx, AV_LOG_ERROR, "No decoder surfaces left\n");
+        ret = AVERROR(ENOMEM);
+        goto fail;
+    }
+    cf->ref_idx = cf->idx = *cf->idx_ref;
+
+    fdd->hwaccel_priv      = cf;
+    fdd->hwaccel_priv_free = nvdec_fdd_priv_free;
+    fdd->hwaccel_priv_post_process = nvdec_retrieve_data;
+
+    return 0;
+fail:
+    nvdec_fdd_priv_free(cf);
+    return ret;
+
+}
+
+int ff_nvdec_start_frame_sep_ref(AVCodecContext *avctx, AVFrame *frame, int has_sep_ref)
+{
+    NVDECContext *ctx = avctx->internal->hwaccel_priv_data;
+    FrameDecodeData *fdd = frame->private_ref;
+    NVDECFrame *cf;
+    int ret;
+
+    ret = ff_nvdec_start_frame(avctx, frame);
+    if (ret < 0)
+        return ret;
+
+    cf = fdd->hwaccel_priv;
+
+    if (has_sep_ref) {
+        if (!cf->ref_idx_ref) {
+            cf->ref_idx_ref = av_refstruct_pool_get(ctx->decoder_pool);
+            if (!cf->ref_idx_ref) {
+                av_log(avctx, AV_LOG_ERROR, "No decoder surfaces left\n");
+                return AVERROR(ENOMEM);
+            }
+        }
+        cf->ref_idx = *cf->ref_idx_ref;
+    } else {
+        av_refstruct_unref(&cf->ref_idx_ref);
+        cf->ref_idx = cf->idx;
+    }
+
+    return 0;
+}
+
+int ff_nvdec_end_frame(AVCodecContext *avctx)
+{
+    NVDECContext     *ctx = avctx->internal->hwaccel_priv_data;
+    NVDECDecoder *decoder = ctx->decoder;
+    void *logctx          = avctx;
+    CUVIDPICPARAMS    *pp = &ctx->pic_params;
+
+    CUcontext dummy;
+
+    int ret = 0;
+
+    pp->nBitstreamDataLen = ctx->bitstream_len;
+    pp->pBitstreamData    = ctx->bitstream;
+    pp->nNumSlices        = ctx->nb_slices;
+    pp->pSliceDataOffsets = ctx->slice_offsets;
+
+    ret = CHECK_CU(decoder->cudl->cuCtxPushCurrent(decoder->cuda_ctx));
+    if (ret < 0)
+        return ret;
+
+#ifdef NVDEC_HAVE_OPAQUE_OUTPUT_SUPPORT
+    if (decoder->opaque_output && decoder->cvdl->cuvidDecodePictureAsync)
+        ret = CHECK_CU(decoder->cvdl->cuvidDecodePictureAsync(decoder->decoder, &ctx->pic_params, decoder->stream));
+    else
+        ret = CHECK_CU(decoder->cvdl->cuvidDecodePicture(decoder->decoder, &ctx->pic_params));
+#else
+    ret = CHECK_CU(decoder->cvdl->cuvidDecodePicture(decoder->decoder, &ctx->pic_params));
+#endif
+    if (ret < 0)
+        goto finish;
+
+finish:
+    CHECK_CU(decoder->cudl->cuCtxPopCurrent(&dummy));
+
+    return ret;
+}
+
+int ff_nvdec_simple_end_frame(AVCodecContext *avctx)
+{
+    NVDECContext *ctx = avctx->internal->hwaccel_priv_data;
+    int ret = ff_nvdec_end_frame(avctx);
+    ctx->bitstream = NULL;
+    ctx->bitstream_len = 0;
+    ctx->nb_slices = 0;
+    return ret;
+}
+
+int ff_nvdec_simple_decode_slice(AVCodecContext *avctx, const uint8_t *buffer,
+                                 uint32_t size)
+{
+    NVDECContext *ctx = avctx->internal->hwaccel_priv_data;
+    void *tmp;
+
+    tmp = av_fast_realloc(ctx->slice_offsets, &ctx->slice_offsets_allocated,
+                          (ctx->nb_slices + 1) * sizeof(*ctx->slice_offsets));
+    if (!tmp)
+        return AVERROR(ENOMEM);
+    ctx->slice_offsets = tmp;
+
+    if (!ctx->bitstream)
+        ctx->bitstream = buffer;
+
+    ctx->slice_offsets[ctx->nb_slices] = buffer - ctx->bitstream;
+    ctx->bitstream_len += size;
+    ctx->nb_slices++;
+
+    return 0;
+}
+
+int ff_nvdec_frame_params(AVCodecContext *avctx,
+                          AVBufferRef *hw_frames_ctx,
+                          enum AVPixelFormat hw_format,
+                          int dpb_size,
+                          int supports_444)
+{
+    AVHWFramesContext *frames_ctx = (AVHWFramesContext*)hw_frames_ctx->data;
+    const AVPixFmtDescriptor *sw_desc;
+    int cuvid_codec_type, cuvid_chroma_format, chroma_444;
+
+    /*
+     * This may be called from get_format() before avctx->hwaccel is set,
+     * so the selected hardware format is passed explicitly by the wrapper.
+     */
+    if (hw_format != AV_PIX_FMT_CUDA && hw_format != AV_PIX_FMT_CUARRAY)
+        return AVERROR_BUG;
+
+    sw_desc = av_pix_fmt_desc_get(avctx->sw_pix_fmt);
+    if (!sw_desc)
+        return AVERROR_BUG;
+
+    cuvid_codec_type = map_avcodec_id(avctx->codec_id);
+    if (cuvid_codec_type < 0) {
+        av_log(avctx, AV_LOG_ERROR, "Unsupported codec ID\n");
+        return AVERROR_BUG;
+    }
+
+    cuvid_chroma_format = map_chroma_format(avctx->sw_pix_fmt);
+    if (cuvid_chroma_format < 0) {
+        av_log(avctx, AV_LOG_VERBOSE, "Unsupported chroma format\n");
+        return AVERROR(EINVAL);
+    }
+    chroma_444 = supports_444 && cuvid_chroma_format == cudaVideoChromaFormat_444;
+
+    frames_ctx->format            = hw_format;
+    // NVDEC target dimensions must be even-aligned for internal surface allocation.
+    // For chroma-subsampled formats (420/422), the output dimensions must also be
+    // even. For monochrome/444, keep the original output dimensions and only
+    // even-align the NVDEC target — the frame copy will crop to avctx dimensions.
+    if (cuvid_chroma_format == cudaVideoChromaFormat_420 ||
+        cuvid_chroma_format == cudaVideoChromaFormat_422) {
+        frames_ctx->width         = (avctx->coded_width  + 1) & ~1;
+        frames_ctx->height        = (avctx->coded_height + 1) & ~1;
+    } else {
+        frames_ctx->width         = avctx->coded_width;
+        frames_ctx->height        = avctx->coded_height;
+    }
+    /*
+     * We add two extra frames to the pool to account for deinterlacing filters
+     * holding onto their frames.
+     */
+    frames_ctx->initial_pool_size = dpb_size + 2;
+
+    switch (sw_desc->comp[0].depth) {
+    case 8:
+        if (chroma_444) {
+            frames_ctx->sw_format = (frames_ctx->format == AV_PIX_FMT_CUARRAY)
+                                    ? AV_PIX_FMT_NV24 : AV_PIX_FMT_YUV444P;
+#ifdef NVDEC_HAVE_422_SUPPORT
+        } else if (cuvid_chroma_format == cudaVideoChromaFormat_422) {
+            frames_ctx->sw_format = AV_PIX_FMT_NV16;
+#endif
+        } else {
+            frames_ctx->sw_format = AV_PIX_FMT_NV12;
+        }
+        break;
+    case 10:
+        if (chroma_444) {
+            frames_ctx->sw_format = (frames_ctx->format == AV_PIX_FMT_CUARRAY)
+                                    ? AV_PIX_FMT_P410 : AV_PIX_FMT_YUV444P10MSB;
+#ifdef NVDEC_HAVE_422_SUPPORT
+        } else if (cuvid_chroma_format == cudaVideoChromaFormat_422) {
+            frames_ctx->sw_format = AV_PIX_FMT_P210;
+#endif
+        } else {
+            frames_ctx->sw_format = AV_PIX_FMT_P010;
+        }
+        break;
+    case 12:
+        if (chroma_444) {
+            frames_ctx->sw_format = (frames_ctx->format == AV_PIX_FMT_CUARRAY)
+                                    ? AV_PIX_FMT_P412 : AV_PIX_FMT_YUV444P12MSB;
+#ifdef NVDEC_HAVE_422_SUPPORT
+        } else if (cuvid_chroma_format == cudaVideoChromaFormat_422) {
+            frames_ctx->sw_format = AV_PIX_FMT_P212;
+#endif
+        } else {
+            frames_ctx->sw_format = AV_PIX_FMT_P012;
+        }
+        break;
+    default:
+        return AVERROR(EINVAL);
+    }
+
+    return 0;
+}
+
+int ff_nvdec_get_ref_idx(AVFrame *frame)
+{
+    FrameDecodeData *fdd;
+    NVDECFrame *cf;
+
+    if (!frame || !frame->private_ref)
+        return -1;
+
+    fdd = frame->private_ref;
+    cf  = (NVDECFrame*)fdd->hwaccel_priv;
+    if (!cf)
+        return -1;
+
+    return cf->ref_idx;
+}

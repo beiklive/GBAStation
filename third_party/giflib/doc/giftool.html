@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8" /><title>giftool</title><meta name="generator" content="DocBook XSL Stylesheets Vsnapshot" /></head><body><div class="refentry"><a id="giftool.1"></a><div class="titlepage"></div><div class="refnamediv"><a id="name"></a><h2>Name</h2><p>giftool — GIF transformation tool</p></div><div class="refsynopsisdiv"><a id="synopsis"></a><h2>Synopsis</h2><div class="cmdsynopsis"><p><code class="command">giftool</code>  [-a <em class="replaceable"><code>aspect</code></em>] [-b <em class="replaceable"><code>bgcolor</code></em>] [-d <em class="replaceable"><code>delaytime</code></em>] [-i <em class="replaceable"><code>interlacing</code></em>] [-n <em class="replaceable"><code>imagelist</code></em>] [-p <em class="replaceable"><code>left,top</code></em>] [-s <em class="replaceable"><code>width,height</code></em>] [-t <em class="replaceable"><code>transcolor</code></em>] [-u <em class="replaceable"><code>sort-flag</code></em>] [-x <em class="replaceable"><code>disposal</code></em>] [-z <em class="replaceable"><code>sort-flag</code></em>]</p></div></div><div class="refsect1"><a id="id1337"></a><h2>Description</h2><p>A filter for transforming GIFS. With no options, it's an expensive 
+copy of a GIF in standard input to standard output.  Options specify
+filtering operations and are performed in the order specified on the command 
+line.</p><p>The -n option selects images, allowing the tool to act on a
+subset of images in a multi-image GIF.  This option takes a
+comma-separated list of decimal integers which are interpreted as
+1-origin image indices; these are the images that will be acted on.
+If no -n option is specified, the tool will select and transform all
+images.</p><p>The -b option takes a decimal integer argument and uses it to
+set the (0-origin) screen background color index.</p><p>The -f option accepts a printf-style format string and
+substitutes into it the values of image-descriptor and graphics-control
+fields. The string is formatted and output once for each selected
+image.  Normal C-style escapes \b, \f, \n, \r, \t. \v, and \xNN are
+interpreted; also \e produces ESC (ASCII 0x1b).  The following format
+cookies are substituted:</p><div class="variablelist"><dl class="variablelist"><dt><span class="term">%a</span></dt><dd><p>Pixel aspect byte.</p></dd><dt><span class="term">%b</span></dt><dd><p>Screen background color.</p></dd><dt><span class="term">%d</span></dt><dd><p>Image delay time</p></dd><dt><span class="term">%h</span></dt><dd><p>Image height (y dimension)</p></dd><dt><span class="term">%n</span></dt><dd><p>Image index</p></dd><dt><span class="term">%p</span></dt><dd><p>Image position (as an x,y pair)</p></dd><dt><span class="term">%s</span></dt><dd><p>Screen size (as an x,y pair)</p></dd><dt><span class="term">%t</span></dt><dd><p>Image transparent-color index</p></dd><dt><span class="term">%u</span></dt><dd><p>Image user-input flag (boolean)</p></dd><dt><span class="term">%v</span></dt><dd><p>GIF version string</p></dd><dt><span class="term">%w</span></dt><dd><p>Image width (x dimension)</p></dd><dt><span class="term">%x</span></dt><dd><p>Image GIF89 disposal mode</p></dd><dt><span class="term">%z</span></dt><dd><p>Image's color table sort flag (boolean, 
+false if no local color map)</p></dd></dl></div><p>Boolean substitutions may take a prefix to modify how they are
+displayed:</p><div class="variablelist"><dl class="variablelist"><dt><span class="term">1</span></dt><dd><p>"1" or "0"</p></dd><dt><span class="term">o</span></dt><dd><p>"on" or "off"</p></dd><dt><span class="term">t</span></dt><dd><p>"t" or "f"</p></dd><dt><span class="term">y</span></dt><dd><p>"yes" or "no"</p></dd></dl></div><p>Thus, for example, "%oz" displays image sort flags using the
+strings "on" and "off". The default with no prefix is numeric.</p><p>The -a option takes an unsigned decimal integer argument and
+uses it to set the aspect-ratio bye in the logical screen descriptor
+block.</p><p>The -b option takes an unsigned decimal integer argument and
+uses it to set the background color index in the logical screen
+descriptor block.</p><p>The -d option takes a decimal integer argument and uses it to set a delay
+time, in hundredths of a second, on selected images.</p><p>The -i option sets or clears interlacing in selected
+images. Acceptable arguments are "1", "0", "yes", "no", "on", "off",
+"t", "f"</p><p>The -p option takes a (0-origin) x,y coordinate-pair and sets it
+as the preferred upper-left-corner coordinates of selected
+images.</p><p>The -s option takes a (0-origin) x,y coordinate-pair and sets it
+as the expected display screen size.</p><p>The -t option takes a decimal integer argument and uses it to set the 
+(0-origin) index of the transparency color in selected images.</p><p>The -u option sets or clears the user-input flag in selected
+images.  Acceptable arguments are "1", "0", "yes", "no", "on", "off",
+"t", "f".</p><p>The -x option takes a decimal integer argument and uses it to set the
+GIF89 disposal mode in selected images.</p><p>The -z option sets or clears the color-table sort flag in
+selected images.  Acceptable arguments are "1", "0", "yes", "no",
+"on", "off", "t", "f".</p><p>Note that the -a, -b, -p, -s, and -z options are included to
+complete the ability to modify all fields defined in the GIF standard,
+but should have no effect on how an image renders on browsers or
+modern viewers.</p></div><div class="refsect1"><a id="id1338"></a><h2>Author</h2><p>Eric S. Raymond.</p></div></div></body></html>

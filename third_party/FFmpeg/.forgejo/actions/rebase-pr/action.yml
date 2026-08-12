@@ -1,0 +1,40 @@
+name: Rebase PR onto target
+
+inputs:
+  path:
+    description: Directory to run in
+    required: false
+    default: .
+
+runs:
+  using: composite
+  steps:
+    - name: Rebase onto target branch
+      if: ${{ forge.event_name == 'pull_request' }}
+      working-directory: ${{ inputs.path }}
+      run: |
+        set -x
+        # Fetch all PR commits + merge-base
+        commits=$(curl -s -o /dev/null -w '%header{X-Total-Count}' '${{ forge.api_url }}/repos/${{ forge.repository }}/pulls/${{ forge.event.pull_request.number }}/commits?limit=1&verification=false&files=false')
+        git fetch -vv --deepen=$commits origin pull/${{ forge.event.pull_request.number }}/head
+
+        if [ "$(wc -l < .git/shallow)" -ne 1 ]; then
+            echo "Complex PR history detected, falling back to merge"
+            git fetch -vv --unshallow origin pull/${{ forge.event.pull_request.number }}/head
+            git fetch -vv origin ${{ forge.base_ref }}
+            git merge --no-edit origin/${{ forge.base_ref }} \
+              || { echo "Does not merge cleanly with ${{ forge.base_ref }}"; exit 1; }
+            exit 0
+        fi
+
+        # Unfortunately, Forgejo does not update the merge-base when PR branch
+        # is updated, the `forge.event.pull_request.merge_base` is stale value,
+        # from the time when PR was created. We cannot rely on it, so try to
+        # infer parent commit of the PR from the shallow clone that we have.
+        base=$(cat .git/shallow)
+
+        # Fetch target branch
+        git fetch -vv --depth=1 origin ${{ forge.base_ref }}
+        # Rebase PR commits onto the current state of target branch
+        git rebase --onto origin/${{ forge.base_ref }} $base \
+          || { echo "Does not rebase cleanly onto ${{ forge.base_ref }}"; exit 1; }

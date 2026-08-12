@@ -1,0 +1,43 @@
+/* some pages also use their own CSS files, so: NO CUSTOM CLASS NAMES HERE */
+
+body {
+	background:white;
+	color:black;
+	font-family:sans-serif;
+}
+
+table {
+	background:black;
+	border-spacing:2px;
+}
+th, td {
+	padding:3px 5px;
+	vertical-align:middle;
+	empty-cells:show;
+}
+th {
+	background:silver;
+}
+td {
+	background:white;
+}
+
+h1 {
+	text-align:center;
+}
+pre, tt {
+	font-size:120%;
+}
+abbr {
+	text-decoration:underline;
+}
+
+@media print {
+	.noprint {
+		display:none;
+	}
+	a[href] {
+		color:black;
+		text-decoration:none;
+	}
+}

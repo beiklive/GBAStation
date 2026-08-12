@@ -350,6 +350,7 @@ namespace beiklive
         // UI 背景图片设置
         SettingManager->SetDefault(KEY_UI_SHOW_BG_IMAGE, ConfigValue(0));
         SettingManager->SetDefault(KEY_UI_BG_IMAGE_PATH, ConfigValue(std::string("")));
+        SettingManager->SetDefault(KEY_UI_BG_GIF_SPEED, ConfigValue(1.0f));
         SettingManager->SetDefault(KEY_UI_BG_BLUR_ENABLED, ConfigValue(0));
         SettingManager->SetDefault(KEY_UI_BG_BLUR_RADIUS, ConfigValue(12.0f));
         SettingManager->SetDefault(KEY_UI_SHOW_XMB_BG, ConfigValue(0));

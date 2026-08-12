@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: MIT
+
+name: Backport
+
+on:
+  pull_request_target:
+    types:
+      - closed
+      - labeled
+
+concurrency:
+  cancel-in-progress: false
+  group: backport-${{ forgejo.event.pull_request.number }}
+
+jobs:
+  backporting:
+    name: PR
+    if: >
+      ( vars.BACKPORTS == 'enabled' ) && (
+        forgejo.event.pull_request.merged &&
+        contains(toJSON(forgejo.event.pull_request.labels), 'backport/release/')
+      )
+    runs-on: utilities
+    steps:
+      - uses: actions/git-backporting@main
+        with:
+          target-branch-pattern: "^backport/(?<target>(.+))$"
+          strategy: ort
+          strategy-option: find-renames
+          cherry-pick-options: -x
+          bp-repo: ffmpeg-devel/FFmpeg
+          auth: ${{ secrets.BACKPORT_TOKEN }}
+          pull-request: ${{ forgejo.event.pull_request.url }}
+          auto-no-squash: true
+          enable-err-notification: true
+          git-user: ffmpeg-devel
+          git-email: code@ffmpeg.org

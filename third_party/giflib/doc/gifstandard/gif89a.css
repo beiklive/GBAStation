@@ -1,0 +1,62 @@
+ul {
+	list-style-type:disc;
+}
+ul ul {
+	list-style-type:circle;
+}
+
+div#notes {
+	font-style:italic;
+}
+
+table.invisible {
+	border-spacing:0;
+}
+
+table#interlace td {
+	text-align:center;
+}
+
+div.hiddenparagraph {
+	display:none;
+}
+
+@media not print {
+	a[href*="#"] {
+		text-decoration:none;
+		color:blue;
+	}
+
+	span.rcomp {
+		background:#FAA;
+	}
+	span.gcomp {
+		background:#8F8;
+	}
+	span.bcomp {
+		background:#BBF;
+	}
+	
+	h2 span {
+		font-size:small;
+		font-weight:normal;
+		text-decoration:underline;
+	}
+
+	div.togglevisall span {
+		font-weight:bold;
+		text-decoration:underline;
+	}
+}
+
+@media print {
+	table,
+	li {
+		page-break-inside:avoid;
+	}
+
+	h2 span,
+	div.togglevisall {
+		display:none;
+	}
+}

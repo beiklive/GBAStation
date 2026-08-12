@@ -1,0 +1,304 @@
+/*
+ * quarterpel DSP functions
+ * Copyright (c) 2000, 2001 Fabrice Bellard
+ * Copyright (c) 2002-2004 Michael Niedermayer <michaelni@gmx.at>
+ *
+ * This file is part of FFmpeg.
+ *
+ * FFmpeg is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * FFmpeg is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with FFmpeg; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
+
+#include <stddef.h>
+#include <stdint.h>
+
+#include "config.h"
+#include "libavutil/attributes.h"
+#include "libavutil/attributes_internal.h"
+#include "libavutil/cpu.h"
+#include "libavutil/mem_internal.h"
+#include "libavutil/x86/cpu.h"
+#include "libavcodec/qpeldsp.h"
+#include "fpel.h"
+#include "qpel.h"
+
+FF_VISIBILITY_PUSH_HIDDEN
+void ff_put_no_rnd_pixels8x8_l2_mmxext(uint8_t *dst,
+                                       const uint8_t *src1, const uint8_t *src2,
+                                       ptrdiff_t dstStride, ptrdiff_t src1Stride);
+void ff_put_no_rnd_pixels16x16_l2_sse2(uint8_t *dst,
+                                       const uint8_t *src1, const uint8_t *src2,
+                                       ptrdiff_t dstStride, ptrdiff_t src1Stride);
+
+#define QPEL_H(OPNAME, RND, SIZE, UNUSED1, XMM, UNUSED2, UNUSED3, L2)                   \
+void ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _h_lowpass_ ## XMM (uint8_t *dst,          \
+                                                                 const uint8_t *src,    \
+                                                                 ptrdiff_t dstStride,   \
+                                                                 ptrdiff_t srcStride,   \
+                                                                 int h);                \
+void ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _h_lowpass_l2_ ## XMM(uint8_t *dst,        \
+                                                                   const uint8_t *src,  \
+                                                                   ptrdiff_t dstStride, \
+                                                                   ptrdiff_t srcStride, \
+                                                                   int h,               \
+                                                                   ptrdiff_t l2_offset);\
+static void OPNAME ## _qpel ## SIZE ## _mc10_ ## XMM(uint8_t *dst,                      \
+                                                     const uint8_t *src,                \
+                                                     ptrdiff_t stride)                  \
+{                                                                                       \
+    ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _h_lowpass_l2_ ## XMM(dst, src, stride,     \
+                                                                  stride, SIZE, 0);     \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc20_ ## XMM(uint8_t *dst,                      \
+                                                     const uint8_t *src,                \
+                                                     ptrdiff_t stride)                  \
+{                                                                                       \
+    ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _h_lowpass_ ## XMM(dst, src, stride,        \
+                                                               stride, SIZE);           \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc30_ ## XMM(uint8_t *dst,                      \
+                                                     const uint8_t *src,                \
+                                                     ptrdiff_t stride)                  \
+{                                                                                       \
+    ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _h_lowpass_l2_ ## XMM(dst, src, stride,     \
+                                                                  stride, SIZE, 1);     \
+}
+
+#define QPEL_V(OPNAME, RND, SIZE, UNUSED1, UNUSED2, XMM, UNUSED3, L2)                   \
+void ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _v_lowpass_ ## XMM (uint8_t *dst,          \
+                                                                 const uint8_t *src,    \
+                                                                 ptrdiff_t dstStride,   \
+                                                                 ptrdiff_t srcStride);  \
+static void OPNAME ## _qpel ## SIZE ## _mc01_ ## XMM(uint8_t *dst,                      \
+                                                     const uint8_t *src,                \
+                                                     ptrdiff_t stride)                  \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, half)[SIZE*SIZE];                                    \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _v_lowpass_ ## XMM(half, src,               \
+                                                               SIZE, stride);           \
+    ff_ ## OPNAME ## _pixels ## SIZE ## x ## SIZE ## _l2_ ## L2(dst, src, half,         \
+                                                                stride, stride);        \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc02_ ## XMM(uint8_t *dst,                      \
+                                                     const uint8_t *src,                \
+                                                     ptrdiff_t stride)                  \
+{                                                                                       \
+    ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _v_lowpass_ ## XMM(dst, src,                \
+                                                               stride, stride);         \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc03_ ## XMM(uint8_t *dst,                      \
+                                                     const uint8_t *src,                \
+                                                     ptrdiff_t stride)                  \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, half)[SIZE*SIZE];                                    \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _v_lowpass_ ## XMM(half, src,               \
+                                                               SIZE, stride);           \
+    ff_ ## OPNAME ## _pixels ## SIZE ## x ## SIZE ## _l2_ ## L2(dst, src + stride,      \
+                                                                half, stride, stride);  \
+}
+
+#define QPEL_HV(OPNAME, RND, SIZE, SIZEP1, HXMM, VXMM, HVXMM, L2)                       \
+static void OPNAME ## _qpel ## SIZE ## _mc11_ ## HVXMM(uint8_t *dst,                    \
+                                                       const uint8_t *src,              \
+                                                       ptrdiff_t stride)                \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, half)[(SIZE + SIZEP1)*SIZE];                         \
+    uint8_t *const halfH  = half + SIZE*SIZE;                                           \
+    uint8_t *const halfHV = half;                                                       \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _h_lowpass_l2_ ## HXMM(halfH, src, SIZE,    \
+                                                                   stride, SIZEP1, 0);  \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _v_lowpass_ ## VXMM(halfHV, halfH,          \
+                                                                SIZE, SIZE);            \
+    ff_ ## OPNAME ## _pixels ## SIZE ## x ## SIZE ## _l2_ ## L2(dst, halfH, halfHV,     \
+                                                                stride, SIZE);          \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc31_ ## HVXMM(uint8_t *dst,                    \
+                                                       const uint8_t *src,              \
+                                                       ptrdiff_t stride)                \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, half)[(SIZE + SIZEP1)*SIZE];                         \
+    uint8_t *const halfH  = half + SIZE*SIZE;                                           \
+    uint8_t *const halfHV = half;                                                       \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _h_lowpass_l2_ ## HXMM(halfH, src, SIZE,    \
+                                                                   stride, SIZEP1, 1);  \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _v_lowpass_ ## VXMM(halfHV, halfH,          \
+                                                                SIZE, SIZE);            \
+    ff_ ## OPNAME ## _pixels ## SIZE ## x ## SIZE ## _l2_ ## L2(dst, halfH, halfHV,     \
+                                                                stride, SIZE);          \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc13_ ## HVXMM(uint8_t *dst,                    \
+                                                       const uint8_t *src,              \
+                                                       ptrdiff_t stride)                \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, half)[(SIZE + SIZEP1)*SIZE];                         \
+    uint8_t *const halfH  = half + SIZE*SIZE;                                           \
+    uint8_t *const halfHV = half;                                                       \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _h_lowpass_l2_ ## HXMM(halfH, src, SIZE,    \
+                                                                   stride, SIZEP1, 0);  \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _v_lowpass_ ## VXMM(halfHV, halfH,          \
+                                                                SIZE, SIZE);            \
+    ff_ ## OPNAME ## _pixels ## SIZE ## x ## SIZE ## _l2_ ## L2(dst, halfH + SIZE,      \
+                                                                halfHV, stride, SIZE);  \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc33_ ## HVXMM(uint8_t *dst,                    \
+                                                       const uint8_t *src,              \
+                                                       ptrdiff_t stride)                \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, half)[(SIZE + SIZEP1)*SIZE];                         \
+    uint8_t *const halfH  = half + SIZE*SIZE;                                           \
+    uint8_t *const halfHV = half;                                                       \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _h_lowpass_l2_ ## HXMM(halfH, src, SIZE,    \
+                                                                   stride, SIZEP1, 1);  \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _v_lowpass_ ## VXMM(halfHV, halfH,          \
+                                                                SIZE, SIZE);            \
+    ff_ ## OPNAME ## _pixels ## SIZE ## x ## SIZE ## _l2_ ## L2(dst, halfH + SIZE,      \
+                                                                halfHV, stride, SIZE);  \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc21_ ## HVXMM(uint8_t *dst,                    \
+                                                       const uint8_t *src,              \
+                                                       ptrdiff_t stride)                \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, half)[(SIZE + SIZEP1)*SIZE];                         \
+    uint8_t *const halfH  = half + SIZE*SIZE;                                           \
+    uint8_t *const halfHV = half;                                                       \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _h_lowpass_ ## HXMM(halfH, src, SIZE,       \
+                                                                stride, SIZEP1);        \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _v_lowpass_ ## VXMM(halfHV, halfH,          \
+                                                                SIZE, SIZE);            \
+    ff_ ## OPNAME ## _pixels ## SIZE ## x ## SIZE ## _l2_ ## L2(dst, halfH, halfHV,     \
+                                                                stride, SIZE);          \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc23_ ## HVXMM(uint8_t *dst,                    \
+                                                       const uint8_t *src,              \
+                                                       ptrdiff_t stride)                \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, half)[(SIZE + SIZEP1)*SIZE];                         \
+    uint8_t *const halfH  = half + SIZE*SIZE;                                           \
+    uint8_t *const halfHV = half;                                                       \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _h_lowpass_ ## HXMM(halfH, src, SIZE,       \
+                                                                stride, SIZEP1);        \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _v_lowpass_ ## VXMM(halfHV, halfH,          \
+                                                                SIZE, SIZE);            \
+    ff_ ## OPNAME ## _pixels ## SIZE ## x ## SIZE ## _l2_ ## L2(dst, halfH + SIZE,      \
+                                                                halfHV, stride, SIZE);  \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc12_ ## HVXMM(uint8_t *dst,                    \
+                                                       const uint8_t *src,              \
+                                                       ptrdiff_t stride)                \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, halfH)[SIZEP1*SIZE];                                 \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _h_lowpass_l2_ ## HXMM(halfH, src, SIZE,    \
+                                                                   stride, SIZEP1, 0);  \
+    ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _v_lowpass_ ## VXMM(dst, halfH,             \
+                                                                stride, SIZE);          \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc32_ ## HVXMM(uint8_t *dst,                    \
+                                                       const uint8_t *src,              \
+                                                       ptrdiff_t stride)                \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, halfH)[SIZEP1*SIZE];                                 \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _h_lowpass_l2_ ## HXMM(halfH, src, SIZE,    \
+                                                                   stride, SIZEP1, 1);  \
+    ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _v_lowpass_ ## VXMM(dst, halfH,             \
+                                                                stride, SIZE);          \
+}                                                                                       \
+                                                                                        \
+static void OPNAME ## _qpel ## SIZE ## _mc22_ ## HVXMM(uint8_t *dst,                    \
+                                                       const uint8_t *src,              \
+                                                       ptrdiff_t stride)                \
+{                                                                                       \
+    DECLARE_ALIGNED(SIZE, uint8_t, halfH)[SIZEP1*SIZE];                                 \
+    ff_mpeg4_put_ ## RND ## qpel ## SIZE ## _h_lowpass_ ## HXMM(halfH, src, SIZE,       \
+                                                                stride, SIZEP1);        \
+    ff_mpeg4_ ## OPNAME ## _qpel ## SIZE ## _v_lowpass_ ## VXMM(dst, halfH,             \
+                                                                stride, SIZE);          \
+}
+
+#define QPEL3(MACRO, SIZE, SIZEP1, HXMM, VXMM, HVXMM, L2)       \
+MACRO(put,,                SIZE, SIZEP1, HXMM, VXMM, HVXMM, L2) \
+MACRO(avg,,                SIZE, SIZEP1, HXMM, VXMM, HVXMM, L2) \
+MACRO(put_no_rnd, no_rnd_, SIZE, SIZEP1, HXMM, VXMM, HVXMM, L2)
+
+QPEL3(QPEL_H,   8,  9, ssse3, sse2, ssse3, mmxext)
+QPEL3(QPEL_H,  16, 17, ssse3, sse2, ssse3, sse2)
+QPEL3(QPEL_V,   8,  9, ssse3, sse2, ssse3, mmxext)
+QPEL3(QPEL_HV,  8,  9, ssse3, sse2, ssse3, mmxext)
+QPEL3(QPEL_V,  16, 17, ssse3, sse2, ssse3, sse2)
+QPEL3(QPEL_HV, 16, 17, ssse3, sse2, ssse3, sse2)
+
+#define SET_QPEL_FUNC(OP, X, Y, SIZE, CPU, PREFIX) \
+    c->OP ## _qpel_pixels_tab[SIZE == 8][X+4*Y] = PREFIX ## OP ## _qpel ## SIZE ## _mc ## X ## Y ## _ ## CPU
+
+#define SET_QPEL_FUNCS3(X, Y, SIZE, CPU, PREFIX)        \
+    SET_QPEL_FUNC(avg,        X, Y, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNC(put,        X, Y, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNC(put_no_rnd, X, Y, SIZE, CPU, PREFIX)
+
+#define SET_H_QPEL_FUNCS(SIZE, CPU, PREFIX)   \
+    SET_QPEL_FUNCS3(1, 0, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(2, 0, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(3, 0, SIZE, CPU, PREFIX)
+
+#define SET_V_QPEL_FUNCS(SIZE, CPU, PREFIX)   \
+    SET_QPEL_FUNCS3(0, 1, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(0, 2, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(0, 3, SIZE, CPU, PREFIX)
+
+#define SET_HV_QPEL_FUNCS(SIZE, CPU, PREFIX)  \
+    SET_QPEL_FUNCS3(1, 1, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(1, 2, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(1, 3, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(2, 1, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(2, 2, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(2, 3, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(3, 1, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(3, 2, SIZE, CPU, PREFIX); \
+    SET_QPEL_FUNCS3(3, 3, SIZE, CPU, PREFIX)
+
+av_cold void ff_qpeldsp_init_x86(QpelDSPContext *c)
+{
+    int cpu_flags = av_get_cpu_flags();
+
+#if HAVE_SSE2_EXTERNAL
+    if (EXTERNAL_SSE2(cpu_flags)) {
+        c->put_no_rnd_qpel_pixels_tab[0][0] =
+        c->put_qpel_pixels_tab[0][0] = ff_put_pixels16x16_sse2;
+        c->put_no_rnd_qpel_pixels_tab[1][0] =
+        c->put_qpel_pixels_tab[1][0] = ff_put_pixels8x8_sse2;
+        c->avg_qpel_pixels_tab[0][0] = ff_avg_pixels16x16_sse2;
+        c->avg_qpel_pixels_tab[1][0] = ff_avg_pixels8x8_sse2;
+
+        SET_V_QPEL_FUNCS (16, sse2,);
+        SET_V_QPEL_FUNCS (8,  sse2,);
+    }
+#endif
+    if (EXTERNAL_SSSE3(cpu_flags)) {
+        SET_H_QPEL_FUNCS(8, ssse3,);
+        SET_HV_QPEL_FUNCS(8, ssse3,);
+        SET_H_QPEL_FUNCS(16, ssse3,);
+        SET_HV_QPEL_FUNCS(16, ssse3,);
+    }
+}
+FF_VISIBILITY_POP_HIDDEN

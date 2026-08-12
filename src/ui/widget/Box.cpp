@@ -1,6 +1,8 @@
 #include "Box.hpp"
 #include "Header.hpp"
 #include "core/common.h"
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 
 namespace beiklive
@@ -47,18 +49,73 @@ namespace beiklive
 
     void Box::showBackground(bool show)
     {
-        if(backgroundLayer) {
-            if (show)
-                ensureBackgroundImageLoaded();
-            backgroundLayer->setVisibility(show ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-        }
+        if (show)
+            ensureBackgroundImageLoaded();
+        if (backgroundLayer)
+            backgroundLayer->setVisibility(show && !backgroundIsGif && !backgroundIsVideo
+                ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        if (backgroundGifLayer)
+            backgroundGifLayer->setVisibility(show && backgroundIsGif && backgroundGifLayer->isLoaded()
+                ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        if (backgroundVideoLayer)
+            backgroundVideoLayer->setVisibility(show && backgroundIsVideo && backgroundVideoLayer->isLoaded()
+                ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
     }
+
+    static bool isGifPath(const std::string& path)
+    {
+        const std::filesystem::path file(path);
+        std::string extension = file.extension().string();
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return extension == ".gif";
+    }
+
+    static bool isMp4Path(const std::string& path)
+    {
+        const std::filesystem::path file(path);
+        std::string extension = file.extension().string();
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return extension == ".mp4";
+    }
+
     void Box::setBackgroundImage(const std::string& path)
     {
-        if(backgroundLayer && !path.empty()) {
+        if (!backgroundLayer || path.empty())
+            return;
+
+        backgroundIsGif = isGifPath(path) && backgroundGifLayer && backgroundGifLayer->load(path);
+        backgroundIsVideo = !backgroundIsGif && isMp4Path(path) && backgroundVideoLayer &&
+            backgroundVideoLayer->load(path);
+        const bool show = GET_SETTING_KEY_INT(
+            beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
+        if (backgroundIsGif) {
+            backgroundLayer->setVisibility(brls::Visibility::GONE);
+            if (backgroundVideoLayer) {
+                backgroundVideoLayer->clear();
+                backgroundVideoLayer->setVisibility(brls::Visibility::GONE);
+            }
+            backgroundGifLayer->setVisibility(show ? brls::Visibility::VISIBLE
+                                                   : brls::Visibility::GONE);
+        } else if (backgroundIsVideo) {
+            backgroundLayer->setVisibility(brls::Visibility::GONE);
+            if (backgroundGifLayer) {
+                backgroundGifLayer->clear();
+                backgroundGifLayer->setVisibility(brls::Visibility::GONE);
+            }
+            backgroundVideoLayer->setVisibility(show ? brls::Visibility::VISIBLE
+                                                     : brls::Visibility::GONE);
+        } else {
+            if (backgroundGifLayer)
+                backgroundGifLayer->clear();
+            if (backgroundVideoLayer)
+                backgroundVideoLayer->clear();
             backgroundLayer->setImageFromFileForce(path);
-            backgroundImageLoaded = true;
+            backgroundLayer->setVisibility(show ? brls::Visibility::VISIBLE
+                                                : brls::Visibility::GONE);
         }
+        backgroundImageLoaded = true;
     }
 
     void Box::showShader(bool show)
@@ -298,8 +355,26 @@ namespace beiklive
         backgroundLayer->setScalingType(brls::ImageScalingType::FIT);
         backgroundLayer->setInterpolation(brls::ImageInterpolation::LINEAR);
 
-        // 应用所有背景设置（可见性、图片、XMB着色器与颜色）
         this->addView(backgroundLayer);
+        backgroundGifLayer = new beiklive::GifBackgroundView();
+        backgroundGifLayer->setFocusable(false);
+        backgroundGifLayer->setPositionType(brls::PositionType::ABSOLUTE);
+        backgroundGifLayer->setPositionTop(0);
+        backgroundGifLayer->setPositionLeft(0);
+        backgroundGifLayer->setWidthPercentage(100);
+        backgroundGifLayer->setHeightPercentage(100);
+        backgroundGifLayer->setVisibility(brls::Visibility::GONE);
+        this->addView(backgroundGifLayer);
+        backgroundVideoLayer = new beiklive::VideoBackgroundView();
+        backgroundVideoLayer->setFocusable(false);
+        backgroundVideoLayer->setPositionType(brls::PositionType::ABSOLUTE);
+        backgroundVideoLayer->setPositionTop(0);
+        backgroundVideoLayer->setPositionLeft(0);
+        backgroundVideoLayer->setWidthPercentage(100);
+        backgroundVideoLayer->setHeightPercentage(100);
+        backgroundVideoLayer->setVisibility(brls::Visibility::GONE);
+        this->addView(backgroundVideoLayer);
+
         bool showBg = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
         showBackground(showBg);
     }
@@ -312,9 +387,13 @@ namespace beiklive
         const std::string bgPath = GET_SETTING_KEY_STR(
             beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, "");
         if (!bgPath.empty() && std::filesystem::exists(bgPath))
-            backgroundLayer->setImageFromFile(bgPath);
-        else
+            setBackgroundImage(bgPath);
+        else {
             backgroundLayer->setImageFromFile(BK_RES("img/bg2.png"));
+            backgroundIsGif = false;
+            backgroundIsVideo = false;
+            backgroundLayer->setVisibility(brls::Visibility::VISIBLE);
+        }
         backgroundImageLoaded = true;
     }
 

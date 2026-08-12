@@ -1,0 +1,36 @@
+OBJS                            += x86/rgb2rgb.o                        \
+                                   x86/swscale.o                        \
+                                   x86/yuv2rgb.o                        \
+
+OBJS-$(HAVE_MMXEXT_INLINE)      += x86/hscale_fast_bilinear_simd.o      \
+
+OBJS-$(CONFIG_XMM_CLOBBER_TEST) += x86/w64xmmtest.o
+
+EMMS_OBJS_$(HAVE_MMX_INLINE)_$(HAVE_MMX_EXTERNAL)_$(HAVE_MM_EMPTY) = x86/emms.o
+# Add internal copy of ff_emms() to swscale for shared builds (if needed).
+SHLIBOBJS                       += $(EMMS_OBJS__yes_)
+
+X86ASM-OBJS                     += x86/input.o                          \
+                                   x86/output.o                         \
+                                   x86/scale.o                          \
+                                   x86/scale_avx2.o                          \
+                                   x86/range_convert.o                  \
+                                   x86/rgb_2_rgb.o                      \
+                                   x86/yuv_2_rgb.o                      \
+                                   x86/yuv2yuvX.o                       \
+
+SKIPHEADERS                     += x86/uops_macros.asm.h
+
+ifdef ARCH_X86_64
+X86ASM-OBJS-$(CONFIG_UNSTABLE)  += x86/ops_common.o                     \
+                                   x86/ops_int.o                        \
+                                   x86/ops_float.o                      \
+                                   x86/ops.o
+
+$(SUBDIR)x86/ops_common.o: $(SUBDIR)x86/uops_macros.gen.asm
+$(SUBDIR)x86/ops_int.o: $(SUBDIR)x86/uops_macros.gen.asm
+$(SUBDIR)x86/ops_float.o: $(SUBDIR)x86/uops_macros.gen.asm
+$(SUBDIR)x86/uops_macros.gen.asm: $(SRC_PATH)/libswscale/x86/uops_macros.asm.h \
+                                  $(SRC_PATH)/libswscale/uops_macros.h
+	$(HOSTCC) $(HOSTCC_E) $(HOSTCPPFLAGS) $<
+endif

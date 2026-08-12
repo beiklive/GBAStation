@@ -1,0 +1,140 @@
+/*
+ * VC-1 and WMV3 - DSP functions MMX-optimized
+ * Copyright (c) 2007 Christophe GISQUET <christophe.gisquet@free.fr>
+ *
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#include "libavutil/attributes.h"
+#include "libavutil/cpu.h"
+#include "libavutil/x86/cpu.h"
+#include "libavcodec/vc1dsp.h"
+#include "vc1dsp.h"
+#include "config.h"
+
+#define LOOP_FILTER4(EXT) \
+void ff_vc1_v_loop_filter4_ ## EXT(uint8_t *src, ptrdiff_t stride, int pq); \
+void ff_vc1_h_loop_filter4_ ## EXT(uint8_t *src, ptrdiff_t stride, int pq);
+#define LOOP_FILTER816(EXT) \
+void ff_vc1_v_loop_filter8_ ## EXT(uint8_t *src, ptrdiff_t stride, int pq); \
+void ff_vc1_h_loop_filter8_ ## EXT(uint8_t *src, ptrdiff_t stride, int pq); \
+\
+static void vc1_v_loop_filter16_ ## EXT(uint8_t *src, ptrdiff_t stride, int pq) \
+{ \
+    ff_vc1_v_loop_filter8_ ## EXT(src,   stride, pq); \
+    ff_vc1_v_loop_filter8_ ## EXT(src+8, stride, pq); \
+} \
+\
+static void vc1_h_loop_filter16_ ## EXT(uint8_t *src, ptrdiff_t stride, int pq) \
+{ \
+    ff_vc1_h_loop_filter8_ ## EXT(src,          stride, pq); \
+    ff_vc1_h_loop_filter8_ ## EXT(src+8*stride, stride, pq); \
+}
+
+LOOP_FILTER816(sse2)
+LOOP_FILTER4(ssse3)
+LOOP_FILTER816(ssse3)
+
+void ff_vc1_h_loop_filter8_sse4(uint8_t *src, ptrdiff_t stride, int pq);
+
+static void vc1_h_loop_filter16_sse4(uint8_t *src, ptrdiff_t stride, int pq)
+{
+    ff_vc1_h_loop_filter8_sse4(src,          stride, pq);
+    ff_vc1_h_loop_filter8_sse4(src+8*stride, stride, pq);
+}
+
+void ff_put_vc1_chroma_mc8_nornd_ssse3(uint8_t *dst, const uint8_t *src,
+                                       ptrdiff_t stride, int h, int x, int y);
+void ff_avg_vc1_chroma_mc8_nornd_ssse3(uint8_t *dst, const uint8_t *src,
+                                       ptrdiff_t stride, int h, int x, int y);
+void ff_vc1_inv_trans_4x4_dc_sse2(uint8_t *dest, ptrdiff_t linesize,
+                                  int16_t *block);
+void ff_vc1_inv_trans_4x8_dc_sse2(uint8_t *dest, ptrdiff_t linesize,
+                                  int16_t *block);
+void ff_vc1_inv_trans_8x4_dc_sse2(uint8_t *dest, ptrdiff_t linesize,
+                                  int16_t *block);
+void ff_vc1_inv_trans_8x8_dc_sse2(uint8_t *dest, ptrdiff_t linesize,
+                                  int16_t *block);
+
+#define MSPEL_FUNC(OP, X, Y, SIZE, XMM)                                     \
+    void ff_vc1_ ## OP ## _mspel_mc ## X ## Y ## _ ## SIZE ##_ ## XMM       \
+             (uint8_t *dst, const uint8_t *src, ptrdiff_t stride, int rnd); \
+    dsp->OP ## _vc1_mspel_pixels_tab[SIZE == 8][X + 4 * Y] =                \
+        ff_vc1_ ## OP ## _mspel_mc ## X ## Y## _ ## SIZE ##_ ## XMM
+#define MSPEL_FUNCS_SIZE(X, Y, SIZE, XMM) \
+    MSPEL_FUNC(put, X, Y, SIZE, XMM);     \
+    MSPEL_FUNC(avg, X, Y, SIZE, XMM)
+#define MSPEL_FUNCS(X, Y, XMM)            \
+    MSPEL_FUNCS_SIZE(X, Y,  8, XMM);      \
+    MSPEL_FUNCS_SIZE(X, Y, 16, XMM)
+
+av_cold void ff_vc1dsp_init_x86(VC1DSPContext *dsp)
+{
+    int cpu_flags = av_get_cpu_flags();
+
+#if HAVE_X86_6REGS && HAVE_INLINE_ASM && HAVE_MMX_EXTERNAL
+    if (HAVE_X86_6REGS && INLINE_MMX(cpu_flags))
+        if (EXTERNAL_MMX(cpu_flags))
+        ff_vc1dsp_init_mmx(dsp);
+
+    if (HAVE_X86_6REGS && INLINE_MMXEXT(cpu_flags))
+        if (EXTERNAL_MMXEXT(cpu_flags))
+        ff_vc1dsp_init_mmxext(dsp);
+#endif /* HAVE_X86_6REGS && HAVE_INLINE_ASM && HAVE_MMX_EXTERNAL */
+
+#define ASSIGN_LF4(EXT) \
+        dsp->vc1_v_loop_filter4  = ff_vc1_v_loop_filter4_ ## EXT; \
+        dsp->vc1_h_loop_filter4  = ff_vc1_h_loop_filter4_ ## EXT
+#define ASSIGN_LF816(EXT) \
+        dsp->vc1_v_loop_filter8  = ff_vc1_v_loop_filter8_ ## EXT; \
+        dsp->vc1_h_loop_filter8  = ff_vc1_h_loop_filter8_ ## EXT; \
+        dsp->vc1_v_loop_filter16 = vc1_v_loop_filter16_ ## EXT; \
+        dsp->vc1_h_loop_filter16 = vc1_h_loop_filter16_ ## EXT
+
+    if (EXTERNAL_SSE2(cpu_flags)) {
+        dsp->vc1_inv_trans_8x8_dc                = ff_vc1_inv_trans_8x8_dc_sse2;
+        dsp->vc1_inv_trans_4x8_dc                = ff_vc1_inv_trans_4x8_dc_sse2;
+        dsp->vc1_inv_trans_8x4_dc                = ff_vc1_inv_trans_8x4_dc_sse2;
+        dsp->vc1_inv_trans_4x4_dc                = ff_vc1_inv_trans_4x4_dc_sse2;
+
+        ASSIGN_LF816(sse2);
+
+        MSPEL_FUNCS(0, 0, sse2);
+    }
+    if (EXTERNAL_SSSE3(cpu_flags)) {
+        ASSIGN_LF4(ssse3);
+        ASSIGN_LF816(ssse3);
+        dsp->put_no_rnd_vc1_chroma_pixels_tab[0] = ff_put_vc1_chroma_mc8_nornd_ssse3;
+        dsp->avg_no_rnd_vc1_chroma_pixels_tab[0] = ff_avg_vc1_chroma_mc8_nornd_ssse3;
+
+        MSPEL_FUNCS(0, 1, ssse3);
+        MSPEL_FUNCS(0, 2, ssse3);
+        MSPEL_FUNCS(0, 3, ssse3);
+        MSPEL_FUNCS(1, 0, ssse3);
+        MSPEL_FUNCS(2, 0, ssse3);
+        MSPEL_FUNCS(3, 0, ssse3);
+    }
+    if (EXTERNAL_SSE4(cpu_flags)) {
+        dsp->vc1_h_loop_filter8  = ff_vc1_h_loop_filter8_sse4;
+        dsp->vc1_h_loop_filter16 = vc1_h_loop_filter16_sse4;
+    }
+}
