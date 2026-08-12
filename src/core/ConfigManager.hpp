@@ -66,6 +66,9 @@ public:
 
 	bool Contains(const std::string& key) const;
 	bool Remove(const std::string& key);
+	/// Restores a value registered through SetDefault. Returns false if no
+	/// application default is known for this key.
+	bool ResetToDefault(const std::string& key);
 	void Clear();
 	/// 返回所有持久化 key 列表（用于遍历数据）
 	std::vector<std::string> GetAllKeys() const;
@@ -86,6 +89,7 @@ private:
 
 	std::string filePath_;
 	std::unordered_map<std::string, Entry> entries_;
+	std::unordered_map<std::string, ConfigValue> defaults_;
 };
 
 } // namespace beiklive

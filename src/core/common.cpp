@@ -498,6 +498,9 @@ namespace beiklive
         SettingManager->SetDefault("core.azahar.audio_emulation", ConfigValue(std::string("hle")));
         SettingManager->SetDefault("core.azahar.audio_stretching", ConfigValue(0));
         SettingManager->SetDefault("core.azahar.realtime_audio", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.pause_when_menu_open", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.movie_cpu_throttle", ConfigValue(1));
+        SettingManager->SetDefault("core.azahar.movie_throttle_clock", ConfigValue(50));
 
         SettingManager->SetDefault("core.ppsspp.rendering_resolution", ConfigValue(std::string("1")));
         SettingManager->SetDefault("core.ppsspp.frameskip", ConfigValue(std::string("0")));
@@ -547,6 +550,7 @@ namespace beiklive
         SettingManager->SetDefault("core.melonds_dldi_enabled", ConfigValue(0));
         SettingManager->SetDefault("core.melonds_dldi_path", ConfigValue(std::string("")));
         SettingManager->SetDefault("core.melonds_randomize_mac", ConfigValue(0));
+        SettingManager->SetDefault("core.melonds_firmware_language", ConfigValue(-1));
 
         SettingManager->SetDefault("core.genesis.region", ConfigValue(std::string("auto")));
         SettingManager->SetDefault("core.genesis.pad_buttons", ConfigValue(6));

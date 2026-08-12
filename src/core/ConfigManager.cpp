@@ -143,6 +143,11 @@ bool ConfigManager::Save() const {
 }
 
 void ConfigManager::SetDefault(const std::string& key, const ConfigValue& value) {
+	if (key.empty()) return;
+	// Keep the declared default even when a persisted value already exists.
+	// This lets the UI restore a single setting without deleting the key and
+	// waiting for a later application restart to repopulate it.
+	defaults_[key] = value;
 	if (!Contains(key)) {
 		// brls::Logger::debug("ConfigManager::SetDefault [{}]: setting default", key);
 		Set(key, value, true);
@@ -171,6 +176,13 @@ bool ConfigManager::Contains(const std::string& key) const {
 
 bool ConfigManager::Remove(const std::string& key) {
 	return entries_.erase(key) > 0;
+}
+
+bool ConfigManager::ResetToDefault(const std::string& key) {
+	auto it = defaults_.find(key);
+	if (it == defaults_.end()) return false;
+	Set(key, it->second);
+	return true;
 }
 
 void ConfigManager::Clear() {
