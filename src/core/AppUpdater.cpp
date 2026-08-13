@@ -161,8 +161,8 @@ static bool extractUpdateFilesFromZip(const std::string& zipPath,
         ? threeDsStubPreferredIndex
         : threeDsStubFallbackIndex;
     bool mainOk = false;
-    bool stubOk = false;
-    bool threeDsStubOk = false;
+    bool stubOk = stubIndex < 0;
+    bool threeDsStubOk = threeDsStubIndex < 0;
     if (mainIndex >= 0)
         mainOk = mz_zip_reader_extract_to_file(
             &zip, static_cast<mz_uint>(mainIndex), mainNroPath.c_str(), 0);
@@ -174,6 +174,8 @@ static bool extractUpdateFilesFromZip(const std::string& zipPath,
             &zip, static_cast<mz_uint>(threeDsStubIndex), threeDsStubPath.c_str(), 0);
 
     mz_zip_reader_end(&zip);
+    // The main application is the only mandatory entry in an update package.
+    // Stubs are updated only when the package explicitly includes them.
     return mainOk && stubOk && threeDsStubOk;
 }
 
@@ -361,9 +363,17 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
         return false;
     }
 
-    // 写入 cache 目录中的 zip 包，然后解压出 update.nro
+    // 写入 cache 目录中的 zip 包，然后解压出更新文件。
+    // Remove previous extraction results first: optional stubs from an older
+    // package must never be mistaken for files contained in this package.
     std::error_code ec;
     std::filesystem::create_directories(beiklive::path::cachePath(), ec);
+    std::filesystem::remove(cacheNroPath(), ec);
+    ec.clear();
+    std::filesystem::remove(cacheNdsStubPath(), ec);
+    ec.clear();
+    std::filesystem::remove(cache3dsStubPath(), ec);
+    ec.clear();
     std::ofstream f(cacheZipPath(), std::ios::binary | std::ios::trunc);
     if (!f) return false;
     f.write(reinterpret_cast<const char*>(m_downloadedData.data()), m_downloadedData.size());
@@ -376,33 +386,37 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
         std::filesystem::remove(cacheNdsStubPath(), ec);
         std::filesystem::remove(cache3dsStubPath(), ec);
         brls::Logger::error(
-            "AppUpdater: 更新包解压失败，缺少 GBAStation.nro、GBAStationNDSStub.nro 或 "
-            "GBAStation3DSStub.nro");
+            "AppUpdater: 更新包解压失败，缺少或无法解压 GBAStation.nro（Stub 为可选文件）");
         return false;
     }
 
     std::filesystem::remove(cacheZipPath(), ec);
     m_info.fileSize = m_downloadedData.size();
 
-    brls::Logger::info("AppUpdater: 下载并解压完成 {} bytes -> {}, {}, {}",
-        m_downloadedData.size(), cacheNroPath(), cacheNdsStubPath(), cache3dsStubPath());
+    const bool hasNdsStub = std::filesystem::exists(cacheNdsStubPath(), ec);
+    ec.clear();
+    const bool has3dsStub = std::filesystem::exists(cache3dsStubPath(), ec);
+    brls::Logger::info(
+        "AppUpdater: 下载并解压完成 {} bytes -> main='{}', NDS Stub={}, 3DS Stub={}",
+        m_downloadedData.size(), cacheNroPath(), hasNdsStub ? "included" : "not included",
+        has3dsStub ? "included" : "not included");
     return true;
 }
 
 bool AppUpdater::install() {
 #ifdef __SWITCH__
-    // 校验缓存 NRO 是否存在
+    // 主程序 NRO 必须存在；更新包可以不携带任一 Stub。
     {
         std::ifstream mainNro(cacheNroPath(), std::ios::binary);
-        std::ifstream ndsStub(cacheNdsStubPath(), std::ios::binary);
-        std::ifstream threeDsStub(cache3dsStubPath(), std::ios::binary);
-        if (!mainNro.good() || !ndsStub.good() || !threeDsStub.good()) {
-            brls::Logger::error("AppUpdater: 缓存主程序、NDS Stub 或 3DS Stub 不存在");
+        if (!mainNro.good()) {
+            brls::Logger::error("AppUpdater: 缓存主程序不存在");
             return false;
         }
     }
 
-    brls::Logger::info("AppUpdater: 安装准备工作完成");
+    brls::Logger::info("AppUpdater: 安装准备工作完成（NDS Stub={}, 3DS Stub={}）",
+                       std::filesystem::exists(cacheNdsStubPath()) ? "will update" : "keep current",
+                       std::filesystem::exists(cache3dsStubPath()) ? "will update" : "keep current");
     return true;
 #else
     brls::Logger::warning("AppUpdater: NRO 安装仅在 Switch 平台可用");
@@ -419,19 +433,26 @@ bool AppUpdater::finishInstall() {
     const std::string ndsStubBackupPath = ndsStubPath + ".update_backup";
     const std::string threeDsStubBackupPath = threeDsStubPath + ".update_backup";
 
+    const bool updateNdsStub = std::filesystem::exists(cacheNdsStubPath());
+    const bool update3dsStub = std::filesystem::exists(cache3dsStubPath());
+
     romfsExit();
 
     std::error_code ec;
-    std::filesystem::create_directories(
-        std::filesystem::path(ndsStubPath).parent_path(), ec);
-    if (ec) {
-        brls::Logger::error("AppUpdater: 创建核心目录失败: {}", ec.message());
-        return false;
+    if (updateNdsStub || update3dsStub) {
+        std::filesystem::create_directories(
+            std::filesystem::path(ndsStubPath).parent_path(), ec);
+        if (ec) {
+            brls::Logger::error("AppUpdater: 创建核心目录失败: {}", ec.message());
+            return false;
+        }
     }
 
     std::remove(nroBackupPath.c_str());
-    std::remove(ndsStubBackupPath.c_str());
-    std::remove(threeDsStubBackupPath.c_str());
+    if (updateNdsStub)
+        std::remove(ndsStubBackupPath.c_str());
+    if (update3dsStub)
+        std::remove(threeDsStubBackupPath.c_str());
 
     const bool hadMainNro = std::filesystem::exists(nroPath, ec);
     ec.clear();
@@ -451,46 +472,55 @@ bool AppUpdater::finishInstall() {
         brls::Logger::error("AppUpdater: 无法备份现有主程序");
         return false;
     }
-    if (hadNdsStub && std::rename(ndsStubPath.c_str(), ndsStubBackupPath.c_str()) != 0) {
+    if (updateNdsStub && hadNdsStub &&
+        std::rename(ndsStubPath.c_str(), ndsStubBackupPath.c_str()) != 0) {
         restoreBackup(nroPath, nroBackupPath, hadMainNro);
         brls::Logger::error("AppUpdater: 无法备份现有 NDS Stub");
         return false;
     }
-    if (hadThreeDsStub &&
+    if (update3dsStub && hadThreeDsStub &&
         std::rename(threeDsStubPath.c_str(), threeDsStubBackupPath.c_str()) != 0) {
-        restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
+        if (updateNdsStub)
+            restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
         restoreBackup(nroPath, nroBackupPath, hadMainNro);
         brls::Logger::error("AppUpdater: 无法备份现有 3DS Stub");
         return false;
     }
 
-    if (std::rename(cacheNdsStubPath().c_str(), ndsStubPath.c_str()) != 0) {
-        restoreBackup(threeDsStubPath, threeDsStubBackupPath, hadThreeDsStub);
+    if (updateNdsStub && std::rename(cacheNdsStubPath().c_str(), ndsStubPath.c_str()) != 0) {
+        if (update3dsStub)
+            restoreBackup(threeDsStubPath, threeDsStubBackupPath, hadThreeDsStub);
         restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
         restoreBackup(nroPath, nroBackupPath, hadMainNro);
         brls::Logger::error("AppUpdater: NDS Stub 替换失败");
         return false;
     }
-    if (std::rename(cache3dsStubPath().c_str(), threeDsStubPath.c_str()) != 0) {
+    if (update3dsStub && std::rename(cache3dsStubPath().c_str(), threeDsStubPath.c_str()) != 0) {
         restoreBackup(threeDsStubPath, threeDsStubBackupPath, hadThreeDsStub);
-        restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
+        if (updateNdsStub)
+            restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
         restoreBackup(nroPath, nroBackupPath, hadMainNro);
         brls::Logger::error("AppUpdater: 3DS Stub 替换失败");
         return false;
     }
     if (std::rename(cacheNroPath().c_str(), nroPath.c_str()) != 0) {
-        restoreBackup(threeDsStubPath, threeDsStubBackupPath, hadThreeDsStub);
-        restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
+        if (update3dsStub)
+            restoreBackup(threeDsStubPath, threeDsStubBackupPath, hadThreeDsStub);
+        if (updateNdsStub)
+            restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);
         restoreBackup(nroPath, nroBackupPath, hadMainNro);
         brls::Logger::error("AppUpdater: 主程序 NRO 替换失败");
         return false;
     }
 
     std::remove(nroBackupPath.c_str());
-    std::remove(ndsStubBackupPath.c_str());
-    std::remove(threeDsStubBackupPath.c_str());
-    brls::Logger::info("AppUpdater: 更新文件替换完成 -> {}, {}, {}",
-                       nroPath, ndsStubPath, threeDsStubPath);
+    if (updateNdsStub)
+        std::remove(ndsStubBackupPath.c_str());
+    if (update3dsStub)
+        std::remove(threeDsStubBackupPath.c_str());
+    brls::Logger::info("AppUpdater: 更新文件替换完成 -> main='{}', NDS Stub={}, 3DS Stub={}",
+                       nroPath, updateNdsStub ? "updated" : "kept",
+                       update3dsStub ? "updated" : "kept");
     return true;
 #else
     return false;

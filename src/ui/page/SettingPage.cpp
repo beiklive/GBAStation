@@ -3369,6 +3369,18 @@ private:
             _addBinding(L("打开菜单"), L("可绑定单键或双键组合"),
                         beiklive::input_mapping::makeKey(prefix, "hotkey.menu.pad"),
                         "PAD_LT+PAD_RT");
+            _addBinding(L("快进"), L("可绑定单键或双键组合"),
+                        beiklive::input_mapping::makeKey(prefix, "handle.fastforward"),
+                        "PAD_LSB");
+            _addBinding(L("倒带"), L("可绑定单键或双键组合"),
+                        beiklive::input_mapping::makeKey(prefix, "handle.rewind"),
+                        "none");
+            _addBinding(L("快速保存"), L("可绑定单键或双键组合"),
+                        beiklive::input_mapping::makeKey(prefix, "hotkey.quicksave.pad"),
+                        "none");
+            _addBinding(L("快速读取"), L("可绑定单键或双键组合"),
+                        beiklive::input_mapping::makeKey(prefix, "hotkey.quickload.pad"),
+                        "none");
             m_mappingFocus = _firstFocusable(m_mappingItems);
             m_mappingScroll = m_mappingTargetScroll = 0.f;
             return;
@@ -3388,8 +3400,7 @@ private:
         m_mappingItems.push_back(_section(L("功能热键")));
         for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
         {
-            if ((nds && entry.hiddenOnNds) ||
-                (prefix == "3ds." && entry.hiddenOnThreeDs))
+            if (!beiklive::input_mapping::showsHotkeyForPrefix(prefix, entry, nds))
                 continue;
             _addBinding(entry.label, L("可绑定单键或双键组合"), beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
         }
@@ -3405,20 +3416,23 @@ private:
                 _addBinding(entry.label, L("右摇杆控制指针；麦克风热键再次按下可取消"), beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
             }
         }
-        m_mappingItems.push_back(_section(L("连发")));
-        _addBinding(prefix == "md." ? L("MD C 连发") : L("A 连发"),
-                    prefix == "md." ? L("按住时自动重复触发 MD C") : L("按住时自动重复触发 A"),
-                    beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey),
-                    beiklive::input_mapping::kTurboADefault);
-        _addBinding(prefix == "md." ? L("MD B 连发") : L("B 连发"),
-                    prefix == "md." ? L("按住时自动重复触发 MD B") : L("按住时自动重复触发 B"),
-                    beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey),
-                    beiklive::input_mapping::kTurboBDefault);
-        const std::vector<float> rates = {1.f, 5.f, 10.f, 15.f, 30.f};
-        m_mappingItems.push_back(_selector(L("连发速度"), L("每秒自动触发次数"), 0xE8E5,
-            {L("每秒1次"), L("每秒5次"), L("每秒10次"), L("每秒15次"), L("每秒30次")},
-            [rates]() { const float cur = GET_SETTING_KEY_FLOAT("turbo.rate", 10.f); for (int i = 0; i < 5; ++i) if (std::fabs(cur - rates[i]) < 0.01f) return i; return 2; },
-            [rates](int i) { if (i >= 0 && i < 5) SET_SETTING_KEY_FLOAT("turbo.rate", rates[i]); }));
+        if (beiklive::input_mapping::showsTurboBindingsForPrefix(prefix))
+        {
+            m_mappingItems.push_back(_section(L("连发")));
+            _addBinding(prefix == "md." ? L("MD C 连发") : L("A 连发"),
+                        prefix == "md." ? L("按住时自动重复触发 MD C") : L("按住时自动重复触发 A"),
+                        beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey),
+                        beiklive::input_mapping::kTurboADefault);
+            _addBinding(prefix == "md." ? L("MD B 连发") : L("B 连发"),
+                        prefix == "md." ? L("按住时自动重复触发 MD B") : L("按住时自动重复触发 B"),
+                        beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey),
+                        beiklive::input_mapping::kTurboBDefault);
+            const std::vector<float> rates = {1.f, 5.f, 10.f, 15.f, 30.f};
+            m_mappingItems.push_back(_selector(L("连发速度"), L("每秒自动触发次数"), 0xE8E5,
+                {L("每秒1次"), L("每秒5次"), L("每秒10次"), L("每秒15次"), L("每秒30次")},
+                [rates]() { const float cur = GET_SETTING_KEY_FLOAT("turbo.rate", 10.f); for (int i = 0; i < 5; ++i) if (std::fabs(cur - rates[i]) < 0.01f) return i; return 2; },
+                [rates](int i) { if (i >= 0 && i < 5) SET_SETTING_KEY_FLOAT("turbo.rate", rates[i]); }));
+        }
         m_mappingFocus = _firstFocusable(m_mappingItems);
         m_mappingScroll = m_mappingTargetScroll = 0.f;
     }
@@ -5010,8 +5024,7 @@ namespace
         box->addView(makeHeader(L("功能热键绑定")));
         for (const auto& entry : beiklive::input_mapping::kHotkeyDefaults)
         {
-            if ((nds && entry.hiddenOnNds) ||
-                (prefix == "3ds." && entry.hiddenOnThreeDs))
+            if (!beiklive::input_mapping::showsHotkeyForPrefix(prefix, entry, nds))
                 continue;
             std::string cfgKey = beiklive::input_mapping::makeKey(prefix, entry.key);
             auto* cell = new beiklive::DetailCell();
@@ -5039,38 +5052,41 @@ namespace
             box->addView(makeHint(L("模拟麦克风输入：按下热键后持续输入静态噪声，再按一次取消")));
         }
 
-        box->addView(makeHeader(L("连发按键绑定")));
+        if (beiklive::input_mapping::showsTurboBindingsForPrefix(prefix))
         {
-            std::string cfgKey = beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey);
-            auto* cell = new beiklive::DetailCell();
-            cell->setLeftText(L("A 连发"));
-            cell->setRightText(cfgGetStr(cfgKey, beiklive::input_mapping::kTurboADefault));
-            registerKeyBindActions(cell, cfgKey);
-            box->addView(cell);
-        }
-        {
-            std::string cfgKey = beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey);
-            auto* cell = new beiklive::DetailCell();
-            cell->setLeftText(L("B 连发"));
-            cell->setRightText(cfgGetStr(cfgKey, beiklive::input_mapping::kTurboBDefault));
-            registerKeyBindActions(cell, cfgKey);
-            box->addView(cell);
-        }
-        {
-            std::vector<std::string> rates = {L("每秒1次"), L("每秒5次"), L("每秒10次"), L("每秒15次"), L("每秒30次")};
-            static const float rateVals[] = {1.0f, 5.0f, 10.0f, 15.0f, 30.0f};
-            float curRate = GET_SETTING_KEY_FLOAT("turbo.rate", 10.0f);
-            int idx = 2;
-            for (int i = 0; i < 5; ++i)
-                if (rateVals[i] == curRate) { idx = i; break; }
-            auto* rateCell = new brls::SelectorCell();
-            rateCell->init(L("连发速度"), rates, idx,
-                           [](int i) {
-                               if (i >= 0 && i < 5)
-                                   SET_SETTING_KEY_FLOAT("turbo.rate", rateVals[i]);
-                           });
-            box->addView(rateCell);
-            box->addView(makeHint(L("按住连发按键时每秒触发的次数，次数越高反应越快")));
+            box->addView(makeHeader(L("连发按键绑定")));
+            {
+                std::string cfgKey = beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboAKey);
+                auto* cell = new beiklive::DetailCell();
+                cell->setLeftText(L("A 连发"));
+                cell->setRightText(cfgGetStr(cfgKey, beiklive::input_mapping::kTurboADefault));
+                registerKeyBindActions(cell, cfgKey);
+                box->addView(cell);
+            }
+            {
+                std::string cfgKey = beiklive::input_mapping::makeKey(prefix, beiklive::input_mapping::kTurboBKey);
+                auto* cell = new beiklive::DetailCell();
+                cell->setLeftText(L("B 连发"));
+                cell->setRightText(cfgGetStr(cfgKey, beiklive::input_mapping::kTurboBDefault));
+                registerKeyBindActions(cell, cfgKey);
+                box->addView(cell);
+            }
+            {
+                std::vector<std::string> rates = {L("每秒1次"), L("每秒5次"), L("每秒10次"), L("每秒15次"), L("每秒30次")};
+                static const float rateVals[] = {1.0f, 5.0f, 10.0f, 15.0f, 30.0f};
+                float curRate = GET_SETTING_KEY_FLOAT("turbo.rate", 10.0f);
+                int idx = 2;
+                for (int i = 0; i < 5; ++i)
+                    if (rateVals[i] == curRate) { idx = i; break; }
+                auto* rateCell = new brls::SelectorCell();
+                rateCell->init(L("连发速度"), rates, idx,
+                               [](int i) {
+                                   if (i >= 0 && i < 5)
+                                       SET_SETTING_KEY_FLOAT("turbo.rate", rateVals[i]);
+                               });
+                box->addView(rateCell);
+                box->addView(makeHint(L("按住连发按键时每秒触发的次数，次数越高反应越快")));
+            }
         }
 
         scroll->setContentView(box);

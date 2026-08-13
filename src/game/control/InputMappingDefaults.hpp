@@ -91,6 +91,38 @@ namespace beiklive::input_mapping
     inline constexpr const char* kTurboADefault = "none";
     inline constexpr const char* kTurboBDefault = "none";
 
+    inline bool showsHotkeyForPrefix(const std::string& prefix,
+                                     const HotkeyDefault& entry,
+                                     bool nds)
+    {
+        if ((nds && entry.hiddenOnNds) ||
+            (prefix == "3ds." && entry.hiddenOnThreeDs))
+            return false;
+
+        if (prefix == "arcade.")
+        {
+            return std::string(entry.key) == "handle.fastforward" ||
+                   std::string(entry.key) == "handle.rewind" ||
+                   std::string(entry.key) == "hotkey.quicksave.pad" ||
+                   std::string(entry.key) == "hotkey.quickload.pad" ||
+                   std::string(entry.key) == "hotkey.menu.pad";
+        }
+
+        if (prefix == "dc." || prefix == "psp.")
+        {
+            return std::string(entry.key) != "hotkey.screenshot.pad" &&
+                   std::string(entry.key) != "hotkey.mute.pad" &&
+                   std::string(entry.key) != "hotkey.pause.pad";
+        }
+
+        return true;
+    }
+
+    inline bool showsTurboBindingsForPrefix(const std::string& prefix)
+    {
+        return prefix != "arcade." && prefix != "dc." && prefix != "psp.";
+    }
+
     inline bool usesLegacyGbFamilyFallback(const std::string& prefix)
     {
         return prefix == "gbc." || prefix == "gb.";
