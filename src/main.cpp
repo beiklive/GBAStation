@@ -426,7 +426,7 @@ int main(int argc, char* argv[]) {
 	auto* audioPlayer = new beiklive::BKAudioPlayer();
 	brls::Application::setAudioPlayer(audioPlayer);
 
-	brls::Application::getPlatform()->setThemeVariant(brls::ThemeVariant::DARK);
+	beiklive::ApplyUiTheme();
 	beiklive::RegisterStyles();
 	beiklive::RegisterThemes();
 

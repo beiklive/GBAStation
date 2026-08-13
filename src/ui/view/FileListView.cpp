@@ -191,7 +191,7 @@ void FileListView::draw(NVGcontext* vg, float x, float y, float w, float h,
 
     loadVisibleIcons(vg, first, last);
 
-    NVGcolor textColor = GET_THEME_COLOR("brls/text");
+    NVGcolor textColor = uiTextPrimary();
 
     for (int i = first; i < last; i++) {
         float itemY = y + i * m_itemHeight - m_scrollY;
@@ -331,7 +331,7 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemX, float itemY,
     nvgBeginPath(vg);
     nvgMoveTo(vg, textX, itemY + m_itemHeight - 1.f);
     nvgLineTo(vg, rowX + rowW - 18.f, itemY + m_itemHeight - 1.f);
-    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 18));
+    nvgStrokeColor(vg, uiDivider());
     nvgStrokeWidth(vg, 1.f);
     nvgStroke(vg);
 }
@@ -345,7 +345,7 @@ void FileListView::drawScrollbar(NVGcontext* vg, float x, float y, float w, floa
 
     nvgBeginPath(vg);
     nvgRoundedRect(vg, x - 6.f, barY, 3.f, barH, 1.5f);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 90));
+    nvgFillColor(vg, uiTextMuted(0.70f));
     nvgFill(vg);
 }
 

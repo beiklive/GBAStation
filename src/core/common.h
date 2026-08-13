@@ -62,9 +62,34 @@ namespace beiklive // 全局变量 动态背景
         OceanBlue,     // 海洋蓝
         SakuraPink,    // 樱花粉
         VscodeBlack,     // VSCode 黑
+        AuroraTeal,      // 极光青
+        RoyalPurple,     // 皇家紫
+        SunsetOrange,    // 日落橙
+        Graphite,        // 石墨灰
+        CloudWhite,      // 云雾白
     };
 
     extern GradientTheme g_gradientTheme;
+
+    enum class UiThemeMode
+    {
+        Dark,
+        Light,
+    };
+
+    // Semantic foreground colors for NanoVG-based pages. Use these instead of
+    // hard-coded white/black values so custom backgrounds remain readable.
+    UiThemeMode getUiThemeMode();
+    NVGcolor uiTextPrimary(float alpha = 1.0f);
+    NVGcolor uiTextSecondary(float alpha = 1.0f);
+    NVGcolor uiTextMuted(float alpha = 1.0f);
+    NVGcolor uiIconPrimary(float alpha = 1.0f);
+    NVGcolor uiDivider(float alpha = 1.0f);
+    NVGcolor uiSurface(float alpha = 1.0f);
+    NVGcolor uiContentOverlay();
+    NVGcolor uiAccent(float alpha = 1.0f);
+    void ApplyUiTheme();
+    GradientTheme gradientThemeFromId(const std::string& id);
 
 }
 

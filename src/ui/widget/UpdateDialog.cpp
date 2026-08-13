@@ -17,7 +17,7 @@ brls::Box* buildUpdateDialogContent(const std::string& title, const std::string&
     auto* titleLabel = new brls::Label();
     titleLabel->setText(title);
     titleLabel->setFontSize(26.f);
-    titleLabel->setTextColor(nvgRGB(255, 255, 255));
+    titleLabel->setTextColor(beiklive::uiTextPrimary());
     titleLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
     titleLabel->setSingleLine(false);
     titleLabel->setMarginBottom(18.f);
@@ -34,7 +34,7 @@ brls::Box* buildUpdateDialogContent(const std::string& title, const std::string&
     bodyLabel->setText(body);
     bodyLabel->setFontSize(16.f);
     bodyLabel->setWidthPercentage(100.f);
-    bodyLabel->setTextColor(nvgRGBA(200, 200, 210, 255));
+    bodyLabel->setTextColor(beiklive::uiTextSecondary());
     bodyLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
     bodyLabel->setSingleLine(false);
     bodyLabel->setIsWrapping(true);

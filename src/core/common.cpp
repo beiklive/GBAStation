@@ -229,6 +229,130 @@ namespace beiklive
 
     GradientTheme g_gradientTheme = GradientTheme::Midnight;
 
+    namespace
+    {
+        unsigned char uiAlpha(float alpha)
+        {
+            return static_cast<unsigned char>(std::max(0.0f, std::min(alpha, 1.0f)) * 255.0f);
+        }
+
+        bool useLightForeground()
+        {
+        const std::string foreground = GET_SETTING_KEY_STR(
+            SettingKey::KEY_UI_FOREGROUND_MODE, "auto");
+            if (foreground == "light")
+                return true;
+            if (foreground == "dark")
+                return false;
+            if (foreground == "highContrast")
+                return getUiThemeMode() == UiThemeMode::Dark;
+            return getUiThemeMode() == UiThemeMode::Dark;
+        }
+    }
+
+    UiThemeMode getUiThemeMode()
+    {
+        return GET_SETTING_KEY_STR(SettingKey::KEY_UI_THEME, "dark") == "light"
+            ? UiThemeMode::Light
+            : UiThemeMode::Dark;
+    }
+
+    NVGcolor uiTextPrimary(float alpha)
+    {
+        const bool highContrast = GET_SETTING_KEY_STR(
+            SettingKey::KEY_UI_FOREGROUND_MODE, "auto") == "highContrast";
+        if (useLightForeground())
+            return nvgRGBA(248, 250, 252, uiAlpha(alpha));
+        return highContrast
+            ? nvgRGBA(0, 0, 0, uiAlpha(alpha))
+            : nvgRGBA(15, 23, 42, uiAlpha(alpha));
+    }
+
+    NVGcolor uiTextSecondary(float alpha)
+    {
+        return useLightForeground()
+            ? nvgRGBA(203, 213, 225, uiAlpha(alpha))
+            : nvgRGBA(55, 65, 81, uiAlpha(alpha));
+    }
+
+    NVGcolor uiTextMuted(float alpha)
+    {
+        return useLightForeground()
+            ? nvgRGBA(148, 163, 184, uiAlpha(alpha))
+            : nvgRGBA(75, 85, 99, uiAlpha(alpha));
+    }
+
+    NVGcolor uiIconPrimary(float alpha) { return uiTextPrimary(alpha); }
+
+    NVGcolor uiDivider(float alpha)
+    {
+        return useLightForeground()
+            ? nvgRGBA(255, 255, 255, uiAlpha(alpha * 0.24f))
+            : nvgRGBA(15, 23, 42, uiAlpha(alpha * 0.20f));
+    }
+
+    NVGcolor uiSurface(float alpha)
+    {
+        return useLightForeground()
+            ? nvgRGBA(12, 18, 32, uiAlpha(alpha))
+            : nvgRGBA(255, 255, 255, uiAlpha(alpha));
+    }
+
+    NVGcolor uiContentOverlay()
+    {
+        const std::string strength = GET_SETTING_KEY_STR(
+            SettingKey::KEY_UI_READABILITY_OVERLAY, "auto");
+        float alpha = 0.0f;
+        if (strength == "weak") alpha = 0.18f;
+        else if (strength == "standard") alpha = 0.34f;
+        else if (strength == "strong") alpha = 0.50f;
+        else if (strength == "auto") alpha = getUiThemeMode() == UiThemeMode::Dark ? 0.30f : 0.20f;
+        if (strength == "off")
+            return nvgRGBA(0, 0, 0, 0);
+        return useLightForeground()
+            ? nvgRGBA(3, 7, 18, uiAlpha(alpha))
+            : nvgRGBA(255, 255, 255, uiAlpha(alpha));
+    }
+
+    NVGcolor uiAccent(float alpha)
+    {
+        return getUiThemeMode() == UiThemeMode::Dark
+            ? nvgRGBA(79, 193, 255, uiAlpha(alpha))
+            : nvgRGBA(0, 102, 204, uiAlpha(alpha));
+    }
+
+    void ApplyUiTheme()
+    {
+        const bool light = getUiThemeMode() == UiThemeMode::Light;
+        auto& theme = light ? brls::Theme::getLightTheme() : brls::Theme::getDarkTheme();
+        theme.addColor("brls/text", uiTextPrimary());
+        theme.addColor("brls/text_disabled", uiTextMuted());
+        theme.addColor("brls/applet_frame/separator", uiDivider());
+        theme.addColor("brls/sidebar/background", uiSurface(light ? 0.88f : 0.58f));
+        theme.addColor("beiklive/CardText/color", uiTextPrimary());
+        theme.addColor("beiklive/sidePanel", uiSurface(light ? 0.92f : 0.72f));
+        theme.addColor("beiklive/subtitle", uiTextSecondary(0.80f));
+        theme.addColor("beiklive/line", uiDivider());
+        brls::Application::getPlatform()->setThemeVariant(
+            light ? brls::ThemeVariant::LIGHT : brls::ThemeVariant::DARK);
+    }
+
+    GradientTheme gradientThemeFromId(const std::string& id)
+    {
+        if (id == "LemonYellow") return GradientTheme::LemonYellow;
+        if (id == "AvocadoGreen") return GradientTheme::AvocadoGreen;
+        if (id == "StrawberryRed") return GradientTheme::StrawberryRed;
+        if (id == "OceanBlue") return GradientTheme::OceanBlue;
+        if (id == "SakuraPink") return GradientTheme::SakuraPink;
+        if (id == "AuroraTeal") return GradientTheme::AuroraTeal;
+        if (id == "RoyalPurple") return GradientTheme::RoyalPurple;
+        if (id == "SunsetOrange") return GradientTheme::SunsetOrange;
+        if (id == "Graphite") return GradientTheme::Graphite;
+        if (id == "CloudWhite") return GradientTheme::CloudWhite;
+        if (id == "VscodeBlack") return GradientTheme::VscodeBlack;
+        return GradientTheme::Midnight;
+    }
+
     void GetGradientColors(NVGcolor &top, NVGcolor &bottom)
     {
         switch (g_gradientTheme)
@@ -256,6 +380,26 @@ namespace beiklive
         case GradientTheme::VscodeBlack:
             top = nvgRGBA(118, 118, 118, 128);
             bottom = nvgRGBA(12, 12, 12, 128);
+            break;
+        case GradientTheme::AuroraTeal:
+            top = nvgRGBA(45, 212, 191, 128);
+            bottom = nvgRGBA(12, 74, 110, 128);
+            break;
+        case GradientTheme::RoyalPurple:
+            top = nvgRGBA(124, 58, 237, 128);
+            bottom = nvgRGBA(49, 20, 92, 128);
+            break;
+        case GradientTheme::SunsetOrange:
+            top = nvgRGBA(251, 146, 60, 128);
+            bottom = nvgRGBA(190, 24, 93, 128);
+            break;
+        case GradientTheme::Graphite:
+            top = nvgRGBA(71, 85, 105, 128);
+            bottom = nvgRGBA(15, 23, 42, 128);
+            break;
+        case GradientTheme::CloudWhite:
+            top = nvgRGBA(241, 245, 249, 180);
+            bottom = nvgRGBA(186, 230, 253, 180);
             break;
         case GradientTheme::Midnight:
         default:
@@ -359,6 +503,9 @@ namespace beiklive
         SettingManager->SetDefault(KEY_UI_PICO8_SHORTCUT_VISIBLE, ConfigValue(1));
         SettingManager->SetDefault(KEY_UI_SHOW_SHADER, ConfigValue(1));
         SettingManager->SetDefault(KEY_UI_GRADIENT_THEME, ConfigValue(std::string("VscodeBlack")));
+        SettingManager->SetDefault(KEY_UI_THEME, ConfigValue(std::string("dark")));
+        SettingManager->SetDefault(KEY_UI_FOREGROUND_MODE, ConfigValue(std::string("auto")));
+        SettingManager->SetDefault(KEY_UI_READABILITY_OVERLAY, ConfigValue(std::string("auto")));
         SettingManager->SetDefault(KEY_UI_LANGUAGE, ConfigValue(std::string("zh-CN")));
 
         // 遮罩设置

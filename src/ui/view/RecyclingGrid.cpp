@@ -1883,7 +1883,7 @@ float GameGridView::_drawBadge(NVGcontext* vg, const GridDrawItem& item, float x
     nvgFill(vg);
 
     nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
+    nvgFillColor(vg, beiklive::uiTextPrimary());
     nvgText(vg, x + badgeW * 0.5f, y + badgeH * 0.5f, item.badgeText.c_str(), nullptr);
     return badgeW;
 }
@@ -1893,7 +1893,7 @@ void GameGridView::_drawTitle(NVGcontext* vg, const GridDrawItem& item, float x,
     nvgFontSize(vg, m_titleFontSize);
     nvgFontFaceId(vg, m_fontId);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 255));
+    nvgFillColor(vg, beiklive::uiTextPrimary());
 
     nvgSave(vg);
     nvgIntersectScissor(vg, x, y - 3.f, maxWidth, m_titleFontSize + 6.f);
@@ -1915,7 +1915,7 @@ void GameGridView::_drawSubText(NVGcontext* vg, const std::string& text, float x
     nvgFontSize(vg, 14.f);
     nvgFontFaceId(vg, m_fontId);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-    nvgFillColor(vg, nvgRGBA(145, 151, 165, 255));
+    nvgFillColor(vg, beiklive::uiTextSecondary());
 
     nvgSave(vg);
     nvgIntersectScissor(vg, x, y - 2.f, std::max(1.f, maxWidth), 22.f);
@@ -2093,7 +2093,7 @@ void GameGridView::_drawLaunchOverlay(NVGcontext* vg, float x, float y,
     nvgFontFaceId(vg, m_fontId);
     nvgFontSize(vg, 28.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
+    nvgFillColor(vg, beiklive::uiTextPrimary(0.96f));
     nvgSave(vg);
     nvgIntersectScissor(vg, infoX, targetY + launchFloatY + 48.f,
                         std::max(1.f, infoW), 72.f);
@@ -2105,7 +2105,7 @@ void GameGridView::_drawLaunchOverlay(NVGcontext* vg, float x, float y,
     std::string launching = L("启动中") + std::string(static_cast<size_t>(dotCount), '.');
     nvgFontSize(vg, 18.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(vg, nvgRGBA(215, 221, 232, 225));
+    nvgFillColor(vg, beiklive::uiTextSecondary(0.90f));
     nvgText(vg, infoX, targetY + launchFloatY + targetH - 82.f,
             launching.c_str(), nullptr);
 
@@ -2233,19 +2233,18 @@ void GameGridView::_drawToolbar(NVGcontext* vg, float x, float y, float w)
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 17.f + 5.f * prominence);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255,
-                static_cast<unsigned char>(255.f * alpha)));
+            nvgFillColor(vg, beiklive::uiTextPrimary(alpha));
             nvgText(vg, labelX, centerY,
                     m_platformLabels[static_cast<size_t>(index)].c_str(), nullptr);
         }
     }
 
     _drawSwitchButton(vg, brls::BUTTON_Y, x + w - 145.f, y + 35.f,
-                      23.f, nvgRGBA(255, 255, 255, 240));
+                      23.f, beiklive::uiIconPrimary(0.94f));
     nvgFontFaceId(vg, m_fontId);
     nvgFontSize(vg, 22.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 220));
+    nvgFillColor(vg, beiklive::uiTextPrimary(0.86f));
     nvgText(vg, x + w - 128.f, y + 35.f,
             m_viewMode == ViewMode::GRID ? L("切换为列表").c_str() : L("切换为网格").c_str(), nullptr);
 
@@ -2266,7 +2265,7 @@ void GameGridView::_drawToolbar(NVGcontext* vg, float x, float y, float w)
     nvgBeginPath(vg);
     nvgMoveTo(vg, dividerX, dividerY);
     nvgLineTo(vg, dividerX + dividerW, dividerY);
-    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 48));
+    nvgStrokeColor(vg, beiklive::uiDivider());
     nvgStrokeWidth(vg, 1.f);
     nvgStroke(vg);
 }
@@ -2289,17 +2288,17 @@ void GameGridView::_drawHint(NVGcontext* vg, float x, float y,
                              const std::string& label, int secondButton)
 {
     _drawSwitchButton(vg, button, x + 17.f, y, 30.f,
-                      nvgRGBA(255, 255, 255, 245));
+                      beiklive::uiIconPrimary(0.96f));
     float labelX = x + 38.f;
     if (secondButton >= 0) {
         _drawSwitchButton(vg, static_cast<brls::ControllerButton>(secondButton),
-                          x + 47.f, y, 30.f, nvgRGBA(255, 255, 255, 245));
+                          x + 47.f, y, 30.f, beiklive::uiIconPrimary(0.96f));
         labelX = x + 69.f;
     }
     nvgFontFaceId(vg, m_fontId);
     nvgFontSize(vg, 22.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 225));
+    nvgFillColor(vg, beiklive::uiTextPrimary(0.88f));
     nvgText(vg, labelX, y, label.c_str(), nullptr);
 }
 
@@ -2405,7 +2404,7 @@ void GameGridView::_drawDetailsPanel(NVGcontext* vg, float x, float y,
     nvgFontFaceId(vg, m_fontId);
     nvgFontSize(vg, 25.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 250));
+    nvgFillColor(vg, beiklive::uiTextPrimary(0.98f));
     nvgText(vg, x + pad, infoTop + 21.f, item.title.c_str(), nullptr);
     nvgRestore(vg);
 
@@ -2419,14 +2418,14 @@ void GameGridView::_drawDetailsPanel(NVGcontext* vg, float x, float y,
     nvgBeginPath(vg);
     nvgMoveTo(vg, x + pad, dividerY);
     nvgLineTo(vg, x + w - pad, dividerY);
-    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 52));
+    nvgStrokeColor(vg, beiklive::uiDivider());
     nvgStrokeWidth(vg, 1.f);
     nvgStroke(vg);
 
     nvgFontFaceId(vg, m_fontId);
     nvgFontSize(vg, 16.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255, 180));
+    nvgFillColor(vg, beiklive::uiTextSecondary(0.88f));
     nvgText(vg, x + pad, dividerY + 24.f, L("封面预览").c_str(), nullptr);
     _drawImage(vg, item, x + pad, dividerY + 43.f,
                w - pad * 2.f, y + h - 18.f - (dividerY + 43.f));

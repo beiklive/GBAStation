@@ -39,6 +39,11 @@ void RegisterThemes()
     ADD_THEME_COLOR("brls/button/default_enabled_background", nvgRGBA(255, 255, 255, 0));
     ADD_THEME_COLOR("brls/button/default_disabled_background", nvgRGBA(255, 255, 255, 0));
 
+    // RegisterThemes runs before the first page is created. Apply the
+    // persisted semantic scheme afterwards so Borealis and self-drawn views
+    // share the same foreground contrast policy.
+    ApplyUiTheme();
+
 
 
 

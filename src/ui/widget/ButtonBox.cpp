@@ -75,7 +75,7 @@ namespace beiklive
         m_materialIcon->setWidth(30.f);
         m_materialIcon->setHeight(30.f);
         m_materialIcon->setFontSize(28.f);
-        m_materialIcon->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_materialIcon->setTextColor(uiIconPrimary());
         m_materialIcon->setHorizontalAlign(brls::HorizontalAlign::CENTER);
         m_materialIcon->setVerticalAlign(brls::VerticalAlign::CENTER);
         m_materialIcon->setMarginLeft(5.f);
@@ -90,6 +90,7 @@ namespace beiklive
         m_label->setMarginTop(4.f);
         m_label->setVerticalAlign(brls::VerticalAlign::BOTTOM);
         m_label->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+        m_label->setTextColor(uiTextPrimary());
         this->addView(m_label);
 
         addGestureRecognizer(new brls::TapGestureRecognizer(this));

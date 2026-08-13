@@ -19,7 +19,7 @@ namespace beiklive
         this->setPaddingRight(GET_STYLE("brls/applet_frame/header_padding_sides"));
         this->setPaddingLeft(GET_STYLE("brls/applet_frame/header_padding_sides"));
     
-        this->setLineColor(GET_THEME_COLOR("brls/applet_frame/separator"));
+        this->setLineColor(uiDivider());
         this->setLineBottom(1.f);
         
     
@@ -28,7 +28,7 @@ namespace beiklive
         m_titleBox->setMarginRight(GET_STYLE("brls/applet_frame/header_image_title_spacing"));
         m_titleBox->setHeight(FontSize+5);
         m_titleLabel = new brls::Label();
-        m_titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_titleLabel->setTextColor(uiTextPrimary());
         m_titleLabel->setFontSize(FontSize+5);
         m_titleLabel->setWidth(FontSize*4.5f);
         m_titleBox->addView(m_titleLabel);
@@ -46,7 +46,7 @@ namespace beiklive
         m_pathLabel->setSingleLine(true);
         m_pathLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
         m_pathLabel->setFontSize(FontSize/2);
-        m_pathLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_pathLabel->setTextColor(uiTextSecondary());
     
         m_subtitleBox->addView(m_pathLabel);
         this->addView(m_subtitleBox);
@@ -55,7 +55,7 @@ namespace beiklive
     
         m_infoLabel = new brls::Label();
         m_infoLabel->setFontSize(FontSize);
-        m_infoLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_infoLabel->setTextColor(uiTextSecondary());
         this->addView(m_infoLabel);
     
     }

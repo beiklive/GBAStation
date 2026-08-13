@@ -173,6 +173,8 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_UI_START_PAGE         = "UI.startPage";              // 起始页面
     constexpr const char *KEY_UI_LANGUAGE           = "UI.language";               // 语言
     constexpr const char *KEY_UI_THEME              = "UI.theme";                  // 主题
+    constexpr const char *KEY_UI_FOREGROUND_MODE    = "UI.foregroundMode";         // 自绘文字与图标前景色
+    constexpr const char *KEY_UI_READABILITY_OVERLAY = "UI.readabilityOverlay";    // 内容区可读性遮罩
 
     // UI 背景图片设置
     constexpr const char *KEY_UI_SHOW_BG_IMAGE      = "UI.showBgImage";            ///< 是否显示背景图片

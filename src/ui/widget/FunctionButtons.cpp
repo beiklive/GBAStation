@@ -23,7 +23,7 @@ SwitchButton::SwitchButton()
 
     m_label = new brls::Label();
     m_label->setFontSize(20.f);
-    m_label->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_label->setTextColor(uiTextPrimary());
     m_label->setFocusable(false);
 
     m_image = new brls::Image();
@@ -74,7 +74,7 @@ SelectorButton::SelectorButton()
 
     m_label = new brls::Label();
     m_label->setFontSize(20.f);
-    m_label->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_label->setTextColor(uiTextPrimary());
     m_label->setFocusable(false);
 
     auto* rightBox = new brls::Box(brls::Axis::ROW);
@@ -83,21 +83,21 @@ SelectorButton::SelectorButton()
 
     m_arrowLeft = new brls::Label();
     m_arrowLeft->setFontSize(22.f);
-    m_arrowLeft->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_arrowLeft->setTextColor(uiIconPrimary());
     m_arrowLeft->setText("\uE0E4");
     m_arrowLeft->setFocusable(false);
     m_arrowLeft->setMarginRight(8.f);
 
     m_valueLabel = new brls::Label();
     m_valueLabel->setFontSize(20.f);
-    m_valueLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_valueLabel->setTextColor(uiTextPrimary());
     m_valueLabel->setFocusable(false);
     m_valueLabel->setWidth(160.f);
     m_valueLabel->setHorizontalAlign(brls::HorizontalAlign::CENTER);
 
     m_arrowRight = new brls::Label();
     m_arrowRight->setFontSize(22.f);
-    m_arrowRight->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_arrowRight->setTextColor(uiIconPrimary());
     m_arrowRight->setText("\uE0E5");
     m_arrowRight->setFocusable(false);
     m_arrowRight->setMarginLeft(8.f);
@@ -190,12 +190,12 @@ NumberButton::NumberButton()
 
     m_label = new brls::Label();
     m_label->setFontSize(20.f);
-    m_label->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_label->setTextColor(uiTextPrimary());
     m_label->setFocusable(false);
 
     m_valueLabel = new brls::Label();
     m_valueLabel->setFontSize(20.f);
-    m_valueLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+    m_valueLabel->setTextColor(uiTextPrimary());
     m_valueLabel->setFocusable(false);
     m_valueLabel->setHorizontalAlign(brls::HorizontalAlign::RIGHT);
     updateValue();

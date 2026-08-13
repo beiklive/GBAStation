@@ -1358,13 +1358,7 @@ beiklive::enums::FileType platformToFileType(int platform)
         this->showShader(enableShader);
         if (enableShader) {
             std::string themeStr = GET_SETTING_KEY_STR(beiklive::SettingKey::KEY_UI_GRADIENT_THEME, "VscodeBlack");
-            if (themeStr == "Midnight")           this->setGradientTheme(GradientTheme::Midnight);
-            else if (themeStr == "LemonYellow")   this->setGradientTheme(GradientTheme::LemonYellow);
-            else if (themeStr == "AvocadoGreen")  this->setGradientTheme(GradientTheme::AvocadoGreen);
-            else if (themeStr == "StrawberryRed") this->setGradientTheme(GradientTheme::StrawberryRed);
-            else if (themeStr == "OceanBlue")     this->setGradientTheme(GradientTheme::OceanBlue);
-            else if (themeStr == "SakuraPink")    this->setGradientTheme(GradientTheme::SakuraPink);
-            else                                   this->setGradientTheme(GradientTheme::VscodeBlack);
+            this->setGradientTheme(gradientThemeFromId(themeStr));
         }
         // 重新读取背景图片配置
         bool enableBg = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
@@ -1374,6 +1368,7 @@ beiklive::enums::FileType platformToFileType(int platform)
             if (!bgPath.empty())
                 this->setBackgroundImage(bgPath);
         }
+        ApplyUiTheme();
         if (switchLayout) {
             switchLayout->setPico8ShortcutVisible(
                 GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_PICO8_SHORTCUT_VISIBLE, 1) != 0);

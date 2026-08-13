@@ -13,12 +13,12 @@ namespace beiklive
         this->setHeight(60.f);
         this->setPadding(12.f, 20.f, 12.f, 20.f);
         this->setLineBottom(1.f);
-        this->setLineColor(nvgRGBA(255, 255, 255, 20));
+        this->setLineColor(uiDivider());
 
         // ── 左侧 Label ──
         m_leftLabel = new brls::Label();
         m_leftLabel->setFontSize(20.f);
-        m_leftLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        m_leftLabel->setTextColor(uiTextPrimary());
         m_leftLabel->setGrow(1.f);
         m_leftLabel->setSingleLine(true);
         m_leftLabel->setAnimated(true);
@@ -86,7 +86,7 @@ namespace beiklive
         auto* lbl = new brls::Label();
         lbl->setText(text);
         lbl->setFontSize(16.f);
-        lbl->setTextColor(GET_THEME_COLOR("brls/text"));
+        lbl->setTextColor(uiTextSecondary());
         lbl->setSingleLine(true);
         lbl->setFocusable(false);
         lbl->setMarginLeft(8.f);

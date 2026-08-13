@@ -104,12 +104,12 @@ public:
         nvgFontFaceId(vg, m_font);
         nvgFontSize(vg, 20.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(240, 244, 249, 235));
+        nvgFillColor(vg, uiTextPrimary(0.92f));
         nvgText(vg, x + 18.f, y + 29.f, m_title.c_str(), nullptr);
         nvgBeginPath(vg);
         nvgMoveTo(vg, x + 18.f, y + 52.f);
         nvgLineTo(vg, x + w - 6.f, y + 52.f);
-        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 30));
+        nvgStrokeColor(vg, uiDivider());
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
     }
@@ -124,7 +124,7 @@ static brls::Label* makeHint(const std::string& text)
     auto* label = new brls::Label();
     label->setText(text);
     label->setFontSize(14.f);
-    label->setTextColor(nvgRGBA(195, 203, 215, 175));
+    label->setTextColor(uiTextSecondary(0.80f));
     label->setMarginTop(4.f);
     label->setMarginBottom(10.f);
     label->setMarginLeft(16.f);
@@ -937,12 +937,12 @@ private:
         nvgFontFaceId(vg, m_switchFont);
         nvgFontSize(vg, 25.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
+        nvgFillColor(vg, uiIconPrimary(0.96f));
         nvgText(vg, cursor + 13.f, y, glyph.c_str(), nullptr);
         nvgFontFaceId(vg, m_font);
         nvgFontSize(vg, 18.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(230, 234, 241, 225));
+        nvgFillColor(vg, uiTextPrimary(0.88f));
         nvgText(vg, cursor + 30.f, y, label, nullptr);
         cursor -= 16.f;
     }
@@ -1287,6 +1287,7 @@ struct NanoSettingsHost
 {
     std::function<void(bool)> showShader;
     std::function<void(GradientTheme)> setGradientTheme;
+    std::function<void()> applyUiTheme;
     std::function<void(bool)> showBackground;
     std::function<void(const std::string&)> setBackgroundImage;
     std::function<void()> close;
@@ -1689,18 +1690,49 @@ private:
         emulator.push_back(_toggle(L("动态渐变背景"), L("显示与主页一致的动态背景"), 0xE3B7,
             []() { return cfgGetBool(KEY_UI_SHOW_SHADER, false); },
             [this](bool v) { cfgSetBool(KEY_UI_SHOW_SHADER, v); if (m_host.showShader) m_host.showShader(v); }));
-        const std::vector<std::string> themeLabels = {L("深夜蓝"), L("柠檬黄"), L("牛油果绿"), L("草莓红"), L("海洋蓝"), L("樱花粉"), L("VSCode黑")};
-        const std::vector<std::string> themeValues = {"Midnight", "LemonYellow", "AvocadoGreen", "StrawberryRed", "OceanBlue", "SakuraPink", "VscodeBlack"};
+        emulator.push_back(_selector(L("颜色主题"), L("控制原生控件及自绘界面的深色或浅色基调"), 0xE3B7,
+            {L("深色"), L("浅色")},
+            []() { return cfgGetStr(KEY_UI_THEME, "dark") == "light" ? 1 : 0; },
+            [this](int i) {
+                cfgSetStr(KEY_UI_THEME, i == 1 ? "light" : "dark");
+                if (m_host.applyUiTheme) m_host.applyUiTheme();
+                invalidate();
+            }));
+        emulator.push_back(_selector(L("文字与图标颜色"), L("自动随颜色主题适配，也可强制高对比"), 0xE8D5,
+            {L("自动"), L("浅色"), L("深色"), L("高对比")},
+            []() {
+                const std::vector<std::string> values = {"auto", "light", "dark", "highContrast"};
+                return findIndex(values, cfgGetStr(KEY_UI_FOREGROUND_MODE, "auto"));
+            },
+            [this](int i) {
+                static const char* values[] = {"auto", "light", "dark", "highContrast"};
+                if (i < 0 || i > 3) return;
+                cfgSetStr(KEY_UI_FOREGROUND_MODE, values[i]);
+                if (m_host.applyUiTheme) m_host.applyUiTheme();
+                invalidate();
+            }));
+        emulator.push_back(_selector(L("背景可读性遮罩"), L("为图片、GIF 和视频背景增加内容区对比度"), 0xE3B7,
+            {L("自动"), L("关闭"), L("弱"), L("标准"), L("强")},
+            []() {
+                const std::vector<std::string> values = {"auto", "off", "weak", "standard", "strong"};
+                return findIndex(values, cfgGetStr(KEY_UI_READABILITY_OVERLAY, "auto"));
+            },
+            [this](int i) {
+                static const char* values[] = {"auto", "off", "weak", "standard", "strong"};
+                if (i < 0 || i > 4) return;
+                cfgSetStr(KEY_UI_READABILITY_OVERLAY, values[i]);
+                if (m_host.applyUiTheme) m_host.applyUiTheme();
+                invalidate();
+            }));
+        const std::vector<std::string> themeLabels = {L("深夜蓝"), L("柠檬黄"), L("牛油果绿"), L("草莓红"), L("海洋蓝"), L("樱花粉"), L("VSCode黑"), L("极光青"), L("皇家紫"), L("日落橙"), L("石墨灰"), L("云雾白")};
+        const std::vector<std::string> themeValues = {"Midnight", "LemonYellow", "AvocadoGreen", "StrawberryRed", "OceanBlue", "SakuraPink", "VscodeBlack", "AuroraTeal", "RoyalPurple", "SunsetOrange", "Graphite", "CloudWhite"};
         emulator.push_back(_selector(L("渐变主题"), L("切换后立即应用到当前页面"), 0xE40A, themeLabels,
             [themeValues]() { return findIndex(themeValues, cfgGetStr(KEY_UI_GRADIENT_THEME, "VscodeBlack"), 6); },
             [this, themeValues](int i) {
                 if (i < 0 || i >= static_cast<int>(themeValues.size())) return;
                 cfgSetStr(KEY_UI_GRADIENT_THEME, themeValues[i]);
                 if (!m_host.setGradientTheme) return;
-                static const GradientTheme themes[] = {GradientTheme::Midnight, GradientTheme::LemonYellow,
-                    GradientTheme::AvocadoGreen, GradientTheme::StrawberryRed, GradientTheme::OceanBlue,
-                    GradientTheme::SakuraPink, GradientTheme::VscodeBlack};
-                m_host.setGradientTheme(themes[i]);
+                m_host.setGradientTheme(gradientThemeFromId(themeValues[i]));
             }));
         emulator.push_back(_selector(L("主页布局(重启后生效)"), L("选择首页的布局样式，重启应用后生效"), 0xE8A1,
             {L("Switch 布局"), L("IISU 布局")},
@@ -4424,9 +4456,9 @@ brls::View *SettingPage::buildUITab()
     }
 
     {
-        std::vector<std::string> themes = {L("深夜蓝"), L("柠檬黄"), L("牛油果绿"), L("草莓红"), L("海洋蓝"), L("樱花粉"), L("VSCode黑")};
+        std::vector<std::string> themes = {L("深夜蓝"), L("柠檬黄"), L("牛油果绿"), L("草莓红"), L("海洋蓝"), L("樱花粉"), L("VSCode黑"), L("极光青"), L("皇家紫"), L("日落橙"), L("石墨灰"), L("云雾白")};
         std::vector<std::string> themeIds = {"Midnight", "LemonYellow", "AvocadoGreen", "StrawberryRed",
-                                              "OceanBlue", "SakuraPink", "VscodeBlack"};
+                                              "OceanBlue", "SakuraPink", "VscodeBlack", "AuroraTeal", "RoyalPurple", "SunsetOrange", "Graphite", "CloudWhite"};
         std::string curTheme = cfgGetStr(beiklive::SettingKey::KEY_UI_GRADIENT_THEME, "VscodeBlack");
         int curIdx = findIndex(themeIds, curTheme, 6);
         auto *themeCell = new brls::SelectorCell();
@@ -4434,13 +4466,7 @@ brls::View *SettingPage::buildUITab()
                        [this, themeIds](int idx) {
                            if (idx >= 0 && idx < (int)themeIds.size()) {
                                cfgSetStr(beiklive::SettingKey::KEY_UI_GRADIENT_THEME, themeIds[idx]);
-                               if (themeIds[idx] == "Midnight")      this->setGradientTheme(GradientTheme::Midnight);
-                               else if (themeIds[idx] == "LemonYellow")  this->setGradientTheme(GradientTheme::LemonYellow);
-                               else if (themeIds[idx] == "AvocadoGreen") this->setGradientTheme(GradientTheme::AvocadoGreen);
-                               else if (themeIds[idx] == "StrawberryRed") this->setGradientTheme(GradientTheme::StrawberryRed);
-                               else if (themeIds[idx] == "OceanBlue")    this->setGradientTheme(GradientTheme::OceanBlue);
-                               else if (themeIds[idx] == "SakuraPink")   this->setGradientTheme(GradientTheme::SakuraPink);
-                               else if (themeIds[idx] == "VscodeBlack")  this->setGradientTheme(GradientTheme::VscodeBlack);
+                               this->setGradientTheme(gradientThemeFromId(themeIds[idx]));
                            }
                        });
         box->addView(themeCell);
@@ -5242,6 +5268,10 @@ void SettingPage::init()
     NanoSettingsHost host;
     host.showShader = [this](bool visible) { this->showShader(visible); };
     host.setGradientTheme = [this](GradientTheme theme) { this->setGradientTheme(theme); };
+    host.applyUiTheme = [this]() {
+        ApplyUiTheme();
+        this->invalidate();
+    };
     host.showBackground = [this](bool visible) { this->showBackground(visible); };
     host.setBackgroundImage = [this](const std::string& path) { this->setBackgroundImage(path, true); };
     host.close = [this]() { beiklive::popActivity(this, false); };
