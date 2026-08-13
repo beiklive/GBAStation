@@ -7,7 +7,6 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -55,6 +54,10 @@ namespace beiklive
         std::thread decoder;
         std::atomic_bool stop{false};
         std::atomic<State> state{State::Loading};
+        // The initial scan must never monopolize an SD card forever because
+        // of a malformed MP4 index or a key frame placed far into the file.
+        std::atomic_bool firstFrameQueued{false};
+        std::atomic_bool initialLoadTimedOut{false};
 
         // Accessed only by the UI thread after the worker publishes Ready.
         int sourceWidth = 0;
@@ -97,14 +100,17 @@ namespace beiklive
         std::atomic_bool g_videoPlaybackPaused{false};
 
 #ifdef __SWITCH__
-        constexpr size_t kMaxVideoBytes = 16 * 1024 * 1024;
+        // Streaming no longer duplicates the file in RAM. Keep a generous
+        // upper bound to prevent a misplaced movie file from monopolizing SD
+        // I/O; decode/output dimensions remain bounded below.
+        constexpr size_t kMaxVideoBytes = 128 * 1024 * 1024;
         // Decode higher-resolution source files only when they stay within a
         // bounded software-decoding budget; the RGBA texture is still 720p.
         constexpr int kMaxSourceWidth = 1920;
         constexpr int kMaxSourceHeight = 1080;
         constexpr int kMaxVideoEdge = 720;
 #else
-        constexpr size_t kMaxVideoBytes = 64 * 1024 * 1024;
+        constexpr size_t kMaxVideoBytes = 128 * 1024 * 1024;
         constexpr int kMaxSourceWidth = 3840;
         constexpr int kMaxSourceHeight = 2160;
         constexpr int kMaxVideoEdge = 720;
@@ -112,6 +118,7 @@ namespace beiklive
         constexpr double kFallbackFrameDuration = 1.0 / 30.0;
         constexpr double kMinFrameDuration = 1.0 / 60.0;
         constexpr double kMaxFrameDuration = 1.0;
+        constexpr auto kInitialFrameDeadline = std::chrono::seconds(15);
 
         const char* errorText(int error, char (&buffer)[AV_ERROR_MAX_STRING_SIZE])
         {
@@ -128,65 +135,90 @@ namespace beiklive
                 (horizontal ? sourceWidth : sourceHeight) * scale)) & ~1);
         }
 
-        bool readFile(const std::string& path, std::vector<uint8_t>& output)
+        // Keep FFmpeg on custom AVIO (the direct file protocol has proved
+        // unreliable on libnx), but do not copy the whole MP4 into RAM before
+        // decoding.  FFmpeg can now seek to `moov` and read only the packets
+        // required for the first key frame.
+        struct FileInput
         {
-            std::ifstream file(path, std::ios::binary | std::ios::ate);
-            if (!file) {
-                brls::Logger::warning("MP4: cannot open '{}'", path);
-                return false;
-            }
-            const std::streamoff size = file.tellg();
-            if (size < 12 || static_cast<uint64_t>(size) > kMaxVideoBytes) {
-                brls::Logger::warning("MP4: '{}' has invalid size {} (limit {} bytes)",
-                                      path, size, kMaxVideoBytes);
-                return false;
-            }
-            output.resize(static_cast<size_t>(size));
-            file.seekg(0, std::ios::beg);
-            file.read(reinterpret_cast<char*>(output.data()), size);
-            if (file.gcount() != size) {
-                brls::Logger::warning("MP4: partial read for '{}': {} / {} bytes", path,
-                                      file.gcount(), size);
-                output.clear();
-                return false;
-            }
-            return true;
-        }
+            std::ifstream file;
+            int64_t size = 0;
+            SharedVideo* video = nullptr;
+            std::chrono::steady_clock::time_point firstFrameDeadline{};
+            uint64_t bytesRead = 0;
+            uint64_t nextProgressLog = 1024 * 1024;
 
-        struct MemoryInput
-        {
-            const std::vector<uint8_t>* data = nullptr;
-            size_t offset = 0;
+            bool open(const std::string& path)
+            {
+                file.open(path, std::ios::binary | std::ios::ate);
+                if (!file)
+                    return false;
+                const std::streamoff length = file.tellg();
+                if (length < 12 || static_cast<uint64_t>(length) > kMaxVideoBytes)
+                    return false;
+                size = static_cast<int64_t>(length);
+                file.seekg(0, std::ios::beg);
+                return static_cast<bool>(file);
+            }
+
+            bool interrupted()
+            {
+                if (!video || video->stop.load(std::memory_order_acquire))
+                    return true;
+                if (!video->firstFrameQueued.load(std::memory_order_acquire) &&
+                    std::chrono::steady_clock::now() >= firstFrameDeadline) {
+                    video->initialLoadTimedOut.store(true, std::memory_order_release);
+                    return true;
+                }
+                return false;
+            }
         };
 
-        int readMemory(void* opaque, uint8_t* destination, int requested)
+        int readFile(void* opaque, uint8_t* destination, int requested)
         {
-            auto* input = static_cast<MemoryInput*>(opaque);
-            if (!input || !input->data || requested <= 0 || input->offset >= input->data->size())
+            auto* input = static_cast<FileInput*>(opaque);
+            if (!input || input->interrupted())
+                return AVERROR_EXIT;
+            if (!input->file || requested <= 0)
                 return AVERROR_EOF;
-            const size_t count = std::min(static_cast<size_t>(requested),
-                                          input->data->size() - input->offset);
-            std::memcpy(destination, input->data->data() + input->offset, count);
-            input->offset += count;
-            return static_cast<int>(count);
+            // Keep every cancellable I/O operation small. This also avoids a
+            // decoder probe monopolizing the storage thread with a huge read.
+            const int countRequested = std::min(requested, 32 * 1024);
+            input->file.read(reinterpret_cast<char*>(destination), countRequested);
+            const std::streamsize count = input->file.gcount();
+            if (count > 0) {
+                input->bytesRead += static_cast<uint64_t>(count);
+                if (input->bytesRead >= input->nextProgressLog &&
+                    !input->video->firstFrameQueued.load(std::memory_order_acquire)) {
+                    brls::Logger::debug("MP4: initial scan '{}' read {} KiB", input->video->path,
+                                        input->bytesRead / 1024);
+                    input->nextProgressLog += 1024 * 1024;
+                }
+            }
+            return count > 0 ? static_cast<int>(count) : AVERROR_EOF;
         }
 
-        int64_t seekMemory(void* opaque, int64_t offset, int whence)
+        int64_t seekFile(void* opaque, int64_t offset, int whence)
         {
-            auto* input = static_cast<MemoryInput*>(opaque);
-            if (!input || !input->data)
+            auto* input = static_cast<FileInput*>(opaque);
+            if (!input || input->interrupted())
                 return AVERROR(EINVAL);
             if (whence == AVSEEK_SIZE)
-                return static_cast<int64_t>(input->data->size());
+                return input->size;
             const int origin = whence & ~AVSEEK_FORCE;
+            // FFmpeg commonly seeks immediately after a short final read.
+            // Clear eof/fail before asking the stream for its current offset.
+            input->file.clear();
+            const std::streampos position = input->file.tellg();
             const int64_t base = origin == SEEK_SET ? 0 :
-                origin == SEEK_CUR ? static_cast<int64_t>(input->offset) :
-                origin == SEEK_END ? static_cast<int64_t>(input->data->size()) : -1;
+                origin == SEEK_CUR ? (position < 0 ? -1 : static_cast<int64_t>(position)) :
+                origin == SEEK_END ? input->size : -1;
             const int64_t target = base < 0 ? -1 : base + offset;
-            if (target < 0 || target > static_cast<int64_t>(input->data->size()))
+            if (target < 0 || target > input->size)
                 return AVERROR(EINVAL);
-            input->offset = static_cast<size_t>(target);
-            return target;
+            input->file.clear();
+            input->file.seekg(target, std::ios::beg);
+            return input->file ? target : AVERROR(EINVAL);
         }
 
         bool enqueueFrame(SharedVideo& video, std::vector<uint8_t>&& rgba, double pts)
@@ -211,15 +243,18 @@ namespace beiklive
 
         void decodeLoop(SharedVideo* video)
         {
-            std::vector<uint8_t> source;
             brls::Logger::info("MP4: decoder thread loading '{}'", video->path);
-            if (!readFile(video->path, source)) {
+            FileInput input;
+            input.video = video;
+            input.firstFrameDeadline = std::chrono::steady_clock::now() + kInitialFrameDeadline;
+            if (!input.open(video->path)) {
+                brls::Logger::warning("MP4: cannot open '{}' or its size exceeds {} bytes",
+                                      video->path, kMaxVideoBytes);
                 video->state.store(VideoState::Failed, std::memory_order_release);
                 return;
             }
-            brls::Logger::info("MP4: read {} bytes from '{}'", source.size(), video->path);
-
-            MemoryInput input{&source};
+            brls::Logger::info("MP4: streaming '{}' ({} bytes); decoding first frame without full preload",
+                               video->path, input.size);
             AVIOContext* io = nullptr;
             AVFormatContext* format = nullptr;
             AVCodecContext* codec = nullptr;
@@ -237,6 +272,20 @@ namespace beiklive
                 avio_context_free(&io);
             };
             const auto fail = [&](const char* stage, int error = 0) {
+                if (video->stop.load(std::memory_order_acquire)) {
+                    brls::Logger::info("MP4: '{}' load cancelled", video->path);
+                    video->state.store(VideoState::Stopped, std::memory_order_release);
+                    cleanup();
+                    return;
+                }
+                if (video->initialLoadTimedOut.load(std::memory_order_acquire)) {
+                    brls::Logger::warning("MP4: '{}' did not produce a first frame within {} seconds; "
+                                          "use a fast-start MP4 with an early key frame",
+                                          video->path, kInitialFrameDeadline.count());
+                    video->state.store(VideoState::Failed, std::memory_order_release);
+                    cleanup();
+                    return;
+                }
                 if (error < 0) {
                     char text[AV_ERROR_MAX_STRING_SIZE];
                     brls::Logger::warning("MP4: {} failed for '{}': {}", stage, video->path,
@@ -254,7 +303,7 @@ namespace beiklive
                 return;
             }
             io = avio_alloc_context(ioBuffer, 32 * 1024, 0, &input,
-                                    readMemory, nullptr, seekMemory);
+                                    readFile, nullptr, seekFile);
             if (!io) {
                 av_free(ioBuffer);
                 ioBuffer = nullptr;
@@ -269,9 +318,17 @@ namespace beiklive
             }
             format->pb = io;
             format->flags |= AVFMT_FLAG_CUSTOM_IO;
+            format->interrupt_callback.callback = [](void* opaque) {
+                return static_cast<FileInput*>(opaque)->interrupted() ? 1 : 0;
+            };
+            format->interrupt_callback.opaque = &input;
 
             const AVInputFormat* mov = av_find_input_format("mov");
-            int result = mov ? avformat_open_input(&format, nullptr, mov, nullptr) : AVERROR_DEMUXER_NOT_FOUND;
+            AVDictionary* options = nullptr;
+            av_dict_set(&options, "probesize", "262144", 0);
+            av_dict_set(&options, "analyzeduration", "0", 0);
+            int result = mov ? avformat_open_input(&format, nullptr, mov, &options) : AVERROR_DEMUXER_NOT_FOUND;
+            av_dict_free(&options);
             if (result < 0) {
                 fail("MP4 container open", result);
                 return;
@@ -420,6 +477,7 @@ namespace beiklive
                     lastTimelinePts = timelinePts;
                     if (!enqueueFrame(*video, std::move(rgba), timelinePts))
                         break;
+                    video->firstFrameQueued.store(true, std::memory_order_release);
                     video->state.store(VideoState::Ready, std::memory_order_release);
                     continue;
                 }

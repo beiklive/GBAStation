@@ -247,9 +247,9 @@ namespace beiklive
                 backgroundImageLoaded = true;
                 return;
             }
-            // Always delay persisted MP4 files too.  The decoder itself runs
-            // asynchronously, but deferring its creation keeps startup I/O
-            // and FFmpeg allocation away from the first UI frame.
+            // Only restored MP4 files are delayed. A file picked from the
+            // Settings page is an explicit user action and should begin
+            // producing its first frame immediately.
             backgroundVideoLoadPending = true;
             backgroundVideoFadeStarted = false;
             backgroundVideoFade.stop();
@@ -261,7 +261,7 @@ namespace beiklive
             backgroundLayer->setVisibility(show ? brls::Visibility::VISIBLE
                                                 : brls::Visibility::GONE);
             backgroundVideoLoadAfter = std::chrono::steady_clock::now() +
-                std::chrono::milliseconds(2000);
+                std::chrono::milliseconds(activateVideo ? 0 : 2000);
             brls::Logger::info("MP4 background {} deferred load scheduled: '{}'",
                                activateVideo ? "selected" : "restored", backgroundVideoPath);
         } else {
