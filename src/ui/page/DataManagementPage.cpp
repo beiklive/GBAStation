@@ -898,12 +898,13 @@ private:
         _drawExternalShadow(vg, r, radius, 0.82f);
         nvgBeginPath(vg);
         nvgRoundedRect(vg, r.x, r.y, r.w, r.h, radius);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 7));
+        nvgFillColor(vg, uiPanelSubtle(
+            getUiThemeMode() == UiThemeMode::Light ? 0.82f : 0.027f));
         nvgFill(vg);
         nvgBeginPath(vg);
         nvgRoundedRect(vg, r.x + 1.f, r.y + 1.f,
                        r.w - 2.f, r.h - 2.f, radius - 1.f);
-        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 42));
+        nvgStrokeColor(vg, uiDivider(0.62f));
         nvgStrokeWidth(vg, 1.5f);
         nvgStroke(vg);
     }
@@ -915,7 +916,7 @@ private:
         nvgFontFaceId(vg, m_switchFont);
         nvgFontSize(vg, 25.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 240));
+        nvgFillColor(vg, uiIconPrimary(0.94f));
         nvgText(vg, x, y, glyph.c_str(), nullptr);
     }
 
@@ -929,7 +930,7 @@ private:
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
         nvgText(vg, x + 36.f, y + 43.f, L("数据管理").c_str(), nullptr);
         nvgFontSize(vg, 15.f);
-        nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
+        nvgFillColor(vg, uiTextSecondary(0.78f));
         nvgText(vg, x + 36.f, y + 72.f, L("导入、维护与远程管理游戏库").c_str(), nullptr);
 
         const float centerX = x + w * 0.5f;
@@ -967,23 +968,22 @@ private:
                 nvgBeginPath(vg);
                 nvgRoundedRect(vg, selector.x, selector.y,
                                selector.w, selector.h, selectorRadius);
-                nvgFillColor(vg, nvgRGBA(255, 255, 255,
-                    static_cast<unsigned char>(22.f + 22.f * prominence)));
+                nvgFillColor(vg, uiPanelSubtle(
+                    getUiThemeMode() == UiThemeMode::Light
+                        ? 0.82f : (0.086f + 0.086f * prominence)));
                 nvgFill(vg);
                 nvgBeginPath(vg);
                 nvgRoundedRect(vg, selector.x + 1.f, selector.y + 1.f,
                                selector.w - 2.f, selector.h - 2.f,
                                selectorRadius - 1.f);
-                nvgStrokeColor(vg, nvgRGBA(255, 255, 255,
-                    static_cast<unsigned char>(70.f + 65.f * prominence)));
+                nvgStrokeColor(vg, uiDivider(0.80f + 0.20f * prominence));
                 nvgStrokeWidth(vg, 1.f);
                 nvgStroke(vg);
             }
             nvgFontFaceId(vg, m_defaultFont);
             nvgFontSize(vg, 17.f + 5.f * prominence);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255,
-                static_cast<unsigned char>(255.f * labelAlpha)));
+            nvgFillColor(vg, uiTextPrimary(labelAlpha));
             nvgText(vg, labelX, centerY,
                     m_tabs[static_cast<size_t>(index)].title.c_str(), nullptr);
         }
@@ -991,7 +991,7 @@ private:
         nvgBeginPath(vg);
         nvgMoveTo(vg, x + 36.f, y + 94.f);
         nvgLineTo(vg, x + w - 36.f, y + 94.f);
-        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 46));
+        nvgStrokeColor(vg, uiDivider(0.68f));
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
         nvgRestore(vg);
@@ -1015,7 +1015,7 @@ private:
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(240, 244, 249, 230));
+        nvgFillColor(vg, uiTextPrimary(0.90f));
         nvgText(vg, x + width * 0.5f, y + 14.f, text.c_str(), nullptr);
     }
 
@@ -1038,19 +1038,19 @@ private:
         nvgFontSize(vg, 17.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
         nvgTextLineHeight(vg, 1.42f);
-        nvgFillColor(vg, nvgRGBA(215, 221, 231, 200));
+        nvgFillColor(vg, uiTextSecondary(0.82f));
         nvgTextBox(vg, r.x + 30.f, r.y + 190.f, r.w - 60.f,
                    tab.summary.c_str(), nullptr);
 
         nvgBeginPath(vg);
         nvgMoveTo(vg, r.x + 28.f, r.y + 280.f);
         nvgLineTo(vg, r.x + r.w - 28.f, r.y + 280.f);
-        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 35));
+        nvgStrokeColor(vg, uiDivider(0.52f));
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
 
         nvgFontSize(vg, 15.f);
-        nvgFillColor(vg, nvgRGBA(200, 208, 220, 185));
+        nvgFillColor(vg, uiTextMuted(0.82f));
         nvgTextBox(vg, r.x + 30.f, r.y + 310.f, r.w - 60.f,
                    tab.detail.c_str(), nullptr);
 
@@ -1119,7 +1119,7 @@ private:
                 + (trackH - thumbH) * m_scroll / maximum;
             nvgBeginPath(vg);
             nvgRoundedRect(vg, r.x + r.w + 8.f, thumbY, 3.f, thumbH, 1.5f);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 95));
+            nvgFillColor(vg, uiTextMuted(0.56f));
             nvgFill(vg);
         }
     }
@@ -1131,13 +1131,14 @@ private:
         nvgRoundedRect(vg, r.x, r.y, r.w, r.h, 8.f);
         nvgFillColor(vg, item.danger
             ? (focused ? nvgRGBA(255, 96, 96, 34) : nvgRGBA(255, 96, 96, 9))
-            : (focused ? nvgRGBA(79, 193, 255, 34) : nvgRGBA(255, 255, 255, 7)));
+            : (focused ? nvgRGBA(79, 193, 255, 34)
+                       : uiPanelSubtle(getUiThemeMode() == UiThemeMode::Light ? 0.82f : 0.027f)));
         nvgFill(vg);
         nvgBeginPath(vg);
         nvgRoundedRect(vg, r.x + 1.f, r.y + 1.f,
                        r.w - 2.f, r.h - 2.f, 7.f);
         nvgStrokeColor(vg, focused
-            ? nvgRGBA(255, 255, 255, 145) : nvgRGBA(255, 255, 255, 42));
+            ? uiDivider(1.f) : uiDivider(0.62f));
         nvgStrokeWidth(vg, 1.5f);
         nvgStroke(vg);
         if (focused && isFocused())
@@ -1153,16 +1154,14 @@ private:
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, item.danger
             ? nvgRGBA(255, 135, 135, 235)
-            : (focused ? nvgRGBA(255, 255, 255, 255)
-                       : nvgRGBA(220, 226, 235, 220)));
+            : uiIconPrimary(focused ? 1.f : 0.86f));
         nvgText(vg, r.x + 54.f, r.y + r.h * 0.5f, icon.c_str(), nullptr);
 
         const float textX = r.x + 96.f;
         nvgFontFaceId(vg, m_defaultFont);
         nvgFontSize(vg, m_itemHeight > 80.f ? 22.f : 19.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, focused
-            ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
+        nvgFillColor(vg, focused ? uiTextPrimary() : GET_THEME_COLOR("brls/text"));
         const float titleY = m_itemHeight > 80.f ? r.y + r.h * 0.39f
                                                  : r.y + r.h * 0.43f;
         nvgText(vg, textX, titleY, item.title.c_str(), nullptr);
@@ -1170,7 +1169,7 @@ private:
         if (m_itemHeight > 52.f)
         {
             nvgFontSize(vg, 14.f);
-            nvgFillColor(vg, nvgRGBA(205, 212, 223, focused ? 215 : 165));
+            nvgFillColor(vg, uiTextSecondary(focused ? 0.86f : 0.70f));
             nvgText(vg, textX, r.y + r.h * 0.68f,
                     item.description.c_str(), nullptr);
         }
@@ -1185,13 +1184,13 @@ private:
             nvgBeginPath(vg);
             nvgRoundedRect(vg, switchX, switchY, switchW, switchH, 14.f);
             nvgFillColor(vg, enabled
-                ? nvgRGBA(79, 193, 255, 150) : nvgRGBA(255, 255, 255, 28));
+                ? nvgRGBA(79, 193, 255, 150) : uiPanelSubtle(0.12f));
             nvgFill(vg);
             nvgBeginPath(vg);
             nvgCircle(vg, enabled ? switchX + switchW - 14.f : switchX + 14.f,
                       switchY + 14.f, 10.f);
             nvgFillColor(vg, enabled
-                ? nvgRGBA(255, 255, 255, 250) : nvgRGBA(190, 197, 208, 220));
+                ? uiPanelSurface(0.98f) : uiTextSecondary(0.86f));
             nvgFill(vg);
         }
         else
@@ -1201,7 +1200,7 @@ private:
                 nvgFontFaceId(vg, m_defaultFont);
                 nvgFontSize(vg, 14.f);
                 nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-                nvgFillColor(vg, nvgRGBA(205, 212, 223, 180));
+                nvgFillColor(vg, uiTextSecondary(0.76f));
                 nvgText(vg, r.x + r.w - 48.f, r.y + r.h * 0.5f,
                         item.badge.c_str(), nullptr);
             }
@@ -1209,7 +1208,7 @@ private:
             nvgFontFaceId(vg, m_materialFont);
             nvgFontSize(vg, 24.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(225, 230, 238, 190));
+            nvgFillColor(vg, uiIconPrimary(0.76f));
             nvgText(vg, r.x + r.w - 24.f, r.y + r.h * 0.5f,
                     arrow.c_str(), nullptr);
         }
@@ -1227,12 +1226,12 @@ private:
         nvgFontFaceId(vg, m_switchFont);
         nvgFontSize(vg, 25.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, dataAlpha(alpha)));
+        nvgFillColor(vg, uiIconPrimary(alpha));
         nvgText(vg, cursor + 13.f, y, glyph.c_str(), nullptr);
         nvgFontFaceId(vg, m_defaultFont);
         nvgFontSize(vg, 18.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(230, 234, 241, dataAlpha(alpha)));
+        nvgFillColor(vg, uiTextPrimary(alpha));
         nvgText(vg, cursor + 30.f, y, label, nullptr);
         cursor -= 16.f;
     }

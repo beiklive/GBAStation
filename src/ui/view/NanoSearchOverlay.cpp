@@ -1,5 +1,6 @@
 #include "ui/view/NanoSearchOverlay.hpp"
 #include "core/Translation.hpp"
+#include "core/common.h"
 
 #include "ui/utils/GradientFocus.hpp"
 #include "ui/utils/MaterialIcons.hpp"
@@ -195,9 +196,9 @@ void NanoSearchOverlay::draw(NVGcontext* vg, float x, float y, float w, float h,
     nvgFill(vg);
     nvgBeginPath(vg);
     nvgRoundedRect(vg, panelX, panelY, panelW, panelH, 20.f);
-    nvgFillColor(vg, nvgRGBA(25, 29, 39, 248));
+    nvgFillColor(vg, uiDialogSurface(0.98f));
     nvgFill(vg);
-    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 74));
+    nvgStrokeColor(vg, uiDivider(0.95f));
     nvgStrokeWidth(vg, 1.f);
     nvgStroke(vg);
     nvgFontFaceId(vg, m_materialFont);
@@ -208,10 +209,10 @@ void NanoSearchOverlay::draw(NVGcontext* vg, float x, float y, float w, float h,
     nvgText(vg, panelX + 34.f, panelY + 49.f, searchIcon.c_str(), nullptr);
     nvgFontFaceId(vg, m_defaultFont);
     nvgFontSize(vg, 28.f);
-    nvgFillColor(vg, nvgRGBA(246, 248, 252, 248));
+    nvgFillColor(vg, uiTextPrimary(0.98f));
     nvgText(vg, panelX + 84.f, panelY + 49.f, L("搜索游戏库").c_str(), nullptr);
     nvgFontSize(vg, 15.f);
-    nvgFillColor(vg, nvgRGBA(192, 201, 215, 190));
+    nvgFillColor(vg, uiTextSecondary(0.86f));
     nvgText(vg, panelX + 35.f, panelY + 82.f,
             L("支持游戏标题和 ROM 文件名模糊匹配").c_str(), nullptr);
 
@@ -227,9 +228,9 @@ void NanoSearchOverlay::draw(NVGcontext* vg, float x, float y, float w, float h,
         nvgTranslate(vg, -(panelX + panelW * 0.5f), -(rowY + 32.f));
         nvgBeginPath(vg);
         nvgRoundedRect(vg, panelX + 28.f, rowY, panelW - 56.f, 64.f, 12.f);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, focused ? 38 : 9));
+        nvgFillColor(vg, uiPanelSubtle(focused ? 0.15f : 0.055f));
         nvgFill(vg);
-        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, focused ? 112 : 42));
+        nvgStrokeColor(vg, uiDivider(focused ? 1.f : 0.55f));
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
         if (focused) beiklive::ui::drawGradientFocusBorder(
@@ -243,12 +244,12 @@ void NanoSearchOverlay::draw(NVGcontext* vg, float x, float y, float w, float h,
         nvgText(vg, panelX + 52.f, rowY + 32.f, icon.c_str(), nullptr);
         nvgFontFaceId(vg, m_defaultFont);
         nvgFontSize(vg, 22.f);
-        nvgFillColor(vg, nvgRGBA(242, 245, 250, 242));
+        nvgFillColor(vg, uiTextPrimary(0.95f));
         nvgText(vg, panelX + 101.f, rowY + 32.f, labels[i].c_str(), nullptr);
         if (i == 0) {
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
             nvgFontSize(vg, 18.f);
-            nvgFillColor(vg, nvgRGBA(205, 214, 228, 220));
+            nvgFillColor(vg, uiTextSecondary(0.9f));
             const std::string value = m_text.empty() ? L("未输入  ›") : m_text + "  ›";
             nvgSave(vg);
             nvgIntersectScissor(vg, panelX + 320.f, rowY,
@@ -276,13 +277,13 @@ void NanoSearchOverlay::_drawHint(NVGcontext* vg, brls::ControllerButton button,
     nvgFontFaceId(vg, m_switchFont);
     nvgFontSize(vg, 26.f);
     nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    nvgFillColor(vg, nvgRGBA(255, 255, 255,
-        static_cast<unsigned char>(245.f * alpha)));
+    nvgFillColor(vg, uiIconPrimary(alpha * 0.96f));
     const std::string glyph = brls::Hint::getKeyIcon(button);
     nvgText(vg, cursor + 12.f, y, glyph.c_str(), nullptr);
     nvgFontFaceId(vg, m_defaultFont);
     nvgFontSize(vg, 16.f);
     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(vg, uiTextPrimary(alpha * 0.96f));
     nvgText(vg, cursor + 28.f, y, text, nullptr);
     cursor -= 12.f;
 }

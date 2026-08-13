@@ -41,12 +41,10 @@ namespace beiklive
     private:
         // 背景层
         void setupBackgroundLayer();
-        void setupReadabilityLayer();
         void ensureBackgroundImageLoaded();
         brls::Image* backgroundLayer = nullptr;
         beiklive::GifBackgroundView* backgroundGifLayer = nullptr;
         beiklive::VideoBackgroundView* backgroundVideoLayer = nullptr;
-        brls::Rectangle* readabilityLayer = nullptr;
         bool backgroundImageLoaded = false;
         bool backgroundIsGif = false;
         bool backgroundIsVideo = false;

@@ -315,12 +315,12 @@ beiklive::enums::FileType platformToFileType(int platform)
             // 面板背景
             nvgBeginPath(vg);
             nvgRoundedRect(vg, panelX, panelY, panelW, panelH, 18.f);
-            nvgFillColor(vg, nvgRGBA(30, 32, 38, 242));
+            nvgFillColor(vg, uiDialogSurface(0.96f));
             nvgFill(vg);
             nvgBeginPath(vg);
             nvgRoundedRect(vg, panelX + 1.f, panelY + 1.f,
                            panelW - 2.f, panelH - 2.f, 17.f);
-            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 34));
+            nvgStrokeColor(vg, uiDivider(0.60f));
             nvgStrokeWidth(vg, 1.f);
             nvgStroke(vg);
 
@@ -328,11 +328,11 @@ beiklive::enums::FileType platformToFileType(int platform)
             nvgFontFaceId(vg, m_defaultFont);
             nvgFontSize(vg, 25.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(235, 240, 248, 245));
+            nvgFillColor(vg, uiTextPrimary(0.96f));
             nvgText(vg, panelX + 28.f, panelY + 37.f, L("选择机种").c_str(), nullptr);
             nvgFontSize(vg, 15.f);
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(170, 178, 190, 190));
+            nvgFillColor(vg, uiTextSecondary(0.78f));
             std::string fileTitle = m_fileName;
             if (fileTitle.size() > 42)
                 fileTitle = fileTitle.substr(0, 42) + "...";
@@ -342,7 +342,7 @@ beiklive::enums::FileType platformToFileType(int platform)
             nvgBeginPath(vg);
             nvgMoveTo(vg, panelX + 26.f, panelY + 66.f);
             nvgLineTo(vg, panelX + panelW - 26.f, panelY + 66.f);
-            nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 26));
+            nvgStrokeColor(vg, uiDivider(0.48f));
             nvgStrokeWidth(vg, 1.f);
             nvgStroke(vg);
 
@@ -359,7 +359,7 @@ beiklive::enums::FileType platformToFileType(int platform)
                 nvgRoundedRect(vg, cardX, cardY, cardW, cardH, 10.f);
                 nvgFillColor(vg, focused
                     ? nvgRGBA(79, 193, 255, 38)
-                    : nvgRGBA(255, 255, 255, 9));
+                    : uiPanelSubtle(0.055f));
                 nvgFill(vg);
                 if (focused)
                 {
@@ -375,7 +375,7 @@ beiklive::enums::FileType platformToFileType(int platform)
                     nvgBeginPath(vg);
                     nvgRoundedRect(vg, cardX + 0.5f, cardY + 0.5f,
                                    cardW - 1.f, cardH - 1.f, 9.5f);
-                    nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 26));
+                    nvgStrokeColor(vg, uiDivider(0.48f));
                     nvgStrokeWidth(vg, 1.f);
                     nvgStroke(vg);
                 }
@@ -393,8 +393,8 @@ beiklive::enums::FileType platformToFileType(int platform)
                 nvgFontSize(vg, 18.f);
                 nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
                 nvgFillColor(vg, focused
-                    ? nvgRGBA(255, 255, 255, 255)
-                    : nvgRGBA(226, 232, 240, 220));
+                    ? uiTextPrimary()
+                    : uiTextPrimary(0.88f));
                 const std::string name =
                     beiklive::tools::platformName(m_candidates[i]);
                 nvgText(vg, cardX + 67.f, cardY + 35.f, name.c_str(), nullptr);
@@ -402,7 +402,7 @@ beiklive::enums::FileType platformToFileType(int platform)
                 nvgFontSize(vg, 13.f);
                 nvgFillColor(vg, focused
                     ? nvgRGBA(125, 211, 252, 235)
-                    : nvgRGBA(152, 163, 180, 185));
+                    : uiTextSecondary(0.72f));
                 nvgText(vg, cardX + 67.f, cardY + 59.f,
                         focused ? L("已选中 · A 启动").c_str() : L("可启动").c_str(), nullptr);
             }

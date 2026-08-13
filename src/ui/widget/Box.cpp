@@ -19,7 +19,6 @@ namespace beiklive
     {
         setupBackgroundLayer();
         setupShaderLayer();
-        setupReadabilityLayer();
         setupMainBox();
         setupHeader();
         setupContentBox();
@@ -31,7 +30,6 @@ namespace beiklive
     {
         setupBackgroundLayer();
         setupShaderLayer();
-        setupReadabilityLayer();
         setupMainBox();
         setupHeader();
         setupContentBox();
@@ -492,9 +490,6 @@ namespace beiklive
     {
         brls::Box::frame(ctx);
 
-        if (readabilityLayer)
-            readabilityLayer->setColor(uiContentOverlay());
-
         // GIF decoding happens off the UI thread. Once its first frame is
         // uploaded, make a previously-hidden background layer visible without
         // requiring the user to toggle the setting or reopen the page.
@@ -677,18 +672,6 @@ namespace beiklive
         // 根据配置决定初始可见性
         bool enable = GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_SHADER, 1) != 0;
         shaderLayer->setVisibility(enable ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
-    }
-
-    void Box::setupReadabilityLayer()
-    {
-        readabilityLayer = new brls::Rectangle(uiContentOverlay());
-        readabilityLayer->setFocusable(false);
-        readabilityLayer->setPositionType(brls::PositionType::ABSOLUTE);
-        readabilityLayer->setPositionTop(0);
-        readabilityLayer->setPositionLeft(0);
-        readabilityLayer->setWidthPercentage(100);
-        readabilityLayer->setHeightPercentage(100);
-        this->addView(readabilityLayer);
     }
 
     void Box::setupMainBox()

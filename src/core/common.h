@@ -77,8 +77,8 @@ namespace beiklive // 全局变量 动态背景
         Light,
     };
 
-    // Semantic foreground colors for NanoVG-based pages. Use these instead of
-    // hard-coded white/black values so custom backgrounds remain readable.
+    // Semantic colors for NanoVG-based pages. They follow UI.theme so custom
+    // pages do not need their own dark/light color switches.
     UiThemeMode getUiThemeMode();
     NVGcolor uiTextPrimary(float alpha = 1.0f);
     NVGcolor uiTextSecondary(float alpha = 1.0f);
@@ -86,7 +86,12 @@ namespace beiklive // 全局变量 动态背景
     NVGcolor uiIconPrimary(float alpha = 1.0f);
     NVGcolor uiDivider(float alpha = 1.0f);
     NVGcolor uiSurface(float alpha = 1.0f);
-    NVGcolor uiContentOverlay();
+    // Reusable translucent surfaces for self-drawn pages.  In light mode a
+    // white glass layer needs substantially more opacity than its dark-mode
+    // counterpart so text remains readable over colourful backgrounds.
+    NVGcolor uiPanelSurface(float alpha = 1.0f);
+    NVGcolor uiPanelSubtle(float alpha = 1.0f);
+    NVGcolor uiDialogSurface(float alpha = 1.0f);
     NVGcolor uiAccent(float alpha = 1.0f);
     void ApplyUiTheme();
     GradientTheme gradientThemeFromId(const std::string& id);

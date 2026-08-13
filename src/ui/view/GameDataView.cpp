@@ -733,12 +733,12 @@ namespace beiklive
         if (filled) {
             nvgBeginPath(vg);
             nvgRoundedRect(vg, x, y, w, h, radius);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255,
-                static_cast<unsigned char>(13.f * alpha)));
+            nvgFillColor(vg, uiPanelSubtle(
+                (getUiThemeMode() == UiThemeMode::Light ? 0.84f : 0.051f) * alpha));
             nvgFill(vg);
         }
         strokeRoundedRectInside(vg, x, y, w, h, radius, 1.f,
-            nvgRGBA(255, 255, 255, static_cast<unsigned char>(72.f * alpha)));
+            uiDivider(0.92f * alpha));
     }
 
     void GameDataView::_drawFocus(NVGcontext* vg, float x, float y, float w, float h,
@@ -778,7 +778,7 @@ namespace beiklive
         if (image <= 0) {
             _drawMaterialIcon(vg, beiklive::material::IMAGE_PLACEHOLDER,
                               x + w * 0.5f, y + h * 0.5f, 58.f,
-                              nvgRGBA(255, 255, 255, 82));
+                              uiTextMuted(0.55f));
             return;
         }
         int iw = 0;
@@ -833,11 +833,11 @@ namespace beiklive
                                  const std::string& label)
     {
         _drawSwitchButton(vg, button, x + 16.f, y, 29.f,
-                          nvgRGBA(255, 255, 255, 245));
+                          uiIconPrimary(0.96f));
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 21.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 225));
+        nvgFillColor(vg, uiTextPrimary(0.90f));
         nvgText(vg, x + 37.f, y, label.c_str(), nullptr);
     }
 
@@ -846,7 +846,7 @@ namespace beiklive
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 27.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(247, 248, 252, 255));
+        nvgFillColor(vg, uiTextPrimary());
         nvgText(vg, x + 30.f, y + 35.f, L("游戏数据").c_str(), nullptr);
 
         const bool isThreeDs = _isThreeDs();
@@ -861,9 +861,9 @@ namespace beiklive
             const int selected = selectedIt == sections.end()
                 ? 0 : static_cast<int>(std::distance(sections.begin(), selectedIt));
             _drawSwitchButton(vg, brls::BUTTON_LB, centerX - 286.f, centerY,
-                              22.f, nvgRGBA(255, 255, 255, 218));
+                              22.f, uiIconPrimary(0.86f));
             _drawSwitchButton(vg, brls::BUTTON_RB, centerX + 286.f, centerY,
-                              22.f, nvgRGBA(255, 255, 255, 218));
+                              22.f, uiIconPrimary(0.86f));
             for (int offset = -1; offset <= 1; ++offset) {
                 const int index = (selected + offset + 4) % 4;
                 const float itemX = centerX + offset * 170.f;
@@ -874,17 +874,16 @@ namespace beiklive
                 nvgFontFaceId(vg, m_fontId);
                 nvgFontSize(vg, offset == 0 ? 21.f : 17.f);
                 nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-                nvgFillColor(vg, nvgRGBA(255, 255, 255,
-                    static_cast<unsigned char>(255.f * prominence)));
+                nvgFillColor(vg, uiTextPrimary(prominence));
                 nvgText(vg, itemX, centerY, labels[index].c_str(), nullptr);
             }
         } else {
             const std::string labels[] = {L("即时存档"), L("游戏图片"), L("电池存档")};
             const int selected = static_cast<int>(m_section);
             _drawSwitchButton(vg, brls::BUTTON_LB, centerX - 260.f, centerY,
-                              22.f, nvgRGBA(255, 255, 255, 218));
+                              22.f, uiIconPrimary(0.86f));
             _drawSwitchButton(vg, brls::BUTTON_RB, centerX + 260.f, centerY,
-                              22.f, nvgRGBA(255, 255, 255, 218));
+                              22.f, uiIconPrimary(0.86f));
             for (int offset = -1; offset <= 1; ++offset) {
                 const int index = (selected + offset + 3) % 3;
                 const float itemX = centerX + offset * 158.f;
@@ -896,8 +895,7 @@ namespace beiklive
                 nvgFontFaceId(vg, m_fontId);
                 nvgFontSize(vg, offset == 0 ? 22.f : 18.f);
                 nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-                nvgFillColor(vg, nvgRGBA(255, 255, 255,
-                    static_cast<unsigned char>(255.f * prominence)));
+                nvgFillColor(vg, uiTextPrimary(prominence));
                 nvgText(vg, itemX, centerY, labels[index].c_str(), nullptr);
             }
         }
@@ -907,7 +905,7 @@ namespace beiklive
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 15.f);
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 175));
+            nvgFillColor(vg, uiTextSecondary(0.78f));
             const float titleIdY = w >= 1050.f ? centerY : y + 61.f;
             nvgText(vg, x + w - 30.f, titleIdY, titleId.c_str(), nullptr);
         }
@@ -925,7 +923,7 @@ namespace beiklive
         nvgBeginPath(vg);
         nvgMoveTo(vg, x + 30.f, lineY);
         nvgLineTo(vg, x + w - 30.f, lineY);
-        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 48));
+        nvgStrokeColor(vg, uiDivider(0.72f));
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
     }
@@ -947,7 +945,7 @@ namespace beiklive
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 24.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 245));
+        nvgFillColor(vg, uiTextPrimary(0.96f));
         const float titleX = x + 22.f;
         const float titleW = w - 44.f;
         float bounds[4]{};
@@ -1009,10 +1007,10 @@ namespace beiklive
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 16.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 145));
+            nvgFillColor(vg, uiTextSecondary(0.80f));
             nvgText(vg, x + 24.f, rowY, summary[static_cast<size_t>(i)].first.c_str(), nullptr);
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 232));
+            nvgFillColor(vg, uiTextPrimary(0.91f));
             nvgText(vg, x + w - 24.f, rowY,
                     summary[static_cast<size_t>(i)].second.c_str(), nullptr);
         }
@@ -1037,16 +1035,16 @@ namespace beiklive
             else
                 _drawMaterialIcon(vg, beiklive::material::SAVE,
                                   cardX + cardW * 0.5f, cardY + cardH * 0.43f,
-                                  48.f, nvgRGBA(255, 255, 255, state.exists ? 180 : 65));
+                                  48.f, uiTextSecondary(state.exists ? 0.82f : 0.42f));
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 18.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, state.exists ? 240 : 120));
+            nvgFillColor(vg, uiTextPrimary(state.exists ? 0.94f : 0.58f));
             nvgText(vg, cardX + cardW * 0.5f, cardY + cardH - 42.f,
                     state.title.c_str(), nullptr);
             if (state.exists) {
                 nvgFontSize(vg, 13.f);
-                nvgFillColor(vg, nvgRGBA(255, 255, 255, 145));
+                nvgFillColor(vg, uiTextSecondary(0.78f));
                 nvgText(vg, cardX + cardW * 0.5f, cardY + cardH - 18.f,
                         state.time.c_str(), nullptr);
             }
@@ -1061,11 +1059,11 @@ namespace beiklive
         if (m_screenshots.empty()) {
             _drawMaterialIcon(vg, beiklive::material::PHOTO_LIBRARY,
                               x + w * 0.5f, y + h * 0.44f, 70.f,
-                              nvgRGBA(255, 255, 255, 70));
+                              uiTextMuted(0.48f));
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 22.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 135));
+            nvgFillColor(vg, uiTextMuted(0.74f));
             nvgText(vg, x + w * 0.5f, y + h * 0.60f, L("暂无游戏图片").c_str(), nullptr);
             return;
         }
@@ -1092,13 +1090,13 @@ namespace beiklive
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 15.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
+            nvgFillColor(vg, uiTextPrimary(0.92f));
             nvgText(vg, cardX + 11.f, cardY + 167.f, shot.title.c_str(), nullptr);
             nvgRestore(vg);
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 12.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 125));
+            nvgFillColor(vg, uiTextSecondary(0.70f));
             nvgText(vg, cardX + 11.f, cardY + 188.f, shot.time.c_str(), nullptr);
             if (i == m_screenshotIndex)
                 _drawFocus(vg, cardX, cardY, cardW, cardH, 8.f);
@@ -1131,11 +1129,11 @@ namespace beiklive
             const float buttonY = startY + i * (buttonH + actionGap);
             _drawPanel(vg, x, buttonY, actionW, buttonH, 8.f, true, 1.f);
             _drawMaterialIcon(vg, icons[i], x + 46.f, buttonY + buttonH * 0.5f,
-                              36.f, nvgRGBA(255, 255, 255, 225));
+                              36.f, uiIconPrimary(0.90f));
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, i == 4 ? 22.f : 23.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
+            nvgFillColor(vg, uiTextPrimary(0.92f));
             nvgText(vg, x + 82.f, buttonY + buttonH * 0.5f, labels[i].c_str(), nullptr);
             if (m_batteryPane == 0 && i == m_actionIndex)
                 _drawFocus(vg, x, buttonY, actionW, buttonH, 8.f);
@@ -1146,29 +1144,29 @@ namespace beiklive
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 22.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 238));
+        nvgFillColor(vg, uiTextPrimary(0.93f));
         nvgText(vg, listX + listPadding, y + 30.f, L("备份记录").c_str(), nullptr);
         nvgFontSize(vg, 15.f);
         nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 135));
+        nvgFillColor(vg, uiTextSecondary(0.74f));
         const std::string count = std::to_string(m_backups.size()) + L(" 个");
         nvgText(vg, listX + listW - listPadding, y + 30.f, count.c_str(), nullptr);
 
         nvgBeginPath(vg);
         nvgMoveTo(vg, listX + listPadding, y + 57.f);
         nvgLineTo(vg, listX + listW - listPadding, y + 57.f);
-        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 42));
+        nvgStrokeColor(vg, uiDivider(0.62f));
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
 
         if (m_backups.empty()) {
             _drawMaterialIcon(vg, beiklive::material::BACKUP,
                               listX + listW * 0.5f, y + h * 0.46f, 62.f,
-                              nvgRGBA(255, 255, 255, 65));
+                              uiTextMuted(0.42f));
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 19.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 120));
+            nvgFillColor(vg, uiTextMuted(0.64f));
             nvgText(vg, listX + listW * 0.5f, y + h * 0.60f,
                     m_entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)
                         ? L("暂无游戏存档备份").c_str() : L("暂无电池存档备份").c_str(),
@@ -1192,19 +1190,19 @@ namespace beiklive
             _drawPanel(vg, rowX, rowY, rowW, 64.f, 7.f, false, 0.82f);
             _drawMaterialIcon(vg, beiklive::material::RESTORE,
                               rowX + 30.f, rowY + 32.f, 29.f,
-                              nvgRGBA(255, 255, 255, 190));
+                              uiIconPrimary(0.78f));
             nvgSave(vg);
             nvgIntersectScissor(vg, rowX + 58.f, rowY + 7.f, rowW - 76.f, 26.f);
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 17.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 230));
+            nvgFillColor(vg, uiTextPrimary(0.90f));
             nvgText(vg, rowX + 58.f, rowY + 20.f, backup.title.c_str(), nullptr);
             nvgRestore(vg);
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 13.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 125));
+            nvgFillColor(vg, uiTextSecondary(0.70f));
             nvgText(vg, rowX + 58.f, rowY + 45.f, backup.time.c_str(), nullptr);
             if (m_batteryPane == 1 && i == m_backupIndex)
                 _drawFocus(vg, rowX, rowY, rowW, 64.f, 7.f);
@@ -1223,14 +1221,14 @@ namespace beiklive
 
         _drawPanel(vg, x, addY, actionW, addH, 8.f, true, 1.f);
         _drawMaterialIcon(vg, beiklive::material::EDIT, x + actionW * 0.5f,
-                          addY + 39.f, 38.f, nvgRGBA(255, 255, 255, 220));
+                          addY + 39.f, 38.f, uiIconPrimary(0.88f));
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 22.f);
         nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 238));
+        nvgFillColor(vg, uiTextPrimary(0.93f));
         nvgText(vg, x + actionW * 0.5f, addY + 82.f, L("新增金手指").c_str(), nullptr);
         nvgFontSize(vg, 14.f);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 130));
+        nvgFillColor(vg, uiTextSecondary(0.72f));
         nvgText(vg, x + actionW * 0.5f, addY + 107.f, L("名称与代码分步输入").c_str(), nullptr);
         if (m_cheatPane == 0)
             _drawFocus(vg, x, addY, actionW, addH, 8.f);
@@ -1239,29 +1237,29 @@ namespace beiklive
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 22.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 238));
+        nvgFillColor(vg, uiTextPrimary(0.93f));
         nvgText(vg, listX + 26.f, y + 30.f, L("金手指列表").c_str(), nullptr);
         const std::string count = std::to_string(m_cheats.size()) + L(" 个");
         nvgFontSize(vg, 15.f);
         nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 135));
+        nvgFillColor(vg, uiTextSecondary(0.74f));
         nvgText(vg, listX + listW - 26.f, y + 30.f, count.c_str(), nullptr);
 
         nvgBeginPath(vg);
         nvgMoveTo(vg, listX + 26.f, y + 57.f);
         nvgLineTo(vg, listX + listW - 26.f, y + 57.f);
-        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 42));
+        nvgStrokeColor(vg, uiDivider(0.62f));
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
 
         if (m_cheats.empty()) {
             _drawMaterialIcon(vg, beiklive::material::DESCRIPTION,
                               listX + listW * 0.5f, y + h * 0.45f, 60.f,
-                              nvgRGBA(255, 255, 255, 65));
+                              uiTextMuted(0.42f));
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 20.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 125));
+            nvgFillColor(vg, uiTextMuted(0.66f));
             nvgText(vg, listX + listW * 0.5f, y + h * 0.59f, L("为空").c_str(), nullptr);
             return;
         }
@@ -1284,13 +1282,13 @@ namespace beiklive
             _drawPanel(vg, rowX, rowY, rowW, panelH, 7.f, false, 0.85f);
             _drawMaterialIcon(vg, beiklive::material::DESCRIPTION,
                               rowX + 30.f, rowY + panelH * 0.5f, 28.f,
-                              nvgRGBA(255, 255, 255, 188));
+                              uiIconPrimary(0.76f));
             nvgSave(vg);
             nvgIntersectScissor(vg, rowX + 56.f, rowY + 5.f, rowW - 76.f, panelH - 10.f);
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 18.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
+            nvgFillColor(vg, uiTextPrimary(0.92f));
             nvgText(vg, rowX + 56.f, rowY + panelH * 0.5f, cheat.name.c_str(), nullptr);
             nvgRestore(vg);
             if (m_cheatPane == 1 && i == m_cheatIndex)
@@ -1323,12 +1321,12 @@ namespace beiklive
             nvgFontFaceId(vg, m_fontId);
             nvgFontSize(vg, 23.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 242));
+            nvgFillColor(vg, uiTextPrimary(0.95f));
             nvgText(vg, x + 26.f, panelY + 31.f, item.label.c_str(), nullptr);
             if (present) {
                 const std::string countText = std::to_string(fileCount) + L(" 个文件");
                 nvgFontSize(vg, 15.f);
-                nvgFillColor(vg, nvgRGBA(255, 255, 255, 140));
+                nvgFillColor(vg, uiTextSecondary(0.76f));
                 nvgText(vg, x + 112.f, panelY + 31.f, countText.c_str(), nullptr);
             }
 
@@ -1343,7 +1341,7 @@ namespace beiklive
             nvgFill(vg);
             nvgFontSize(vg, 15.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, 235));
+            nvgFillColor(vg, uiTextPrimary(0.92f));
             nvgText(vg, x + w - statusW * 0.5f - 24.f, panelY + 31.f,
                     status.c_str(), nullptr);
 
@@ -1354,7 +1352,7 @@ namespace beiklive
             const float pathW = w - 52.f;
             nvgFontSize(vg, 18.f);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(255, 255, 255, present ? 145 : 85));
+            nvgFillColor(vg, uiTextSecondary(present ? 0.78f : 0.48f));
             float pathBounds[4]{};
             nvgTextBounds(vg, 0.f, 0.f, path.c_str(), nullptr, pathBounds);
             const float pathWidth = pathBounds[2] - pathBounds[0];
@@ -1384,7 +1382,7 @@ namespace beiklive
                 nvgFontFaceId(vg, m_fontId);
                 nvgFontSize(vg, 17.f);
                 nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-                nvgFillColor(vg, nvgRGBA(255, 255, 255, present ? 225 : 105));
+                nvgFillColor(vg, uiTextPrimary(present ? 0.88f : 0.52f));
                 nvgText(vg, buttonX + buttonW * 0.5f, buttonY + 23.f,
                         labels[static_cast<size_t>(action)].c_str(), nullptr);
                 if (index == m_managedIndex && action == m_managedAction)
@@ -1400,7 +1398,7 @@ namespace beiklive
         nvgBeginPath(vg);
         nvgMoveTo(vg, x + 30.f, lineY);
         nvgLineTo(vg, x + w - 30.f, lineY);
-        nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 48));
+        nvgStrokeColor(vg, uiDivider(0.70f));
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
 
@@ -1411,11 +1409,11 @@ namespace beiklive
         const float textX = pathLeft + 38.f;
         const float textW = std::max(40.f, pathRight - textX);
         _drawMaterialIcon(vg, beiklive::material::STORAGE, iconX, cy,
-                          24.f, nvgRGBA(255, 255, 255, 175));
+                          24.f, uiIconPrimary(0.76f));
         nvgFontFaceId(vg, m_fontId);
         nvgFontSize(vg, 16.f);
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-        nvgFillColor(vg, nvgRGBA(255, 255, 255, 155));
+        nvgFillColor(vg, uiTextSecondary(0.74f));
         float pathBounds[4]{};
         nvgTextBounds(vg, 0.f, 0.f, m_entry.path.c_str(), nullptr, pathBounds);
         const float pathWidth = pathBounds[2] - pathBounds[0];

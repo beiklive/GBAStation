@@ -238,14 +238,6 @@ namespace beiklive
 
         bool useLightForeground()
         {
-        const std::string foreground = GET_SETTING_KEY_STR(
-            SettingKey::KEY_UI_FOREGROUND_MODE, "auto");
-            if (foreground == "light")
-                return true;
-            if (foreground == "dark")
-                return false;
-            if (foreground == "highContrast")
-                return getUiThemeMode() == UiThemeMode::Dark;
             return getUiThemeMode() == UiThemeMode::Dark;
         }
     }
@@ -259,27 +251,23 @@ namespace beiklive
 
     NVGcolor uiTextPrimary(float alpha)
     {
-        const bool highContrast = GET_SETTING_KEY_STR(
-            SettingKey::KEY_UI_FOREGROUND_MODE, "auto") == "highContrast";
         if (useLightForeground())
             return nvgRGBA(248, 250, 252, uiAlpha(alpha));
-        return highContrast
-            ? nvgRGBA(0, 0, 0, uiAlpha(alpha))
-            : nvgRGBA(15, 23, 42, uiAlpha(alpha));
+        return nvgRGBA(15, 23, 42, uiAlpha(alpha));
     }
 
     NVGcolor uiTextSecondary(float alpha)
     {
         return useLightForeground()
             ? nvgRGBA(203, 213, 225, uiAlpha(alpha))
-            : nvgRGBA(55, 65, 81, uiAlpha(alpha));
+            : nvgRGBA(71, 85, 105, uiAlpha(alpha));
     }
 
     NVGcolor uiTextMuted(float alpha)
     {
         return useLightForeground()
             ? nvgRGBA(148, 163, 184, uiAlpha(alpha))
-            : nvgRGBA(75, 85, 99, uiAlpha(alpha));
+            : nvgRGBA(100, 116, 139, uiAlpha(alpha));
     }
 
     NVGcolor uiIconPrimary(float alpha) { return uiTextPrimary(alpha); }
@@ -288,7 +276,7 @@ namespace beiklive
     {
         return useLightForeground()
             ? nvgRGBA(255, 255, 255, uiAlpha(alpha * 0.24f))
-            : nvgRGBA(15, 23, 42, uiAlpha(alpha * 0.20f));
+            : nvgRGBA(15, 23, 42, uiAlpha(alpha * 0.28f));
     }
 
     NVGcolor uiSurface(float alpha)
@@ -298,20 +286,25 @@ namespace beiklive
             : nvgRGBA(255, 255, 255, uiAlpha(alpha));
     }
 
-    NVGcolor uiContentOverlay()
+    NVGcolor uiPanelSurface(float alpha)
     {
-        const std::string strength = GET_SETTING_KEY_STR(
-            SettingKey::KEY_UI_READABILITY_OVERLAY, "auto");
-        float alpha = 0.0f;
-        if (strength == "weak") alpha = 0.18f;
-        else if (strength == "standard") alpha = 0.34f;
-        else if (strength == "strong") alpha = 0.50f;
-        else if (strength == "auto") alpha = getUiThemeMode() == UiThemeMode::Dark ? 0.30f : 0.20f;
-        if (strength == "off")
-            return nvgRGBA(0, 0, 0, 0);
         return useLightForeground()
-            ? nvgRGBA(3, 7, 18, uiAlpha(alpha))
-            : nvgRGBA(255, 255, 255, uiAlpha(alpha));
+            ? nvgRGBA(255, 255, 255, uiAlpha(alpha))
+            : nvgRGBA(248, 250, 252, uiAlpha(alpha));
+    }
+
+    NVGcolor uiPanelSubtle(float alpha)
+    {
+        return useLightForeground()
+            ? nvgRGBA(255, 255, 255, uiAlpha(alpha))
+            : nvgRGBA(15, 23, 42, uiAlpha(alpha));
+    }
+
+    NVGcolor uiDialogSurface(float alpha)
+    {
+        return useLightForeground()
+            ? nvgRGBA(24, 31, 43, uiAlpha(alpha))
+            : nvgRGBA(248, 250, 252, uiAlpha(alpha));
     }
 
     NVGcolor uiAccent(float alpha)
@@ -333,6 +326,14 @@ namespace beiklive
         theme.addColor("beiklive/sidePanel", uiSurface(light ? 0.92f : 0.72f));
         theme.addColor("beiklive/subtitle", uiTextSecondary(0.80f));
         theme.addColor("beiklive/line", uiDivider());
+        theme.addColor("brls/button/primary_enabled_background", light
+            ? nvgRGBA(0, 102, 204, 235) : nvgRGBA(79, 193, 255, 235));
+        theme.addColor("brls/button/primary_disabled_background", light
+            ? nvgRGBA(148, 163, 184, 120) : nvgRGBA(100, 116, 139, 120));
+        theme.addColor("brls/button/default_enabled_background", light
+            ? nvgRGBA(226, 232, 240, 235) : nvgRGBA(255, 255, 255, 28));
+        theme.addColor("brls/button/default_disabled_background", light
+            ? nvgRGBA(226, 232, 240, 120) : nvgRGBA(255, 255, 255, 12));
         brls::Application::getPlatform()->setThemeVariant(
             light ? brls::ThemeVariant::LIGHT : brls::ThemeVariant::DARK);
     }
@@ -504,8 +505,6 @@ namespace beiklive
         SettingManager->SetDefault(KEY_UI_SHOW_SHADER, ConfigValue(1));
         SettingManager->SetDefault(KEY_UI_GRADIENT_THEME, ConfigValue(std::string("VscodeBlack")));
         SettingManager->SetDefault(KEY_UI_THEME, ConfigValue(std::string("dark")));
-        SettingManager->SetDefault(KEY_UI_FOREGROUND_MODE, ConfigValue(std::string("auto")));
-        SettingManager->SetDefault(KEY_UI_READABILITY_OVERLAY, ConfigValue(std::string("auto")));
         SettingManager->SetDefault(KEY_UI_LANGUAGE, ConfigValue(std::string("zh-CN")));
 
         // 遮罩设置
