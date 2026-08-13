@@ -449,9 +449,16 @@ int main(int argc, char* argv[]) {
 	// 标志位：程序退出时设置为 true，通知线程提前终止
 	std::atomic<bool> gExitFlag{false};
 
-	// 订阅退出事件，在 mainLoop 返回前尽早设置退出标志
+	// Borealis fires exitEvent while the UI thread still owns a live NanoVG
+	// context. Stop the shared video there: mainLoop() returns only after
+	// Application::exit() has cleared views and destroyed the platform, so
+	// deleting an MP4 texture afterwards can dereference a dead context.
 	brls::Application::getExitEvent()->subscribe(
-		[&gExitFlag]() { gExitFlag.store(true, std::memory_order_release); });
+		[&gExitFlag]() {
+			gExitFlag.store(true, std::memory_order_release);
+			brls::Logger::info("MP4: shutting down shared background before UI teardown");
+			beiklive::VideoBackgroundView::shutdownSharedVideo();
+		});
 
 	std::thread updateThread;
 	if (!directLaunchStarted)
@@ -491,10 +498,6 @@ int main(int argc, char* argv[]) {
 	gExitFlag.store(true, std::memory_order_release);
 	if (updateThread.joinable())
 		updateThread.join();
-
-	// Shared MP4 players own NanoVG textures. Dispose them on this UI thread
-	// before Borealis starts releasing its graphics context.
-	beiklive::VideoBackgroundView::shutdownSharedVideo();
 
 	beiklive::network::WebService::Stop();
 	beiklive::ThreadPool::instance().shutdown();
