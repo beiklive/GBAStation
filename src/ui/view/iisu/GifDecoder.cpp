@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <limits>
 
 extern "C" {
 #include <gif_lib.h>
@@ -84,67 +85,6 @@ namespace beiklive
             return false;
         }
 
-        bool decodeImpl(const std::string& path, GifDecoded& out)
-        {
-            int error = 0;
-            GifFileType* gif = DGifOpenFileName(path.c_str(), &error);
-            if (!gif)
-                return false;
-            const auto closeGif = [&]() { DGifCloseFile(gif, &error); };
-            if (DGifSlurp(gif) == GIF_ERROR || gif->SWidth <= 0 ||
-                gif->SHeight <= 0 || gif->ImageCount <= 0) {
-                closeGif();
-                return false;
-            }
-
-            const int width = gif->SWidth;
-            const int height = gif->SHeight;
-            const bool looping = !hasSingleLoopCount(gif);
-            std::vector<uint8_t> canvas(static_cast<size_t>(width) * height * 4, 0);
-            std::vector<uint8_t> beforePrevious;
-            GraphicsControlBlock previousGcb{};
-            previousGcb.TransparentColor = NO_TRANSPARENT_COLOR;
-            GifImageDesc previousRect{};
-            bool havePrevious = false;
-            std::vector<GifFrame> frames;
-            frames.reserve(static_cast<size_t>(gif->ImageCount));
-
-            for (int i = 0; i < gif->ImageCount; ++i) {
-                if (havePrevious) {
-                    if (previousGcb.DisposalMode == DISPOSE_BACKGROUND) {
-                        clearRect(canvas, width, height, previousRect);
-                    } else if (previousGcb.DisposalMode == DISPOSE_PREVIOUS &&
-                               beforePrevious.size() == canvas.size()) {
-                        canvas = beforePrevious;
-                    }
-                }
-
-                beforePrevious = canvas;
-                SavedImage& image = gif->SavedImages[i];
-                GraphicsControlBlock gcb{};
-                gcb.TransparentColor = NO_TRANSPARENT_COLOR;
-                if (DGifSavedExtensionToGCB(gif, i, &gcb) == GIF_ERROR)
-                    gcb.TransparentColor = NO_TRANSPARENT_COLOR;
-                composeFrame(canvas, width, height, image, gcb, gif->SColorMap);
-
-                GifFrame frame;
-                frame.delayMs = gcb.DelayTime > 0
-                    ? static_cast<uint32_t>(gcb.DelayTime) * 10u : 100u;
-                frame.rgba = canvas;
-                frames.push_back(std::move(frame));
-                previousGcb = gcb;
-                previousRect = image.ImageDesc;
-                havePrevious = true;
-            }
-
-            closeGif();
-            out.width = static_cast<uint32_t>(width);
-            out.height = static_cast<uint32_t>(height);
-            out.looping = looping;
-            out.frames = std::move(frames);
-            return !out.frames.empty();
-        }
-
         void downsampleFrame(GifFrame& frame, int srcW, int srcH,
                              int dstW, int dstH)
         {
@@ -165,47 +105,103 @@ namespace beiklive
             }
             frame.rgba = std::move(out);
         }
+
+        bool decodeImpl(const std::string& path, GifDecoded& out,
+                        int maxEdge, size_t maxFrames)
+        {
+            int error = 0;
+            GifFileType* gif = DGifOpenFileName(path.c_str(), &error);
+            if (!gif)
+                return false;
+            const auto closeGif = [&]() { DGifCloseFile(gif, &error); };
+            if (DGifSlurp(gif) == GIF_ERROR || gif->SWidth <= 0 ||
+                gif->SHeight <= 0 || gif->ImageCount <= 0) {
+                closeGif();
+                return false;
+            }
+
+            const int width = gif->SWidth;
+            const int height = gif->SHeight;
+            const bool looping = !hasSingleLoopCount(gif);
+            int dstW = width;
+            int dstH = height;
+            if (maxEdge > 0 && std::max(dstW, dstH) > maxEdge) {
+                const double scale = static_cast<double>(maxEdge) / std::max(dstW, dstH);
+                dstW = std::max(1, static_cast<int>(dstW * scale));
+                dstH = std::max(1, static_cast<int>(dstH * scale));
+            }
+            const size_t frameStride = maxFrames > 0 &&
+                    static_cast<size_t>(gif->ImageCount) > maxFrames
+                ? (static_cast<size_t>(gif->ImageCount) + maxFrames - 1) / maxFrames
+                : 1;
+            std::vector<uint8_t> canvas(static_cast<size_t>(width) * height * 4, 0);
+            std::vector<uint8_t> beforePrevious;
+            GraphicsControlBlock previousGcb{};
+            previousGcb.TransparentColor = NO_TRANSPARENT_COLOR;
+            GifImageDesc previousRect{};
+            bool havePrevious = false;
+            std::vector<GifFrame> frames;
+            frames.reserve((static_cast<size_t>(gif->ImageCount) + frameStride - 1) / frameStride);
+            uint64_t skippedDelayMs = 0;
+
+            for (int i = 0; i < gif->ImageCount; ++i) {
+                if (havePrevious) {
+                    if (previousGcb.DisposalMode == DISPOSE_BACKGROUND) {
+                        clearRect(canvas, width, height, previousRect);
+                    } else if (previousGcb.DisposalMode == DISPOSE_PREVIOUS &&
+                               beforePrevious.size() == canvas.size()) {
+                        canvas = beforePrevious;
+                    }
+                }
+
+                beforePrevious = canvas;
+                SavedImage& image = gif->SavedImages[i];
+                GraphicsControlBlock gcb{};
+                gcb.TransparentColor = NO_TRANSPARENT_COLOR;
+                if (DGifSavedExtensionToGCB(gif, i, &gcb) == GIF_ERROR)
+                    gcb.TransparentColor = NO_TRANSPARENT_COLOR;
+                composeFrame(canvas, width, height, image, gcb, gif->SColorMap);
+
+                const uint32_t frameDelayMs = gcb.DelayTime > 0
+                    ? static_cast<uint32_t>(gcb.DelayTime) * 10u : 100u;
+                if (static_cast<size_t>(i) % frameStride == 0) {
+                    GifFrame frame;
+                    frame.delayMs = static_cast<uint32_t>(std::min<uint64_t>(
+                        skippedDelayMs + frameDelayMs,
+                        std::numeric_limits<uint32_t>::max()));
+                    frame.rgba = canvas;
+                    downsampleFrame(frame, width, height, dstW, dstH);
+                    frames.push_back(std::move(frame));
+                    skippedDelayMs = 0;
+                } else {
+                    skippedDelayMs += frameDelayMs;
+                }
+                previousGcb = gcb;
+                previousRect = image.ImageDesc;
+                havePrevious = true;
+            }
+
+            closeGif();
+            if (!frames.empty() && skippedDelayMs > 0) {
+                frames.back().delayMs = static_cast<uint32_t>(std::min<uint64_t>(
+                    static_cast<uint64_t>(frames.back().delayMs) + skippedDelayMs,
+                    std::numeric_limits<uint32_t>::max()));
+            }
+            out.width = static_cast<uint32_t>(dstW);
+            out.height = static_cast<uint32_t>(dstH);
+            out.looping = looping;
+            out.frames = std::move(frames);
+            return !out.frames.empty();
+        }
     } // namespace
 
     bool GifDecoder::decode(const std::string& path, GifDecoded& out,
                             int maxEdge, size_t maxFrames)
     {
         GifDecoded raw;
-        if (!decodeImpl(path, raw))
+        if (!decodeImpl(path, raw, maxEdge, maxFrames))
             return false;
-
-        // 帧数上限：按步长抽样
-        if (maxFrames > 0 && raw.frames.size() > maxFrames) {
-            const size_t stride =
-                (raw.frames.size() + maxFrames - 1) / maxFrames;
-            std::vector<GifFrame> sampled;
-            for (size_t i = 0; i < raw.frames.size(); i += stride)
-                sampled.push_back(std::move(raw.frames[i]));
-            if (sampled.empty())
-                sampled.push_back(std::move(raw.frames.back()));
-            raw.frames = std::move(sampled);
-        }
-
-        // 等比缩放（最近邻）
-        int dstW = static_cast<int>(raw.width);
-        int dstH = static_cast<int>(raw.height);
-        if (maxEdge > 0) {
-            const int longest = std::max(dstW, dstH);
-            if (longest > maxEdge) {
-                const double scale =
-                    static_cast<double>(maxEdge) / longest;
-                dstW = std::max(1, static_cast<int>(dstW * scale));
-                dstH = std::max(1, static_cast<int>(dstH * scale));
-            }
-        }
-        for (auto& frame : raw.frames)
-            downsampleFrame(frame, static_cast<int>(raw.width),
-                            static_cast<int>(raw.height), dstW, dstH);
-
-        out.width = static_cast<uint32_t>(dstW);
-        out.height = static_cast<uint32_t>(dstH);
-        out.looping = raw.looping;
-        out.frames = std::move(raw.frames);
+        out = std::move(raw);
         return true;
     }
 } // namespace beiklive

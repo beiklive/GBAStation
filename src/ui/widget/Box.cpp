@@ -7,6 +7,14 @@
 
 namespace beiklive
 {
+    namespace
+    {
+        // Background media is an application-wide choice. Individual Boxes
+        // are short-lived page views and must never resurrect a pending
+        // decoder after another page has selected a different file.
+        std::string g_selectedBackgroundPath;
+    }
+
     Box::Box() : brls::Box()
     {
         setupBackgroundLayer();
@@ -49,17 +57,50 @@ namespace beiklive
 
     void Box::showBackground(bool show)
     {
-        if (show)
+        if (show) {
+            // Returning from an emulator page resumes the shared MP4 worker.
+            VideoBackgroundView::setSharedPlaybackPaused(false);
             ensureBackgroundImageLoaded();
+        }
+        if (!show) {
+            if (backgroundGifLayer && backgroundGifLayer->getVisibility() == brls::Visibility::VISIBLE) {
+                backgroundGifHidePending = true;
+                backgroundGifFade.stop();
+                backgroundGifFade.reset(1.0f);
+                backgroundGifFade.addStep(0.0f, 250, tweeny::easing::enumerated::cubicOut);
+                backgroundGifFade.start();
+            }
+            if (backgroundVideoLayer && backgroundVideoLayer->getVisibility() == brls::Visibility::VISIBLE) {
+                backgroundVideoHidePending = true;
+                backgroundVideoFade.stop();
+                backgroundVideoFade.reset(1.0f);
+                backgroundVideoFade.addStep(0.0f, 250, tweeny::easing::enumerated::cubicOut);
+                backgroundVideoFade.start();
+            }
+        } else {
+            backgroundGifHidePending = false;
+            backgroundVideoHidePending = false;
+        }
         if (backgroundLayer)
-            backgroundLayer->setVisibility(show && !backgroundIsGif && !backgroundIsVideo
+            backgroundLayer->setVisibility(show && !backgroundIsGif &&
+                (!backgroundIsVideo || !backgroundVideoLoadPending ||
+                 !backgroundVideoLayer || !backgroundVideoLayer->isLoaded())
                 ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         if (backgroundGifLayer)
-            backgroundGifLayer->setVisibility(show && backgroundIsGif && backgroundGifLayer->isLoaded()
+            backgroundGifLayer->setVisibility((show || backgroundGifHidePending) && backgroundIsGif && backgroundGifLayer->isLoaded()
                 ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
         if (backgroundVideoLayer)
-            backgroundVideoLayer->setVisibility(show && backgroundIsVideo && backgroundVideoLayer->isLoaded()
+            // The transparent video view must receive frame() calls while it
+            // is waiting for its first decoded frame, otherwise the texture
+            // creation and the fade-in each wait for the other forever.
+            backgroundVideoLayer->setVisibility((show || backgroundVideoHidePending) && backgroundIsVideo &&
+                (!backgroundVideoLoadPending || backgroundVideoLayer->isLoaded())
                 ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+    }
+
+    void Box::suspendBackgroundPlayback(bool suspend)
+    {
+        VideoBackgroundView::setSharedPlaybackPaused(suspend);
     }
 
     static bool isGifPath(const std::string& path)
@@ -80,38 +121,163 @@ namespace beiklive
         return extension == ".mp4";
     }
 
-    void Box::setBackgroundImage(const std::string& path)
+    void Box::setBackgroundImage(const std::string& path, bool activateVideo)
     {
         if (!backgroundLayer || path.empty())
             return;
 
-        backgroundIsGif = isGifPath(path) && backgroundGifLayer && backgroundGifLayer->load(path);
-        backgroundIsVideo = !backgroundIsGif && isMp4Path(path) && backgroundVideoLayer &&
-            backgroundVideoLayer->load(path);
+        // Only Settings passes activateVideo=true. Normal page restoration
+        // attaches to that choice; at cold start there is no owner yet.
+        if (activateVideo || g_selectedBackgroundPath.empty())
+            g_selectedBackgroundPath = path;
+
+        // A different dynamic background must leave the screen gracefully.
+        // Retain the current view until its opacity reaches zero, then apply
+        // the new source (which starts at zero and performs its own fade-in).
+        const bool pathChanged = (backgroundIsGif || backgroundIsVideo) &&
+            ((!backgroundIsVideo && (!isGifPath(path) || !backgroundGifLayer ||
+                                     backgroundGifLayer->path() != path)) ||
+             (backgroundIsVideo && backgroundVideoPath != path));
+        if (!backgroundApplyingTransition && pathChanged) {
+            backgroundTransitionPending = true;
+            backgroundTransitionPath = path;
+            backgroundTransitionActivateVideo = activateVideo;
+            if (backgroundIsGif && backgroundGifLayer) {
+                backgroundGifHidePending = true;
+                backgroundGifFade.stop();
+                backgroundGifFade.reset(backgroundGifLayer->getAlpha());
+                backgroundGifFade.addStep(0.0f, 250, tweeny::easing::enumerated::cubicOut);
+                backgroundGifFade.start();
+            }
+            if (backgroundIsVideo && backgroundVideoLayer) {
+                backgroundVideoHidePending = true;
+                backgroundVideoFade.stop();
+                backgroundVideoFade.reset(backgroundVideoLayer->getAlpha());
+                backgroundVideoFade.addStep(0.0f, 250, tweeny::easing::enumerated::cubicOut);
+                backgroundVideoFade.start();
+            }
+            return;
+        }
+
+        const bool cachedGif = isGifPath(path) && GifBackgroundView::hasCachedAnimation(path);
+        // A path chosen in Settings is an explicit user action, not startup
+        // restoration. Start its GIF decode now so the page does not remain
+        // empty until a later navigation causes another frame/update.
+        backgroundIsGif = isGifPath(path) && backgroundGifLayer &&
+            backgroundGifLayer->load(path, activateVideo);
+        const bool requestedVideo = !backgroundIsGif && isMp4Path(path);
+        backgroundIsVideo = requestedVideo && backgroundVideoLayer &&
+            !path.empty() && std::filesystem::exists(path);
+        if (requestedVideo && !backgroundIsVideo)
+            brls::Logger::warning("MP4 background path is unavailable: '{}'", path);
         const bool show = GET_SETTING_KEY_INT(
             beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
         if (backgroundIsGif) {
+            backgroundVideoLoadPending = false;
+            backgroundVideoFadeStarted = false;
+            backgroundVideoPath.clear();
+            VideoBackgroundView::clearCachedVideo();
             backgroundLayer->setVisibility(brls::Visibility::GONE);
             if (backgroundVideoLayer) {
                 backgroundVideoLayer->clear();
                 backgroundVideoLayer->setVisibility(brls::Visibility::GONE);
             }
+            // Reattaching a page preserves the existing shared GIF without a
+            // flash; a deliberate replacement always starts transparently.
+            backgroundGifFadeStarted = cachedGif && backgroundGifLayer->isLoaded() &&
+                !backgroundApplyingTransition;
+            backgroundGifHidePending = false;
+            backgroundGifFade.stop();
+            backgroundGifFade.reset(backgroundGifFadeStarted ? 1.0f : 0.0f);
+            backgroundGifLayer->setAlpha(backgroundGifFadeStarted ? 1.0f : 0.0f);
             backgroundGifLayer->setVisibility(show ? brls::Visibility::VISIBLE
                                                    : brls::Visibility::GONE);
         } else if (backgroundIsVideo) {
-            backgroundLayer->setVisibility(brls::Visibility::GONE);
+            // onResume reapplies settings after dialogs close. Do not tear
+            // down the same deferred player and restart its two-second timer
+            // on every resume, or it can be postponed indefinitely.
+            const bool samePendingVideo = backgroundVideoLoadPending &&
+                backgroundVideoPath == path;
+            const bool sameLoadedVideo = !backgroundVideoLoadPending &&
+                backgroundVideoPath == path && backgroundVideoLayer->isLoaded() &&
+                backgroundVideoLayer->isCurrentCachedVideo(path);
+            if (samePendingVideo || sameLoadedVideo) {
+                backgroundLayer->setVisibility(show && !sameLoadedVideo
+                                                    ? brls::Visibility::VISIBLE
+                                                    : brls::Visibility::GONE);
+                backgroundVideoLayer->setVisibility(show && sameLoadedVideo
+                                                        ? brls::Visibility::VISIBLE
+                                                        : brls::Visibility::GONE);
+                return;
+            }
+            const bool cachedVideo = VideoBackgroundView::hasCachedVideo(path);
             if (backgroundGifLayer) {
                 backgroundGifLayer->clear();
                 backgroundGifLayer->setVisibility(brls::Visibility::GONE);
             }
-            backgroundVideoLayer->setVisibility(show ? brls::Visibility::VISIBLE
-                                                     : brls::Visibility::GONE);
+            GifBackgroundView::clearCachedAnimation();
+            // Do not enter FFmpeg while the startup scene is still being
+            // assembled.  The first frame will be requested from frame().
+            backgroundVideoLayer->clear();
+            backgroundVideoLayer->setVisibility(brls::Visibility::GONE);
+            backgroundVideoPath = path;
+            if (cachedVideo) {
+                // Binding a process-global player performs no filesystem I/O
+                // and keeps its timeline/texture exactly where the previous
+                // page left them.
+                backgroundVideoLoadPending = false;
+                // The shared texture is already populated. Show it at full
+                // opacity immediately, rather than briefly showing bg2.png
+                // and replaying the new-video fade on every page change.
+                backgroundVideoFadeStarted = true;
+                backgroundVideoFade.stop();
+                backgroundVideoFade.reset(1.0f);
+                if (!backgroundVideoLayer->load(path)) {
+                    backgroundIsVideo = false;
+                    backgroundVideoFadeStarted = false;
+                    backgroundLayer->setImageFromFile(BK_RES("img/bg2.png"));
+                    backgroundLayer->setVisibility(brls::Visibility::VISIBLE);
+                } else {
+                    backgroundLayer->setVisibility(brls::Visibility::GONE);
+                    backgroundVideoLayer->setAlpha(1.0f);
+                    backgroundVideoLayer->setVisibility(show ? brls::Visibility::VISIBLE
+                                                             : brls::Visibility::GONE);
+                    brls::Logger::info("MP4: attached shared background '{}'", path);
+                }
+                backgroundImageLoaded = true;
+                return;
+            }
+            // Always delay persisted MP4 files too.  The decoder itself runs
+            // asynchronously, but deferring its creation keeps startup I/O
+            // and FFmpeg allocation away from the first UI frame.
+            backgroundVideoLoadPending = true;
+            backgroundVideoFadeStarted = false;
+            backgroundVideoFade.stop();
+            backgroundVideoFade.reset(0.0f);
+            // Keep a static fallback underneath until the decoder supplies a
+            // real frame.  This is used for both a newly selected video and a
+            // persisted one restored at launch.
+            backgroundLayer->setImageFromFile(BK_RES("img/bg2.png"));
+            backgroundLayer->setVisibility(show ? brls::Visibility::VISIBLE
+                                                : brls::Visibility::GONE);
+            backgroundVideoLoadAfter = std::chrono::steady_clock::now() +
+                std::chrono::milliseconds(2000);
+            brls::Logger::info("MP4 background {} deferred load scheduled: '{}'",
+                               activateVideo ? "selected" : "restored", backgroundVideoPath);
         } else {
+            backgroundVideoLoadPending = false;
+            backgroundVideoFadeStarted = false;
+            backgroundVideoPath.clear();
+            backgroundVideoFade.stop();
+            VideoBackgroundView::clearCachedVideo();
             if (backgroundGifLayer)
                 backgroundGifLayer->clear();
             if (backgroundVideoLayer)
                 backgroundVideoLayer->clear();
-            backgroundLayer->setImageFromFileForce(path);
+            if (requestedVideo)
+                backgroundLayer->setImageFromFile(BK_RES("img/bg2.png"));
+            else
+                backgroundLayer->setImageFromFileForce(path);
             backgroundLayer->setVisibility(show ? brls::Visibility::VISIBLE
                                                 : brls::Visibility::GONE);
         }
@@ -323,6 +489,97 @@ namespace beiklive
     void Box::frame(brls::FrameContext* ctx)
     {
         brls::Box::frame(ctx);
+
+        // GIF decoding happens off the UI thread. Once its first frame is
+        // uploaded, make a previously-hidden background layer visible without
+        // requiring the user to toggle the setting or reopen the page.
+        const bool showBackgroundImage = GET_SETTING_KEY_INT(
+            beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
+        if (backgroundIsGif && backgroundGifLayer && backgroundGifLayer->isLoaded()) {
+            if (showBackgroundImage && !backgroundGifHidePending) {
+                if (!backgroundGifFadeStarted) {
+                    backgroundGifFadeStarted = true;
+                    backgroundGifFade.stop();
+                    backgroundGifFade.reset(0.0f);
+                    backgroundGifFade.addStep(1.0f, 350, tweeny::easing::enumerated::cubicOut);
+                    backgroundGifFade.start();
+                    backgroundGifLayer->setVisibility(brls::Visibility::VISIBLE);
+                }
+                backgroundGifLayer->setAlpha(backgroundGifFade.getValue());
+                invalidate();
+            } else if (backgroundGifHidePending) {
+                backgroundGifLayer->setAlpha(backgroundGifFade.getValue());
+                if (backgroundGifFade.getValue() <= 0.001f) {
+                    backgroundGifHidePending = false;
+                    backgroundGifFadeStarted = false;
+                    backgroundGifLayer->setVisibility(brls::Visibility::GONE);
+                }
+                invalidate();
+            }
+        }
+        if (backgroundTransitionPending) {
+            const bool gifFinished = !backgroundIsGif || !backgroundGifHidePending;
+            const bool videoFinished = !backgroundIsVideo || !backgroundVideoHidePending;
+            if (gifFinished && videoFinished) {
+                const std::string nextPath = backgroundTransitionPath;
+                const bool nextActivateVideo = backgroundTransitionActivateVideo;
+                backgroundTransitionPending = false;
+                backgroundTransitionPath.clear();
+                backgroundApplyingTransition = true;
+                setBackgroundImage(nextPath, nextActivateVideo);
+                backgroundApplyingTransition = false;
+            }
+        }
+        if (backgroundIsVideo && backgroundVideoLayer) {
+            if (showBackgroundImage && backgroundVideoLoadPending &&
+                !backgroundVideoPath.empty() &&
+                backgroundVideoPath == g_selectedBackgroundPath &&
+                std::filesystem::exists(backgroundVideoPath) &&
+                std::chrono::steady_clock::now() >= backgroundVideoLoadAfter) {
+                backgroundVideoLoadPending = false;
+                brls::Logger::info("Starting deferred MP4 background load: {}", backgroundVideoPath);
+                if (!backgroundVideoLayer->load(backgroundVideoPath)) {
+                    backgroundIsVideo = false;
+                    backgroundLayer->setImageFromFile(BK_RES("img/bg2.png"));
+                    backgroundLayer->setVisibility(brls::Visibility::VISIBLE);
+                } else {
+                    backgroundVideoLayer->setAlpha(0.0f);
+                    backgroundVideoLayer->setVisibility(brls::Visibility::VISIBLE);
+                }
+            } else if (backgroundVideoLoadPending &&
+                       (backgroundVideoPath.empty() ||
+                        !std::filesystem::exists(backgroundVideoPath))) {
+                backgroundVideoLoadPending = false;
+                backgroundIsVideo = false;
+                brls::Logger::warning("Deferred MP4 background path vanished before loading: '{}'",
+                                      backgroundVideoPath);
+                backgroundLayer->setImageFromFile(BK_RES("img/bg2.png"));
+                backgroundLayer->setVisibility(brls::Visibility::VISIBLE);
+            }
+
+            if (showBackgroundImage && !backgroundVideoLoadPending &&
+                backgroundVideoLayer->isLoaded()) {
+                if (!backgroundVideoFadeStarted) {
+                    backgroundVideoFadeStarted = true;
+                    backgroundVideoFade.reset(0.0f);
+                    backgroundVideoFade.addStep(1.0f, 350,
+                                                tweeny::easing::enumerated::cubicOut);
+                    backgroundVideoFade.start();
+                    backgroundLayer->setVisibility(brls::Visibility::GONE);
+                    backgroundVideoLayer->setVisibility(brls::Visibility::VISIBLE);
+                }
+                backgroundVideoLayer->setAlpha(backgroundVideoFade.getValue());
+                invalidate();
+            } else if (backgroundVideoHidePending) {
+                backgroundVideoLayer->setAlpha(backgroundVideoFade.getValue());
+                if (backgroundVideoFade.getValue() <= 0.001f) {
+                    backgroundVideoHidePending = false;
+                    backgroundVideoFadeStarted = false;
+                    backgroundVideoLayer->setVisibility(brls::Visibility::GONE);
+                }
+                invalidate();
+            }
+        }
 
         if (m_animState != AnimState::None && contentBox) {
             contentBox->setTranslationX(m_animOffsetX);

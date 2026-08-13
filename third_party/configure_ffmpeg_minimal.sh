@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build FFmpeg in a separate directory with only the MP4 background decoder.
+# Build FFmpeg in a separate directory with common MP4 video decoders.
 set -euo pipefail
 
 SOURCE_DIR="$1"
@@ -46,19 +46,25 @@ export TEMP="$TMPDIR"
 
 OPTIONS=(
     "--cc=$CC" "--ar=$AR" "--ranlib=$RANLIB"
-    --disable-asm --enable-small --enable-pic
+    --enable-small --enable-pic
     --disable-programs --disable-doc
     --disable-avdevice --disable-avfilter --disable-swresample
     --disable-everything
     --enable-avcodec --enable-avformat --enable-avutil --enable-swscale
-    --enable-demuxer=mov --enable-decoder=h264 --enable-parser=h264
-    --enable-protocol=file
+    # The player has one RGBA output path and supports the common codecs that
+    # are routinely stored in an MP4 container. Audio, filters, encoders and
+    # network/file protocols remain excluded: custom memory AVIO is used.
+    --enable-demuxer=mov
+    --enable-decoder=h264,hevc,mpeg4,mpeg2video,mjpeg,vp8,vp9,av1
+    --enable-parser=h264,hevc,mpeg4video,mpegvideo,mjpeg,vc1
     --enable-static --disable-shared --disable-network --disable-pthreads
     --disable-autodetect --disable-iconv --disable-zlib --disable-bzlib --disable-lzma
 )
 
 if [ "$TARGET_KIND" = "switch" ]; then
-    OPTIONS+=(--arch=aarch64 --target-os=none --enable-cross-compile)
+    OPTIONS+=(--arch=aarch64 --cpu=cortex-a57 --target-os=none --enable-cross-compile)
+else
+    OPTIONS+=(--disable-asm)
 fi
 
 ./configure "${OPTIONS[@]}"

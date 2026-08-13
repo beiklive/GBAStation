@@ -16,22 +16,23 @@ namespace beiklive
         GifBackgroundView() = default;
         ~GifBackgroundView() override = default;
 
-        bool load(const std::string& path);
-        /// 解绑当前背景；全局缓存保留，供下一个页面零开销复用。
+        // Interactive selections start decoding immediately. Startup callers
+        // may retain the small defer to keep their first frame responsive.
+        bool load(const std::string& path, bool immediate = false);
+        /// Unbind the current view without stopping the process-global
+        /// animation. This keeps frame progress stable across page changes.
         void clear();
         bool isLoaded() const;
+        const std::string& path() const;
+        static bool hasCachedAnimation(const std::string& path);
+        static void clearCachedAnimation();
+        bool isCurrentCachedAnimation(const std::string& path) const;
 
         void frame(brls::FrameContext* ctx) override;
         void draw(NVGcontext* vg, float x, float y, float width, float height,
                   brls::Style style, brls::FrameContext* ctx) override;
 
     public:
-        struct Frame
-        {
-            int texture = 0;
-            uint32_t delayMs = 100;
-        };
-
         struct SharedAnimation;
 
     private:

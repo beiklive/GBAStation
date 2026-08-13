@@ -2,6 +2,7 @@
 
 #include <borealis.hpp>
 #include <borealis/core/animation.hpp>
+#include <chrono>
 #include "Header.hpp"
 #include "DynamicBackgroundBox.hpp"
 #include "GifBackgroundView.hpp"
@@ -24,7 +25,8 @@ namespace beiklive
         void showFooter(bool show);
         void hideFooterLine(){ bottomBar->hideLineTop(); }
         void showBackground(bool show);
-        void setBackgroundImage(const std::string& path);
+        void setBackgroundImage(const std::string& path, bool activateVideo = false);
+        void suspendBackgroundPlayback(bool suspend);
         void showShader(bool show);
         void setGradientTheme(GradientTheme theme);
         brls::Box* getContentBox() { return contentBox; }
@@ -46,6 +48,22 @@ namespace beiklive
         bool backgroundImageLoaded = false;
         bool backgroundIsGif = false;
         bool backgroundIsVideo = false;
+        // MP4 is deliberately opened only after the first screen has been
+        // visible for a while.  Some files cause FFmpeg to perform expensive
+        // stream probing, which must never happen during application startup.
+        bool backgroundVideoLoadPending = false;
+        bool backgroundVideoFadeStarted = false;
+        bool backgroundGifFadeStarted = false;
+        bool backgroundVideoHidePending = false;
+        bool backgroundGifHidePending = false;
+        bool backgroundTransitionPending = false;
+        bool backgroundApplyingTransition = false;
+        std::string backgroundTransitionPath;
+        bool backgroundTransitionActivateVideo = false;
+        std::string backgroundVideoPath;
+        std::chrono::steady_clock::time_point backgroundVideoLoadAfter{};
+        brls::Animatable backgroundVideoFade{0.0f};
+        brls::Animatable backgroundGifFade{0.0f};
         // Shader层
         void setupShaderLayer();
         beiklive::DynamicBackgroundBox* shaderLayer = nullptr;

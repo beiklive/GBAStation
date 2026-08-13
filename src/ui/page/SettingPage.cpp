@@ -4468,7 +4468,7 @@ brls::View *SettingPage::buildUITab()
                     [this, bgPathCell](const std::string& path) {
                         cfgSetStr(beiklive::SettingKey::KEY_UI_BG_IMAGE_PATH, path);
                         bgPathCell->setDetailText(beiklive::tools::getFileName(path));
-                        this->setBackgroundImage(path);
+                        this->setBackgroundImage(path, true);
                     },
                     currentPath.parent_path().string(),
                     currentPath.filename().string());
@@ -5243,7 +5243,7 @@ void SettingPage::init()
     host.showShader = [this](bool visible) { this->showShader(visible); };
     host.setGradientTheme = [this](GradientTheme theme) { this->setGradientTheme(theme); };
     host.showBackground = [this](bool visible) { this->showBackground(visible); };
-    host.setBackgroundImage = [this](const std::string& path) { this->setBackgroundImage(path); };
+    host.setBackgroundImage = [this](const std::string& path) { this->setBackgroundImage(path, true); };
     host.close = [this]() { beiklive::popActivity(this, false); };
     auto* canvas = new NanoSettingsCanvas(std::move(host));
     m_settingsFrame = canvas;

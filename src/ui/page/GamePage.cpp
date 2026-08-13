@@ -267,6 +267,10 @@ namespace beiklive
 
     void GamePage::PageInit()
     {
+        // A shared MP4 decoder may otherwise keep using a CPU core while an
+        // embedded emulator is running. Its texture and playback state stay
+        // cached and will resume when a normal Box is shown again.
+        this->suspendBackgroundPlayback(true);
         this->showFooter(false);
         this->showHeader(false);
         this->showBackground(false);
