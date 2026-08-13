@@ -44,6 +44,9 @@ export TMPDIR="$BUILD_DIR/.tmp"
 export TMP="$TMPDIR"
 export TEMP="$TMPDIR"
 
+# Make configure script executable
+chmod +x "$BUILD_DIR/configure"
+
 OPTIONS=(
     "--cc=$CC" "--ar=$AR" "--ranlib=$RANLIB"
     --enable-small --enable-pic
