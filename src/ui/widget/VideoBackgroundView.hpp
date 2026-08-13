@@ -8,7 +8,8 @@
 namespace beiklive
 {
     /// Full-screen MP4 background. Decoder state, texture and timeline are
-    /// shared by every Box using the same file.
+    /// process-global. Each page view automatically follows the currently
+    /// active player instead of retaining a stale player after a replacement.
     class VideoBackgroundView : public brls::View
     {
     public:
@@ -23,7 +24,15 @@ namespace beiklive
         // same decoder, NanoVG texture and playback clock instead of opening
         // the file again.  A new non-video background releases this cache.
         static bool hasCachedVideo(const std::string& path);
+        // Starts decoding a replacement while the current background is
+        // fading out. This performs no NanoVG calls.
+        static bool preload(const std::string& path);
+        static void keepCachedVideo(const std::string& path);
         static void clearCachedVideo();
+        // Must run on the UI thread before Borealis tears down its NanoVG
+        // context. It stops any outstanding decoder work and releases the
+        // shared textures synchronously at application shutdown.
+        static void shutdownSharedVideo();
         bool isCurrentCachedVideo(const std::string& path) const;
         // Used while an emulator core owns CPU time. The decoded texture is
         // retained, but the worker stops filling frames until UI resumes.
@@ -37,6 +46,9 @@ namespace beiklive
         struct SharedVideo;
 
     private:
-        std::shared_ptr<SharedVideo> m_video;
+        // Playback ownership lives entirely in the process-global manager.
+        // Views are transient page surfaces and must never retain a decoder
+        // or NanoVG texture across a background replacement.
+        uint64_t m_observedGeneration = 0;
     };
 } // namespace beiklive

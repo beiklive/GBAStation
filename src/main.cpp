@@ -14,6 +14,7 @@
 #include "core/ExternalCoreSession.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
+#include "ui/widget/VideoBackgroundView.hpp"
 #include "ui/utils/MyActivity.hpp"
 #include "network/WebService.h"
 
@@ -490,6 +491,10 @@ int main(int argc, char* argv[]) {
 	gExitFlag.store(true, std::memory_order_release);
 	if (updateThread.joinable())
 		updateThread.join();
+
+	// Shared MP4 players own NanoVG textures. Dispose them on this UI thread
+	// before Borealis starts releasing its graphics context.
+	beiklive::VideoBackgroundView::shutdownSharedVideo();
 
 	beiklive::network::WebService::Stop();
 	beiklive::ThreadPool::instance().shutdown();

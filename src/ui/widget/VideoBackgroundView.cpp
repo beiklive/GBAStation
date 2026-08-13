@@ -46,8 +46,6 @@ namespace beiklive
             queueWake.notify_all();
             if (decoder.joinable())
                 decoder.join();
-            if (NVGcontext* vg = brls::Application::getNVGContext(); vg && texture > 0)
-                nvgDeleteImage(vg, texture);
         }
 
         std::string path;
@@ -96,7 +94,11 @@ namespace beiklive
 
         // This intentionally owns the active background. Views themselves
         // come and go with Borealis pages, but background playback must not.
+        // The map may hold one replacement while it is preloading; only
+        // g_activeVideo is allowed to be presented by page views.
         std::unordered_map<std::string, std::shared_ptr<SharedVideo>> g_videoCache;
+        std::shared_ptr<SharedVideo> g_activeVideo;
+        uint64_t g_activeVideoGeneration = 0;
         std::atomic_bool g_videoPlaybackPaused{false};
 
 #ifdef __SWITCH__
@@ -119,6 +121,7 @@ namespace beiklive
         constexpr double kMinFrameDuration = 1.0 / 60.0;
         constexpr double kMaxFrameDuration = 1.0;
         constexpr auto kInitialFrameDeadline = std::chrono::seconds(15);
+        constexpr int kAvioBufferSize = 256 * 1024;
 
         const char* errorText(int error, char (&buffer)[AV_ERROR_MAX_STRING_SIZE])
         {
@@ -181,9 +184,10 @@ namespace beiklive
                 return AVERROR_EXIT;
             if (!input->file || requested <= 0)
                 return AVERROR_EOF;
-            // Keep every cancellable I/O operation small. This also avoids a
-            // decoder probe monopolizing the storage thread with a huge read.
-            const int countRequested = std::min(requested, 32 * 1024);
+            // A 256 KiB AVIO buffer avoids thousands of costly SD reads for
+            // a normal video while the interrupt callback still makes the
+            // operation cancellable between bounded reads.
+            const int countRequested = std::min(requested, kAvioBufferSize);
             input->file.read(reinterpret_cast<char*>(destination), countRequested);
             const std::streamsize count = input->file.gcount();
             if (count > 0) {
@@ -243,6 +247,7 @@ namespace beiklive
 
         void decodeLoop(SharedVideo* video)
         {
+            const auto loadStarted = std::chrono::steady_clock::now();
             brls::Logger::info("MP4: decoder thread loading '{}'", video->path);
             FileInput input;
             input.video = video;
@@ -297,12 +302,12 @@ namespace beiklive
                 cleanup();
             };
 
-            ioBuffer = static_cast<uint8_t*>(av_malloc(32 * 1024));
+            ioBuffer = static_cast<uint8_t*>(av_malloc(kAvioBufferSize));
             if (!ioBuffer) {
                 fail("AVIO allocation");
                 return;
             }
-            io = avio_alloc_context(ioBuffer, 32 * 1024, 0, &input,
+            io = avio_alloc_context(ioBuffer, kAvioBufferSize, 0, &input,
                                     readFile, nullptr, seekFile);
             if (!io) {
                 av_free(ioBuffer);
@@ -333,6 +338,11 @@ namespace beiklive
                 fail("MP4 container open", result);
                 return;
             }
+            brls::Logger::info("MP4: container opened '{}' after {} ms ({} KiB read)",
+                               video->path,
+                               std::chrono::duration_cast<std::chrono::milliseconds>(
+                                   std::chrono::steady_clock::now() - loadStarted).count(),
+                               input.bytesRead / 1024);
             int streamIndex = -1;
             for (unsigned int index = 0; index < format->nb_streams; ++index) {
                 if (format->streams[index]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -477,8 +487,16 @@ namespace beiklive
                     lastTimelinePts = timelinePts;
                     if (!enqueueFrame(*video, std::move(rgba), timelinePts))
                         break;
-                    video->firstFrameQueued.store(true, std::memory_order_release);
+                    const bool isFirstQueuedFrame = !video->firstFrameQueued.exchange(
+                        true, std::memory_order_acq_rel);
                     video->state.store(VideoState::Ready, std::memory_order_release);
+                    if (isFirstQueuedFrame) {
+                        brls::Logger::info("MP4: first frame queued for '{}' after {} ms ({} KiB read)",
+                                           video->path,
+                                           std::chrono::duration_cast<std::chrono::milliseconds>(
+                                               std::chrono::steady_clock::now() - loadStarted).count(),
+                                           input.bytesRead / 1024);
+                    }
                     continue;
                 }
                 if (result != AVERROR(EAGAIN) && result != AVERROR_EOF) {
@@ -555,11 +573,45 @@ namespace beiklive
             video.queueWake.notify_all();
             return true;
         }
+
+        void retireVideo(std::shared_ptr<SharedVideo> video)
+        {
+            if (!video)
+                return;
+            video->stop.store(true, std::memory_order_release);
+            video->queueWake.notify_all();
+
+            // NanoVG resources belong to the UI thread. The next decoder
+            // must not start until this one has fully stopped: on Switch,
+            // concurrently probing two MP4s can terminate the process before
+            // FFmpeg reaches its first frame. The outgoing texture is already
+            // transparent when this is called, so a short join here is safer
+            // than an asynchronous overlapping decoder.
+            if (NVGcontext* vg = brls::Application::getNVGContext(); vg && video->texture > 0) {
+                nvgDeleteImage(vg, video->texture);
+                video->texture = 0;
+                video->textureCreated = false;
+                video->textureReady.store(false, std::memory_order_release);
+            }
+            if (video->decoder.joinable()) {
+                brls::Logger::info("MP4: stopping outgoing decoder '{}' before replacement", video->path);
+                video->decoder.join();
+                brls::Logger::info("MP4: outgoing decoder '{}' stopped", video->path);
+            }
+        }
+
+        void setActiveVideo(const std::shared_ptr<SharedVideo>& video)
+        {
+            if (g_activeVideo == video)
+                return;
+            g_activeVideo = video;
+            ++g_activeVideoGeneration;
+        }
     }
 
     void VideoBackgroundView::clear()
     {
-        m_video.reset();
+        m_observedGeneration = 0;
     }
 
     bool VideoBackgroundView::hasCachedVideo(const std::string& path)
@@ -567,26 +619,75 @@ namespace beiklive
         return !path.empty() && g_videoCache.find(path) != g_videoCache.end();
     }
 
+    bool VideoBackgroundView::preload(const std::string& path)
+    {
+        if (path.empty() || !std::filesystem::exists(path))
+            return false;
+        if (const auto found = g_videoCache.find(path); found != g_videoCache.end())
+            return found->second->state.load(std::memory_order_acquire) != VideoState::Failed;
+
+        auto video = std::make_shared<SharedVideo>();
+        video->path = path;
+        video->decoder = std::thread(decodeLoop, video.get());
+        g_videoCache[path] = std::move(video);
+        brls::Logger::info("MP4: preloading replacement background '{}'", path);
+        return true;
+    }
+
+    void VideoBackgroundView::keepCachedVideo(const std::string& path)
+    {
+        for (auto iterator = g_videoCache.begin(); iterator != g_videoCache.end();) {
+            if (iterator->first == path) {
+                ++iterator;
+                continue;
+            }
+            retireVideo(std::move(iterator->second));
+            iterator = g_videoCache.erase(iterator);
+        }
+    }
+
     void VideoBackgroundView::clearCachedVideo()
     {
         // A page may still own a stale view after a new media type was
-        // selected. Stop its worker before dropping the process-global root;
-        // otherwise it keeps decoding in the background and can later be
-        // mistaken for the newly selected video on that page.
+        // selected. Retire the cached player asynchronously: joining FFmpeg
+        // on the UI thread makes a background switch visibly stall.
         for (auto& [path, video] : g_videoCache) {
             (void)path;
-            video->stop.store(true, std::memory_order_release);
-            video->queueWake.notify_all();
+            retireVideo(std::move(video));
         }
         g_videoCache.clear();
+        setActiveVideo(nullptr);
+    }
+
+    void VideoBackgroundView::shutdownSharedVideo()
+    {
+        // main() calls this while the NanoVG context still belongs to the UI
+        // thread. Unlike a background replacement, application exit may wait
+        // briefly for in-flight storage I/O to finish.
+        for (auto& [path, video] : g_videoCache) {
+            (void)path;
+            if (!video)
+                continue;
+            video->stop.store(true, std::memory_order_release);
+            video->queueWake.notify_all();
+            if (NVGcontext* vg = brls::Application::getNVGContext(); vg && video->texture > 0) {
+                nvgDeleteImage(vg, video->texture);
+                video->texture = 0;
+                video->textureCreated = false;
+                video->textureReady.store(false, std::memory_order_release);
+            }
+            if (video->decoder.joinable())
+                video->decoder.join();
+        }
+        g_videoCache.clear();
+        setActiveVideo(nullptr);
     }
 
     bool VideoBackgroundView::isCurrentCachedVideo(const std::string& path) const
     {
-        const auto found = g_videoCache.find(path);
-        return m_video && found != g_videoCache.end() && found->second == m_video &&
-            m_video->state.load(std::memory_order_acquire) != VideoState::Failed &&
-            m_video->state.load(std::memory_order_acquire) != VideoState::Stopped;
+        return !path.empty() && g_activeVideo && g_activeVideo->path == path &&
+            g_activeVideo->state.load(std::memory_order_acquire) != VideoState::Failed &&
+            g_activeVideo->state.load(std::memory_order_acquire) != VideoState::Stopped;
     }
 
     void VideoBackgroundView::setSharedPlaybackPaused(bool paused)
@@ -607,38 +708,46 @@ namespace beiklive
             brls::Logger::warning("MP4: selected path does not exist: '{}'", path);
             return false;
         }
-        if (m_video && m_video->path == path)
-            return m_video->state.load(std::memory_order_acquire) != VideoState::Failed;
+        std::shared_ptr<SharedVideo> video;
         if (const auto found = g_videoCache.find(path); found != g_videoCache.end()) {
-            m_video = found->second;
-            return m_video->state.load(std::memory_order_acquire) != VideoState::Failed;
+            video = found->second;
+        } else {
+            // Only one configured video background can be active. Existing
+            // page views follow g_activeVideo on their next UI frame, so they
+            // cannot keep displaying this retired player after a replacement.
+            clearCachedVideo();
+            video = std::make_shared<SharedVideo>();
+            video->path = path;
+            video->decoder = std::thread(decodeLoop, video.get());
+            g_videoCache[path] = video;
         }
 
-        // Only one configured video background can be active. Existing page
-        // views may still hold the old shared object, so merely erasing the
-        // map is insufficient: explicitly wake and stop its worker first.
-        clearCachedVideo();
-
-        auto video = std::make_shared<SharedVideo>();
-        video->path = path;
-        video->decoder = std::thread(decodeLoop, video.get());
-        m_video = video;
-        g_videoCache[path] = video;
-        return true;
+        setActiveVideo(video);
+        m_observedGeneration = g_activeVideoGeneration;
+        brls::Logger::info("MP4: active background committed '{}' (generation {})",
+                           path, g_activeVideoGeneration);
+        return video->state.load(std::memory_order_acquire) != VideoState::Failed;
     }
 
     bool VideoBackgroundView::isLoaded() const
     {
-        return m_video &&
-            m_video->state.load(std::memory_order_acquire) == VideoState::Ready &&
-            m_video->textureReady.load(std::memory_order_acquire);
+        return g_activeVideo &&
+            g_activeVideo->state.load(std::memory_order_acquire) == VideoState::Ready &&
+            g_activeVideo->textureReady.load(std::memory_order_acquire);
     }
 
     void VideoBackgroundView::frame(brls::FrameContext* ctx)
     {
         brls::View::frame(ctx);
-        if (!m_video || getVisibility() != brls::Visibility::VISIBLE ||
-            m_video->state.load(std::memory_order_acquire) != VideoState::Ready)
+        if (m_observedGeneration != g_activeVideoGeneration) {
+            m_observedGeneration = g_activeVideoGeneration;
+            brls::Logger::debug("MP4: view attached active generation {}", m_observedGeneration);
+            invalidate();
+        }
+
+        const auto video = g_activeVideo;
+        if (!video || getVisibility() != brls::Visibility::VISIBLE ||
+            video->state.load(std::memory_order_acquire) != VideoState::Ready)
             return;
         if (g_videoPlaybackPaused.load(std::memory_order_acquire))
             return;
@@ -646,20 +755,22 @@ namespace beiklive
         if (!vg)
             return;
 
-        if (!m_video->textureCreated) {
-            if (takeFrame(*m_video, true, 0.0, vg))
+        if (!video->textureCreated) {
+            if (takeFrame(*video, true, 0.0, vg)) {
+                brls::Logger::info("MP4: first texture uploaded for '{}'", video->path);
                 invalidate();
+            }
             return;
         }
         const float speed = std::clamp(
             GET_SETTING_KEY_FLOAT(SettingKey::KEY_UI_BG_GIF_SPEED, 1.f), 0.1f, 4.f);
         const auto now = std::chrono::steady_clock::now();
         const double delta = std::min(0.050, std::max(0.0,
-            std::chrono::duration<double>(now - m_video->lastPresentationTick).count()));
-        m_video->lastPresentationTick = now;
-        m_video->presentationElapsed += delta * speed;
+            std::chrono::duration<double>(now - video->lastPresentationTick).count()));
+        video->lastPresentationTick = now;
+        video->presentationElapsed += delta * speed;
         bool uploaded = false;
-        while (takeFrame(*m_video, false, m_video->presentationElapsed, vg))
+        while (takeFrame(*video, false, video->presentationElapsed, vg))
             uploaded = true;
         if (uploaded)
             invalidate();
@@ -671,12 +782,13 @@ namespace beiklive
     {
         (void)style;
         (void)ctx;
-        if (!vg || !m_video || !m_video->textureCreated || m_video->texture <= 0 ||
-            m_video->width <= 0 || m_video->height <= 0)
+        const auto video = g_activeVideo;
+        if (!vg || !video || !video->textureCreated || video->texture <= 0 ||
+            video->width <= 0 || video->height <= 0)
             return;
-        const float scale = std::max(width / m_video->width, height / m_video->height);
-        const float drawWidth = m_video->width * scale;
-        const float drawHeight = m_video->height * scale;
+        const float scale = std::max(width / video->width, height / video->height);
+        const float drawWidth = video->width * scale;
+        const float drawHeight = video->height * scale;
         const float drawX = x + (width - drawWidth) * 0.5f;
         const float drawY = y + (height - drawHeight) * 0.5f;
         nvgSave(vg);
@@ -684,7 +796,7 @@ namespace beiklive
         nvgBeginPath(vg);
         nvgRect(vg, drawX, drawY, drawWidth, drawHeight);
         nvgFillPaint(vg, nvgImagePattern(vg, drawX, drawY, drawWidth, drawHeight,
-                                         0.f, m_video->texture, 1.f));
+                                         0.f, video->texture, 1.f));
         nvgFill(vg);
         nvgRestore(vg);
     }

@@ -1718,9 +1718,6 @@ private:
             [](bool v) { cfgSetBool(KEY_UI_USE_SAVESTATE_THUMB, v); }));
 
         emulator.push_back(_section(L("界面")));
-        emulator.push_back(_toggle(L("动态渐变背景"), L("显示与主页一致的动态背景"), 0xE3B7,
-            []() { return cfgGetBool(KEY_UI_SHOW_SHADER, false); },
-            [this](bool v) { cfgSetBool(KEY_UI_SHOW_SHADER, v); if (m_host.showShader) m_host.showShader(v); }));
         emulator.push_back(_selector(L("颜色主题"), L("控制原生控件及自绘界面的深色或浅色基调"), 0xE3B7,
             {L("深色"), L("浅色")},
             []() { return cfgGetStr(KEY_UI_THEME, "dark") == "light" ? 1 : 0; },
@@ -1729,6 +1726,9 @@ private:
                 if (m_host.applyUiTheme) m_host.applyUiTheme();
                 invalidate();
             }));
+        emulator.push_back(_toggle(L("动态渐变背景"), L("显示与主页一致的动态背景"), 0xE3B7,
+            []() { return cfgGetBool(KEY_UI_SHOW_SHADER, false); },
+            [this](bool v) { cfgSetBool(KEY_UI_SHOW_SHADER, v); if (m_host.showShader) m_host.showShader(v); }));
         const std::vector<std::string> themeLabels = {L("深夜蓝"), L("柠檬黄"), L("牛油果绿"), L("草莓红"), L("海洋蓝"), L("樱花粉"), L("VSCode黑"), L("极光青"), L("皇家紫"), L("日落橙"), L("石墨灰"), L("云雾白")};
         const std::vector<std::string> themeValues = {"Midnight", "LemonYellow", "AvocadoGreen", "StrawberryRed", "OceanBlue", "SakuraPink", "VscodeBlack", "AuroraTeal", "RoyalPurple", "SunsetOrange", "Graphite", "CloudWhite"};
         emulator.push_back(_selector(L("渐变主题"), L("切换后立即应用到当前页面"), 0xE40A, themeLabels,
@@ -1764,7 +1764,7 @@ private:
                     invalidate();
                 }, current.parent_path().string(), current.filename().string());
             }));
-        emulator.push_back(_selector(L("动画背景播放速度"), L("影响 GIF 和 MP4 背景；切换后立即生效"), 0xE8D5,
+        emulator.push_back(_selector(L("GIF播放速度"), L("影响 GIF 背景播放速度；切换后立即生效"), 0xE8D5,
             {"0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x"},
             []() {
                 static constexpr float speeds[] = {0.5f, 0.75f, 1.f, 1.25f, 1.5f, 2.f};
@@ -4517,7 +4517,7 @@ brls::View *SettingPage::buildUITab()
             const float distance = std::fabs(currentGifSpeed - gifSpeeds[i]);
             if (distance < gifSpeedDistance) { gifSpeedIndex = i; gifSpeedDistance = distance; }
         }
-        gifSpeedCell->init(L("动画背景播放速度"),
+        gifSpeedCell->init(L("GIF播放速度"),
                            {"0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x"},
                            gifSpeedIndex,
                            [](int index) {
@@ -4527,6 +4527,7 @@ brls::View *SettingPage::buildUITab()
                                        gifSpeeds[index]);
                            });
         box->addView(gifSpeedCell);
+
     }
 
     // 文件列表滚动动画
