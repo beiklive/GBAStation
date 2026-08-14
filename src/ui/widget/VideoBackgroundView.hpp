@@ -37,10 +37,6 @@ namespace beiklive
         // Used while an emulator core owns CPU time. The decoded texture is
         // retained, but the worker stops filling frames until UI resumes.
         static void setSharedPlaybackPaused(bool paused);
-        // Applies the background-audio toggle immediately by dropping stale
-        // PCM and waking the shared output worker.
-        static void notifySharedAudioSettingsChanged();
-
         void frame(brls::FrameContext* ctx) override;
         void draw(NVGcontext* vg, float x, float y, float width, float height,
                   brls::Style style, brls::FrameContext* ctx) override;

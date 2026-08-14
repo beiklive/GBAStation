@@ -496,6 +496,7 @@ namespace beiklive
         SettingManager->SetDefault(KEY_UI_SHOW_BG_IMAGE, ConfigValue(0));
         SettingManager->SetDefault(KEY_UI_BG_IMAGE_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_UI_BG_GIF_SPEED, ConfigValue(1.0f));
+        SettingManager->SetDefault(KEY_UI_BG_VIDEO_FRAME_RATE, ConfigValue(30));
         SettingManager->SetDefault(KEY_UI_BG_BLUR_ENABLED, ConfigValue(0));
         SettingManager->SetDefault(KEY_UI_BG_BLUR_RADIUS, ConfigValue(12.0f));
         SettingManager->SetDefault(KEY_UI_SHOW_XMB_BG, ConfigValue(0));
@@ -542,8 +543,6 @@ namespace beiklive
         // 音频设置
         SettingManager->SetDefault(KEY_AUDIO_BUTTON_SFX, ConfigValue(1));
         SettingManager->SetDefault(KEY_AUDIO_BUTTON_SFX_VOLUME, ConfigValue(100));
-        SettingManager->SetDefault(KEY_AUDIO_BG_VIDEO_ENABLED, ConfigValue(0));
-        SettingManager->SetDefault(KEY_AUDIO_BG_VIDEO_VOLUME, ConfigValue(50));
         SettingManager->SetDefault(KEY_AUDIO_TARGET_LATENCY_MS, ConfigValue(90));
         SettingManager->SetDefault(KEY_AUDIO_MAX_LATENCY_MS, ConfigValue(180));
         SettingManager->SetDefault(KEY_AUDIO_SYNC_STRENGTH, ConfigValue(0.015f));

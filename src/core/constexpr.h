@@ -178,6 +178,7 @@ namespace beiklive::SettingKey
     constexpr const char *KEY_UI_SHOW_BG_IMAGE      = "UI.showBgImage";            ///< 是否显示背景图片
     constexpr const char *KEY_UI_BG_IMAGE_PATH      = "UI.bgImagePath";            ///< 背景图片路径
     constexpr const char *KEY_UI_BG_GIF_SPEED       = "UI.bgGifSpeed";             ///< GIF 背景播放速度倍率
+    constexpr const char *KEY_UI_BG_VIDEO_FRAME_RATE = "UI.bgVideoFrameRate";      ///< MP4 背景纹理更新帧率
     constexpr const char *KEY_UI_BG_BLUR_ENABLED    = "UI.bgBlurEnabled";          ///< 是否开启背景模糊
     constexpr const char *KEY_UI_BG_BLUR_RADIUS     = "UI.bgBlurRadius";           ///< 背景模糊半径
 
@@ -237,8 +238,6 @@ namespace beiklive::SettingKey
     // 音频设置
     constexpr const char *KEY_AUDIO_BUTTON_SFX          = "audio.buttonSfx";          ///< 按钮音效开关
     constexpr const char *KEY_AUDIO_BUTTON_SFX_VOLUME   = "audio.buttonSfxVolume";    ///< 按钮音效音量（0-100）
-    constexpr const char *KEY_AUDIO_BG_VIDEO_ENABLED    = "audio.backgroundVideoEnabled"; ///< 背景视频音频开关
-    constexpr const char *KEY_AUDIO_BG_VIDEO_VOLUME     = "audio.backgroundVideoVolume";  ///< 背景视频音量（0-100）
     constexpr const char *KEY_AUDIO_TARGET_LATENCY_MS   = "audio.targetLatencyMs";    ///< 音频同步目标缓冲延迟（毫秒）
     constexpr const char *KEY_AUDIO_MAX_LATENCY_MS      = "audio.maxLatencyMs";       ///< 音频最大缓冲延迟（毫秒）
     constexpr const char *KEY_AUDIO_SYNC_STRENGTH       = "audio.syncStrength";       ///< 音画同步修正强度

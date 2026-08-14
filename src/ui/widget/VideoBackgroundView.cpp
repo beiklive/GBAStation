@@ -7,8 +7,6 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdint>
-#include <cstring>
-#include <deque>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -17,22 +15,14 @@
 #include <vector>
 
 #include "core/common.h"
-#include "ui/utils/AudioOutputLock.hpp"
-
-#ifdef __SWITCH__
-#include <switch.h>
-#endif
-
 extern "C"
 {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avio.h>
 #include <libavformat/avformat.h>
-#include <libavutil/channel_layout.h>
 #include <libavutil/error.h>
 #include <libavutil/mem.h>
 #include <libavutil/pixdesc.h>
-#include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 }
 
@@ -53,15 +43,8 @@ namespace beiklive
         {
             stop.store(true, std::memory_order_release);
             queueWake.notify_all();
-#ifdef __SWITCH__
-            audioWake.notify_all();
-#endif
             if (decoder.joinable())
                 decoder.join();
-#ifdef __SWITCH__
-            if (audioOutput.joinable())
-                audioOutput.join();
-#endif
         }
 
         std::string path;
@@ -91,6 +74,10 @@ namespace beiklive
         // modal obscures every consumer, preventing a return from consuming a
         // burst of "overdue" queued frames.
         double presentationElapsed = 0.0;
+        // Updated by the UI thread and consumed by the decoder before RGBA
+        // conversion. Keeping the rate limit on this side leaves NanoVG's
+        // frame scheduling and texture ownership untouched.
+        std::atomic_int targetFrameRate{30};
         std::chrono::steady_clock::time_point lastPresentationTick{};
 
         // One producer (decoder) and one consumer (UI). FFmpeg and NanoVG
@@ -102,15 +89,6 @@ namespace beiklive
         size_t writeIndex = 0;
         size_t queued = 0;
 
-#ifdef __SWITCH__
-        // FFmpeg's decoder thread produces 48 kHz stereo PCM.  The output
-        // thread is the only background owner of audout and consumes small
-        // chunks so it can react immediately to disable/pause/replacement.
-        std::mutex audioMutex;
-        std::condition_variable audioWake;
-        std::deque<std::vector<int16_t>> audioQueue;
-        std::thread audioOutput;
-#endif
     };
 
     namespace
@@ -149,116 +127,14 @@ namespace beiklive
         constexpr auto kInitialFrameDeadline = std::chrono::seconds(15);
         constexpr int kAvioBufferSize = 256 * 1024;
 
-#ifdef __SWITCH__
-        constexpr int kBackgroundAudioRate = 48000;
-        constexpr size_t kBackgroundAudioQueueLimit = 16;
-
-        bool backgroundVideoAudioEnabled()
+        int backgroundVideoFrameRate()
         {
-            return GET_SETTING_KEY_INT(SettingKey::KEY_AUDIO_BG_VIDEO_ENABLED, 0) != 0;
-        }
-
-        float backgroundVideoAudioVolume()
-        {
-            return std::clamp(static_cast<float>(GET_SETTING_KEY_INT(
-                SettingKey::KEY_AUDIO_BG_VIDEO_VOLUME, 50)) / 100.0f, 0.0f, 1.0f);
-        }
-
-        void clearAudioQueue(SharedVideo& video)
-        {
-            std::lock_guard<std::mutex> lock(video.audioMutex);
-            video.audioQueue.clear();
-            video.audioWake.notify_all();
-        }
-
-        bool enqueueAudio(SharedVideo& video, std::vector<int16_t>&& pcm)
-        {
-            if (pcm.empty())
-                return true;
-            std::unique_lock<std::mutex> lock(video.audioMutex);
-            video.audioWake.wait(lock, [&]() {
-                return video.stop.load(std::memory_order_acquire) ||
-                    !backgroundVideoAudioEnabled() ||
-                    g_videoPlaybackPaused.load(std::memory_order_acquire) ||
-                    video.audioQueue.size() < kBackgroundAudioQueueLimit;
+            static constexpr std::array<int, 7> rates = {30, 35, 40, 45, 50, 55, 60};
+            const int configured = GET_SETTING_KEY_INT(SettingKey::KEY_UI_BG_VIDEO_FRAME_RATE, 30);
+            return *std::min_element(rates.begin(), rates.end(), [configured](int left, int right) {
+                return std::abs(left - configured) < std::abs(right - configured);
             });
-            if (video.stop.load(std::memory_order_acquire))
-                return false;
-            if (!backgroundVideoAudioEnabled() ||
-                g_videoPlaybackPaused.load(std::memory_order_acquire))
-                return true;
-            video.audioQueue.emplace_back(std::move(pcm));
-            lock.unlock();
-            video.audioWake.notify_all();
-            return true;
         }
-
-        void audioPlaybackLoop(SharedVideo* video)
-        {
-            bool logged = false;
-            while (!video->stop.load(std::memory_order_acquire)) {
-                std::vector<int16_t> pcm;
-                {
-                    std::unique_lock<std::mutex> lock(video->audioMutex);
-                    video->audioWake.wait(lock, [&]() {
-                        return video->stop.load(std::memory_order_acquire) ||
-                            (!g_videoPlaybackPaused.load(std::memory_order_acquire) &&
-                             backgroundVideoAudioEnabled() && !video->audioQueue.empty());
-                    });
-                    if (video->stop.load(std::memory_order_acquire))
-                        break;
-                    if (!backgroundVideoAudioEnabled() ||
-                        g_videoPlaybackPaused.load(std::memory_order_acquire)) {
-                        video->audioQueue.clear();
-                        continue;
-                    }
-                    pcm = std::move(video->audioQueue.front());
-                    video->audioQueue.pop_front();
-                    video->audioWake.notify_all();
-                }
-
-                const float volume = backgroundVideoAudioVolume();
-                if (volume <= 0.001f)
-                    continue;
-                for (auto& sample : pcm) {
-                    const int scaled = static_cast<int>(std::lround(sample * volume));
-                    sample = static_cast<int16_t>(std::clamp(scaled, -32768, 32767));
-                }
-                const size_t dataBytes = pcm.size() * sizeof(int16_t);
-                const size_t alignedBytes = (dataBytes + 0xFFF) & ~static_cast<size_t>(0xFFF);
-                void* buffer = aligned_alloc(0x1000, alignedBytes);
-                if (!buffer) {
-                    brls::Logger::warning("MP4: background audio allocation failed ({} bytes)", alignedBytes);
-                    continue;
-                }
-                std::memset(buffer, 0, alignedBytes);
-                std::memcpy(buffer, pcm.data(), dataBytes);
-                AudioOutBuffer output{};
-                output.buffer = buffer;
-                output.buffer_size = alignedBytes;
-                output.data_size = dataBytes;
-                {
-                    std::lock_guard<std::mutex> audioLock(audio::switchAudioOutMutex);
-                    if (!video->stop.load(std::memory_order_acquire) &&
-                        !g_videoPlaybackPaused.load(std::memory_order_acquire) &&
-                        backgroundVideoAudioEnabled() &&
-                        R_SUCCEEDED(audoutAppendAudioOutBuffer(&output))) {
-                        if (!logged) {
-                            logged = true;
-                            brls::Logger::info("MP4: background audio output started for '{}'", video->path);
-                        }
-                        AudioOutBuffer* released = nullptr;
-                        u32 releasedCount = 0;
-                        const auto frames = pcm.size() / 2;
-                        const u64 waitNs = static_cast<u64>(frames) * 2000000000ULL /
-                            kBackgroundAudioRate + 100000000ULL;
-                        audoutWaitPlayFinish(&released, &releasedCount, waitNs);
-                    }
-                }
-                free(buffer);
-            }
-        }
-#endif
 
         const char* errorText(int error, char (&buffer)[AV_ERROR_MAX_STRING_SIZE])
         {
@@ -403,15 +279,6 @@ namespace beiklive
             AVFrame* frame = nullptr;
             AVPacket* packet = nullptr;
             SwsContext* sws = nullptr;
-#ifdef __SWITCH__
-            AVCodecContext* audioCodec = nullptr;
-            AVFrame* audioFrame = nullptr;
-            SwrContext* swr = nullptr;
-            AVChannelLayout resamplerInputLayout{};
-            int resamplerInputRate = 0;
-            AVSampleFormat resamplerInputFormat = AV_SAMPLE_FMT_NONE;
-            int audioStreamIndex = -1;
-#endif
             uint8_t* ioBuffer = nullptr;
 
             const auto cleanup = [&]() {
@@ -419,12 +286,6 @@ namespace beiklive
                 av_packet_free(&packet);
                 av_frame_free(&frame);
                 avcodec_free_context(&codec);
-#ifdef __SWITCH__
-                swr_free(&swr);
-                av_channel_layout_uninit(&resamplerInputLayout);
-                av_frame_free(&audioFrame);
-                avcodec_free_context(&audioCodec);
-#endif
                 avformat_close_input(&format);
                 avio_context_free(&io);
             };
@@ -533,120 +394,6 @@ namespace beiklive
                 return;
             }
 
-#ifdef __SWITCH__
-            // Background video audio is optional, but the decoder is opened
-            // once so enabling the setting takes effect immediately without
-            // reopening or rereading the MP4.  Audio failures never prevent
-            // the picture from playing.
-            for (unsigned int index = 0; index < format->nb_streams; ++index) {
-                if (format->streams[index]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-                    audioStreamIndex = static_cast<int>(index);
-                    break;
-                }
-            }
-            if (audioStreamIndex >= 0) {
-                AVStream* audioStream = format->streams[audioStreamIndex];
-                const AVCodec* audioDecoder = avcodec_find_decoder(audioStream->codecpar->codec_id);
-                if (!audioDecoder) {
-                    brls::Logger::warning("MP4: '{}' audio codec '{}' is unavailable",
-                                          video->path,
-                                          avcodec_get_name(audioStream->codecpar->codec_id));
-                    audioStreamIndex = -1;
-                } else {
-                    audioCodec = avcodec_alloc_context3(audioDecoder);
-                    int audioResult = audioCodec
-                        ? avcodec_parameters_to_context(audioCodec, audioStream->codecpar)
-                        : AVERROR(ENOMEM);
-                    if (audioResult >= 0)
-                        audioResult = avcodec_open2(audioCodec, audioDecoder, nullptr);
-                    if (audioResult < 0) {
-                        char text[AV_ERROR_MAX_STRING_SIZE];
-                        brls::Logger::warning("MP4: audio decoder open failed for '{}': {}",
-                                              video->path, errorText(audioResult, text));
-                        avcodec_free_context(&audioCodec);
-                        audioStreamIndex = -1;
-                    } else if (!(audioFrame = av_frame_alloc())) {
-                        brls::Logger::warning("MP4: audio frame allocation failed for '{}'", video->path);
-                        avcodec_free_context(&audioCodec);
-                        audioStreamIndex = -1;
-                    } else {
-                        brls::Logger::info("MP4: audio decoder opened '{}': {}",
-                                           video->path, avcodec_get_name(audioCodec->codec_id));
-                    }
-                }
-            }
-
-            // libswresample handles planar/packed samples, downmixing and
-            // fractional resampling without introducing long-term drift.
-            const auto receiveAudioFrames = [&]() -> bool {
-                if (!audioCodec || !audioFrame)
-                    return true;
-                while (!video->stop.load(std::memory_order_acquire)) {
-                    const int audioResult = avcodec_receive_frame(audioCodec, audioFrame);
-                    if (audioResult == AVERROR(EAGAIN) || audioResult == AVERROR_EOF)
-                        return true;
-                    if (audioResult < 0) {
-                        char text[AV_ERROR_MAX_STRING_SIZE];
-                        brls::Logger::warning("MP4: audio frame decode failed for '{}': {}",
-                                              video->path, errorText(audioResult, text));
-                        return true;
-                    }
-                    if (!backgroundVideoAudioEnabled()) {
-                        clearAudioQueue(*video);
-                        continue;
-                    }
-                    if (audioFrame->sample_rate <= 0 || audioFrame->nb_samples <= 0 ||
-                        audioFrame->ch_layout.nb_channels <= 0) {
-                        brls::Logger::warning("MP4: '{}' produced an invalid audio frame", video->path);
-                        continue;
-                    }
-                    const AVSampleFormat inputFormat =
-                        static_cast<AVSampleFormat>(audioFrame->format);
-                    const bool resamplerChanged = !swr ||
-                        resamplerInputRate != audioFrame->sample_rate ||
-                        resamplerInputFormat != inputFormat ||
-                        av_channel_layout_compare(&resamplerInputLayout,
-                                                  &audioFrame->ch_layout) != 0;
-                    if (resamplerChanged) {
-                        AVChannelLayout stereoLayout;
-                        av_channel_layout_default(&stereoLayout, 2);
-                        const int configureResult = swr_alloc_set_opts2(
-                            &swr, &stereoLayout, AV_SAMPLE_FMT_S16, kBackgroundAudioRate,
-                            &audioFrame->ch_layout, inputFormat, audioFrame->sample_rate,
-                            0, nullptr);
-                        av_channel_layout_uninit(&stereoLayout);
-                        if (configureResult < 0 || !swr || swr_init(swr) < 0 ||
-                            av_channel_layout_copy(&resamplerInputLayout,
-                                                   &audioFrame->ch_layout) < 0) {
-                            brls::Logger::warning("MP4: audio resampler setup failed for '{}'", video->path);
-                            swr_free(&swr);
-                            av_channel_layout_uninit(&resamplerInputLayout);
-                            return true;
-                        }
-                        resamplerInputRate = audioFrame->sample_rate;
-                        resamplerInputFormat = inputFormat;
-                    }
-                    const int outputSamples = av_rescale_rnd(
-                        swr_get_delay(swr, audioFrame->sample_rate) + audioFrame->nb_samples,
-                        kBackgroundAudioRate, audioFrame->sample_rate, AV_ROUND_UP);
-                    if (outputSamples <= 0)
-                        continue;
-                    std::vector<int16_t> pcm(static_cast<size_t>(outputSamples) * 2);
-                    uint8_t* destination[] = {reinterpret_cast<uint8_t*>(pcm.data())};
-                    const int converted = swr_convert(
-                        swr, destination, outputSamples,
-                        const_cast<const uint8_t**>(audioFrame->extended_data),
-                        audioFrame->nb_samples);
-                    if (converted <= 0)
-                        continue;
-                    pcm.resize(static_cast<size_t>(converted) * 2);
-                    if (!enqueueAudio(*video, std::move(pcm)))
-                        return false;
-                }
-                return false;
-            };
-#endif
-
             const AVRational rate = av_guess_frame_rate(format, stream, nullptr);
             const double nominalDuration = rate.num > 0 && rate.den > 0
                 ? std::clamp(av_q2d(av_inv_q(rate)), kMinFrameDuration, kMaxFrameDuration)
@@ -670,6 +417,8 @@ namespace beiklive
             double rawSegmentStart = 0.0;
             double loopOffset = 0.0;
             double lastTimelinePts = 0.0;
+            int outputFrameRate = 0;
+            double outputFrameAccumulator = 0.0;
             while (!video->stop.load(std::memory_order_acquire)) {
                 {
                     std::unique_lock<std::mutex> lock(video->queueMutex);
@@ -745,6 +494,22 @@ namespace beiklive
                         segmentStart = false;
                     }
                     const double timelinePts = loopOffset + std::max(0.0, rawPts - rawSegmentStart);
+                    const int targetRate = std::clamp(
+                        video->targetFrameRate.load(std::memory_order_acquire), 30, 60);
+                    if (targetRate != outputFrameRate) {
+                        outputFrameRate = targetRate;
+                        outputFrameAccumulator = 0.0;
+                    }
+                    const bool queueFirstFrame = !video->firstFrameQueued.load(
+                        std::memory_order_acquire);
+                    if (!queueFirstFrame && targetRate < framesPerSecond) {
+                        outputFrameAccumulator += targetRate;
+                        if (outputFrameAccumulator + 1e-6 < framesPerSecond) {
+                            lastTimelinePts = timelinePts;
+                            continue;
+                        }
+                        outputFrameAccumulator -= framesPerSecond;
+                    }
                     std::vector<uint8_t> rgba(static_cast<size_t>(outputWidth) * outputHeight * 4);
                     uint8_t* destination[] = {rgba.data(), nullptr, nullptr, nullptr};
                     int stride[] = {outputWidth * 4, 0, 0, 0};
@@ -775,11 +540,6 @@ namespace beiklive
                         return;
                     }
                     avcodec_flush_buffers(codec);
-#ifdef __SWITCH__
-                    if (audioCodec)
-                        avcodec_flush_buffers(audioCodec);
-                    clearAudioQueue(*video);
-#endif
                     av_packet_unref(packet);
                     sentEof = false;
                     segmentStart = true;
@@ -796,33 +556,9 @@ namespace beiklive
                             fail("decoder drain", result);
                             return;
                         }
-#ifdef __SWITCH__
-                        if (audioCodec && backgroundVideoAudioEnabled()) {
-                            const int audioResult = avcodec_send_packet(audioCodec, nullptr);
-                            if (audioResult >= 0 && !receiveAudioFrames())
-                                break;
-                        }
-#endif
                     }
                     continue;
                 }
-#ifdef __SWITCH__
-                if (packet->stream_index == audioStreamIndex) {
-                    if (audioCodec && backgroundVideoAudioEnabled()) {
-                        const int audioResult = avcodec_send_packet(audioCodec, packet);
-                        if (audioResult < 0 && audioResult != AVERROR(EAGAIN)) {
-                            char text[AV_ERROR_MAX_STRING_SIZE];
-                            brls::Logger::warning("MP4: audio packet decode failed for '{}': {}",
-                                                  video->path, errorText(audioResult, text));
-                        } else if (!receiveAudioFrames()) {
-                            av_packet_unref(packet);
-                            break;
-                        }
-                    }
-                    av_packet_unref(packet);
-                    continue;
-                }
-#endif
                 if (packet->stream_index != streamIndex) {
                     av_packet_unref(packet);
                     continue;
@@ -875,9 +611,6 @@ namespace beiklive
                 return;
             video->stop.store(true, std::memory_order_release);
             video->queueWake.notify_all();
-#ifdef __SWITCH__
-            video->audioWake.notify_all();
-#endif
 
             // NanoVG resources belong to the UI thread. The next decoder
             // must not start until this one has fully stopped: on Switch,
@@ -896,10 +629,6 @@ namespace beiklive
                 video->decoder.join();
                 brls::Logger::info("MP4: outgoing decoder '{}' stopped", video->path);
             }
-#ifdef __SWITCH__
-            if (video->audioOutput.joinable())
-                video->audioOutput.join();
-#endif
         }
 
         void setActiveVideo(const std::shared_ptr<SharedVideo>& video)
@@ -931,9 +660,6 @@ namespace beiklive
         auto video = std::make_shared<SharedVideo>();
         video->path = path;
         video->decoder = std::thread(decodeLoop, video.get());
-#ifdef __SWITCH__
-        video->audioOutput = std::thread(audioPlaybackLoop, video.get());
-#endif
         g_videoCache[path] = std::move(video);
         brls::Logger::info("MP4: preloading replacement background '{}'", path);
         return true;
@@ -975,9 +701,6 @@ namespace beiklive
                 continue;
             video->stop.store(true, std::memory_order_release);
             video->queueWake.notify_all();
-#ifdef __SWITCH__
-            video->audioWake.notify_all();
-#endif
             if (NVGcontext* vg = brls::Application::getNVGContext(); vg && video->texture > 0) {
                 nvgDeleteImage(vg, video->texture);
                 video->texture = 0;
@@ -986,10 +709,6 @@ namespace beiklive
             }
             if (video->decoder.joinable())
                 video->decoder.join();
-#ifdef __SWITCH__
-            if (video->audioOutput.joinable())
-                video->audioOutput.join();
-#endif
         }
         g_videoCache.clear();
         setActiveVideo(nullptr);
@@ -1010,35 +729,8 @@ namespace beiklive
         for (auto& [path, video] : g_videoCache) {
             (void)path;
             video->queueWake.notify_all();
-#ifdef __SWITCH__
-            video->audioWake.notify_all();
-#endif
         }
-#ifdef __SWITCH__
-        if (paused) {
-            // A game core opens the same audout completion queue.  Finish at
-            // most one already-submitted background chunk before it starts,
-            // preventing a cross-thread completion/free race.
-            std::lock_guard<std::mutex> audioLock(audio::switchAudioOutMutex);
-        }
-#endif
         brls::Logger::info("MP4: shared background playback {}", paused ? "paused" : "resumed");
-    }
-
-    void VideoBackgroundView::notifySharedAudioSettingsChanged()
-    {
-#ifdef __SWITCH__
-        const bool enabled = backgroundVideoAudioEnabled();
-        for (auto& [path, video] : g_videoCache) {
-            (void)path;
-            if (!video)
-                continue;
-            std::lock_guard<std::mutex> lock(video->audioMutex);
-            if (!enabled)
-                video->audioQueue.clear();
-            video->audioWake.notify_all();
-        }
-#endif
     }
 
     bool VideoBackgroundView::load(const std::string& path)
@@ -1058,9 +750,6 @@ namespace beiklive
             video = std::make_shared<SharedVideo>();
             video->path = path;
             video->decoder = std::thread(decodeLoop, video.get());
-#ifdef __SWITCH__
-            video->audioOutput = std::thread(audioPlaybackLoop, video.get());
-#endif
             g_videoCache[path] = video;
         }
 
@@ -1093,6 +782,7 @@ namespace beiklive
             return;
         if (g_videoPlaybackPaused.load(std::memory_order_acquire))
             return;
+        video->targetFrameRate.store(backgroundVideoFrameRate(), std::memory_order_release);
         NVGcontext* vg = brls::Application::getNVGContext();
         if (!vg)
             return;

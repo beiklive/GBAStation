@@ -1755,7 +1755,7 @@ private:
         emulator.push_back(_toggle(L("启用背景图片"), L("在动态背景上显示自定义 PNG、GIF图片 或 MP4视频"), beiklive::material::IMAGE,
             []() { return cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false); },
             [this](bool v) { cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); if (m_host.showBackground) m_host.showBackground(v); }));
-        emulator.push_back(_action(L("背景图片路径"), L("从文件浏览器选择 PNG、GIF图片 或 MP4视频(视频要求小于128MB，编码H264 最高1080p)"), beiklive::material::IMAGE,
+        emulator.push_back(_action(L("背景图片路径"), L("从文件浏览器选择 PNG、GIF图片 或 MP4视频(视频要求小于128MB，编码H264 最高720p 帧数不要高于60fps,30fps最流畅)"), beiklive::material::IMAGE,
             []() { const auto path = cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""); return path.empty() ? L("未设置") : beiklive::tools::getFileName(path); },
             [this]() {
                 const std::filesystem::path current(cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""));
@@ -1782,6 +1782,23 @@ private:
                 static constexpr float speeds[] = {0.5f, 0.75f, 1.f, 1.25f, 1.5f, 2.f};
                 if (index >= 0 && index < 6)
                     SET_SETTING_KEY_FLOAT(KEY_UI_BG_GIF_SPEED, speeds[index]);
+            }));
+        const std::vector<int> videoFrameRateValues = {30, 35, 40, 45, 50, 55, 60};
+        emulator.push_back(_selector(L("MP4播放帧率"), L("限制 MP4 背景纹理更新频率，通过跳帧降低 CPU/GPU 占用；不改变播放速度"), 0xE8D5,
+            {"30 FPS", "35 FPS", "40 FPS", "45 FPS", "50 FPS", "55 FPS", "60 FPS"},
+            [videoFrameRateValues]() {
+                const int current = cfgGetInt(KEY_UI_BG_VIDEO_FRAME_RATE, 30);
+                int best = 0;
+                int distance = std::abs(current - videoFrameRateValues[best]);
+                for (int i = 1; i < static_cast<int>(videoFrameRateValues.size()); ++i) {
+                    const int candidate = std::abs(current - videoFrameRateValues[i]);
+                    if (candidate < distance) { best = i; distance = candidate; }
+                }
+                return best;
+            },
+            [videoFrameRateValues](int index) {
+                if (index >= 0 && index < static_cast<int>(videoFrameRateValues.size()))
+                    cfgSetInt(KEY_UI_BG_VIDEO_FRAME_RATE, videoFrameRateValues[index]);
             }));
         emulator.push_back(_toggle(L("文件列表滚动动画"), L("关闭后文件列表会直接跳转"), 0xE8D5,
             []() { return cfgGetBool(KEY_FILE_LIST_SCROLL_ANIM, true); },
@@ -1966,12 +1983,6 @@ private:
             volumeLabels,
             [volumeValues]() { const int cur = cfgGetInt(KEY_AUDIO_BUTTON_SFX_VOLUME, 100); for (int i = 0; i < static_cast<int>(volumeValues.size()); ++i) if (volumeValues[i] == cur) return i; return 4; },
             [volumeValues](int i) { if (i >= 0 && i < static_cast<int>(volumeValues.size())) cfgSetInt(KEY_AUDIO_BUTTON_SFX_VOLUME, volumeValues[i]); }));
-        audio.push_back(_toggle(L("播放背景视频声音"), L("播放 MP4 背景中包含的音频；运行游戏时自动暂停"), 0xE050,
-            []() { return cfgGetBool(KEY_AUDIO_BG_VIDEO_ENABLED, false); }, [](bool v) { cfgSetBool(KEY_AUDIO_BG_VIDEO_ENABLED, v); VideoBackgroundView::notifySharedAudioSettingsChanged(); }));
-        audio.push_back(_selector(L("背景视频声音音量"), L("调整 MP4 背景音频的音量"), 0xE050,
-            volumeLabels,
-            [volumeValues]() { const int cur = cfgGetInt(KEY_AUDIO_BG_VIDEO_VOLUME, 50); int best = 2; int delta = std::abs(cur - volumeValues[best]); for (int i = 0; i < static_cast<int>(volumeValues.size()); ++i) { const int candidate = std::abs(cur - volumeValues[i]); if (candidate < delta) { best = i; delta = candidate; } } return best; },
-            [volumeValues](int i) { if (i >= 0 && i < static_cast<int>(volumeValues.size())) cfgSetInt(KEY_AUDIO_BG_VIDEO_VOLUME, volumeValues[i]); }));
         const std::vector<int> targetValues = {60, 90, 120, 160};
         audio.push_back(_selector(L("目标缓冲延迟"), L("越低反馈越快，越高越不容易断音"), 0xE425,
             {"60 ms", "90 ms", "120 ms", "160 ms"},
@@ -4555,6 +4566,29 @@ brls::View *SettingPage::buildUITab()
                            });
         box->addView(gifSpeedCell);
 
+        auto *videoFrameRateCell = new brls::SelectorCell();
+        static constexpr int videoFrameRates[] = {30, 35, 40, 45, 50, 55, 60};
+        const int currentVideoFrameRate = cfgGetInt(
+            beiklive::SettingKey::KEY_UI_BG_VIDEO_FRAME_RATE, 30);
+        int videoFrameRateIndex = 0;
+        int videoFrameRateDistance = std::abs(currentVideoFrameRate - videoFrameRates[0]);
+        for (int i = 1; i < 7; ++i) {
+            const int distance = std::abs(currentVideoFrameRate - videoFrameRates[i]);
+            if (distance < videoFrameRateDistance) {
+                videoFrameRateIndex = i;
+                videoFrameRateDistance = distance;
+            }
+        }
+        videoFrameRateCell->init(L("MP4播放帧率"),
+                                 {"30 FPS", "35 FPS", "40 FPS", "45 FPS", "50 FPS", "55 FPS", "60 FPS"},
+                                 videoFrameRateIndex,
+                                 [](int index) {
+                                     if (index >= 0 && index < 7)
+                                         cfgSetInt(beiklive::SettingKey::KEY_UI_BG_VIDEO_FRAME_RATE,
+                                                   videoFrameRates[index]);
+                                 });
+        box->addView(videoFrameRateCell);
+
     }
 
     // 文件列表滚动动画
@@ -4888,28 +4922,6 @@ brls::View *SettingPage::buildAudioTab()
         auto *cell = new brls::SelectorCell();
         cell->init(L("按键音效音量"), opts, idx,
                    [](int i) { if (i >= 0 && i < 5) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_BUTTON_SFX_VOLUME, vals[i]); });
-        box->addView(cell);
-    }
-
-    auto *backgroundAudioCell = new brls::BooleanCell();
-    backgroundAudioCell->init(L("播放背景视频声音"),
-                              cfgGetBool(beiklive::SettingKey::KEY_AUDIO_BG_VIDEO_ENABLED, false),
-                              [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_AUDIO_BG_VIDEO_ENABLED, v); VideoBackgroundView::notifySharedAudioSettingsChanged(); });
-    box->addView(backgroundAudioCell);
-
-    {
-        std::vector<std::string> opts = {L("静音"), "25%", "50%", "75%", "100%"};
-        static const int vals[] = {0, 25, 50, 75, 100};
-        int cur = cfgGetInt(beiklive::SettingKey::KEY_AUDIO_BG_VIDEO_VOLUME, 50);
-        int idx = 2;
-        int delta = std::abs(cur - vals[idx]);
-        for (int i = 0; i < 5; ++i) {
-            const int candidate = std::abs(cur - vals[i]);
-            if (candidate < delta) { idx = i; delta = candidate; }
-        }
-        auto *cell = new brls::SelectorCell();
-        cell->init(L("背景视频声音音量"), opts, idx,
-                   [](int i) { if (i >= 0 && i < 5) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_BG_VIDEO_VOLUME, vals[i]); });
         box->addView(cell);
     }
 
