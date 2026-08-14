@@ -34,18 +34,18 @@ target_include_directories(giflib PUBLIC
 )
 
 # =========================================================
-# FFmpeg - background MP4 playback only
+# FFmpeg - background MP4 video and audio playback
 #
 # Do not use the system FFmpeg executable or shared libraries.  The custom
-# target configures an isolated, static build with just MOV/MP4 demuxing,
-# H.264 decoding, file input and RGBA scaling.  In particular it excludes
-# programs, audio, filters, devices, encoders, muxers and network support.
+# target configures an isolated, static build with MOV/MP4 demuxing, common
+# video/audio decoders, file input and RGBA scaling. In particular it excludes
+# programs, filters, devices, encoders, muxers and network support.
 # =========================================================
 set(FFMPEG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/FFmpeg)
 # FFmpeg's configure generates headers and objects in its source directory.
 # Keep a self-contained source copy under each CMake build directory so
 # Windows and Switch never share architecture-specific static archives.
-set(FFMPEG_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-minimal)
+set(FFMPEG_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-background-audio)
 set(FFMPEG_BUILD_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/configure_ffmpeg_minimal.sh)
 # The configured copy is regenerated whenever the vendored source changes.
 # Without this dependency CMake can retain archives from a prior platform or
@@ -81,6 +81,7 @@ set(FFMPEG_STATIC_LIBRARIES
     ${FFMPEG_BUILD_DIR}/libavcodec/libavcodec.a
     ${FFMPEG_BUILD_DIR}/libavformat/libavformat.a
     ${FFMPEG_BUILD_DIR}/libswscale/libswscale.a
+    ${FFMPEG_BUILD_DIR}/libswresample/libswresample.a
 )
 
 add_custom_command(
@@ -109,9 +110,11 @@ add_ffmpeg_static_library(ffmpeg_avutil ${FFMPEG_BUILD_DIR}/libavutil/libavutil.
 add_ffmpeg_static_library(ffmpeg_avcodec ${FFMPEG_BUILD_DIR}/libavcodec/libavcodec.a)
 add_ffmpeg_static_library(ffmpeg_avformat ${FFMPEG_BUILD_DIR}/libavformat/libavformat.a)
 add_ffmpeg_static_library(ffmpeg_swscale ${FFMPEG_BUILD_DIR}/libswscale/libswscale.a)
+add_ffmpeg_static_library(ffmpeg_swresample ${FFMPEG_BUILD_DIR}/libswresample/libswresample.a)
 target_link_libraries(ffmpeg_avcodec INTERFACE ffmpeg_avutil)
 target_link_libraries(ffmpeg_avformat INTERFACE ffmpeg_avcodec ffmpeg_avutil)
 target_link_libraries(ffmpeg_swscale INTERFACE ffmpeg_avutil)
+target_link_libraries(ffmpeg_swresample INTERFACE ffmpeg_avutil)
 
 # =========================================================
 # mGBA 模拟器  –  源码 native 静态库构建

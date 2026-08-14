@@ -1,4 +1,5 @@
 #include "ui/utils/BKAudioPlayer.hpp"
+#include "ui/utils/AudioOutputLock.hpp"
 
 #include "core/common.h"
 #include "game/audio/AudioManager.hpp"
@@ -194,6 +195,14 @@ static bool isButtonSfxEnabled()
     if (auto i = v->AsInt())
         return (*i != 0);
     return true;
+}
+
+static float buttonSfxVolume()
+{
+    return std::clamp(
+        static_cast<float>(GET_SETTING_KEY_INT(
+            beiklive::SettingKey::KEY_AUDIO_BUTTON_SFX_VOLUME, 100)) / 100.0f,
+        0.0f, 1.0f);
 }
 
 std::string BKAudioPlayer::soundsDir()
@@ -416,8 +425,20 @@ void BKAudioPlayer::playbackThread()
             load(sound);
         }
 
-        if (m_sounds[idx].loaded)
-            playSoundDirect(idx, m_sounds[idx], pitch);
+        if (m_sounds[idx].loaded) {
+            // The stored WAV remains immutable so changing the selector takes
+            // effect on the very next UI sound without cumulative scaling.
+            WavData playback = m_sounds[idx];
+            const float volume = buttonSfxVolume();
+            if (volume < 0.999f) {
+                for (auto& sample : playback.samples) {
+                    const int scaled = static_cast<int>(std::lround(
+                        static_cast<float>(sample) * volume));
+                    sample = static_cast<int16_t>(std::clamp(scaled, -32768, 32767));
+                }
+            }
+            playSoundDirect(idx, playback, pitch);
+        }
         // 若文件缺失则静默跳过
     }
 }
@@ -487,16 +508,19 @@ void BKAudioPlayer::playSoundDirect(int /*soundIdx*/, const WavData& wav, float 
     buf.data_size   = dataBytes;
     buf.data_offset = 0;
 
-    if (R_SUCCEEDED(audoutAppendAudioOutBuffer(&buf)))
     {
-        // 标记正在播放：外部系统（如 AudioManager::init）可通过 isPlaying() 等待本缓冲区完成
-        m_isPlaying.store(true, std::memory_order_release);
-        // 等待音频播放完成，超时为音频时长的2倍 + 200ms
-        u64 waitNs = static_cast<u64>(inFrames) * 2000000000ULL / wav.sampleRate + 200000000ULL;
-        AudioOutBuffer* released = nullptr;
-        u32 relCount = 0;
-        audoutWaitPlayFinish(&released, &relCount, waitNs);
-        m_isPlaying.store(false, std::memory_order_release);
+        std::lock_guard<std::mutex> audioLock(audio::switchAudioOutMutex);
+        if (R_SUCCEEDED(audoutAppendAudioOutBuffer(&buf)))
+        {
+            // 标记正在播放：外部系统（如 AudioManager::init）可通过 isPlaying() 等待本缓冲区完成
+            m_isPlaying.store(true, std::memory_order_release);
+            // 等待音频播放完成，超时为音频时长的2倍 + 200ms
+            u64 waitNs = static_cast<u64>(inFrames) * 2000000000ULL / wav.sampleRate + 200000000ULL;
+            AudioOutBuffer* released = nullptr;
+            u32 relCount = 0;
+            audoutWaitPlayFinish(&released, &relCount, waitNs);
+            m_isPlaying.store(false, std::memory_order_release);
+        }
     }
 
     free(rawBuf);

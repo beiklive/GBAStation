@@ -5,6 +5,7 @@
 #include "ui/utils/AnimationHelper.hpp"
 #include "ui/utils/GradientFocus.hpp"
 #include "ui/utils/MaterialIcons.hpp"
+#include "ui/widget/VideoBackgroundView.hpp"
 
 #include <borealis/views/cells/cell_bool.hpp>
 #include <borealis/views/cells/cell_selector.hpp>
@@ -1751,10 +1752,10 @@ private:
                     ? (int)beiklive::enums::ThemeLayout::IISU_THEME
                     : (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
             }));
-        emulator.push_back(_toggle(L("启用背景图片"), L("在动态背景上显示自定义 PNG、GIF 或 MP4 图片"), beiklive::material::IMAGE,
+        emulator.push_back(_toggle(L("启用背景图片"), L("在动态背景上显示自定义 PNG、GIF图片 或 MP4视频"), beiklive::material::IMAGE,
             []() { return cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false); },
             [this](bool v) { cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); if (m_host.showBackground) m_host.showBackground(v); }));
-        emulator.push_back(_action(L("背景图片路径"), L("从文件浏览器选择 PNG、GIF 或 MP4 图片"), beiklive::material::IMAGE,
+        emulator.push_back(_action(L("背景图片路径"), L("从文件浏览器选择 PNG、GIF图片 或 MP4视频(视频要求小于128MB，编码H264 最高1080p)"), beiklive::material::IMAGE,
             []() { const auto path = cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""); return path.empty() ? L("未设置") : beiklive::tools::getFileName(path); },
             [this]() {
                 const std::filesystem::path current(cfgGetStr(KEY_UI_BG_IMAGE_PATH, ""));
@@ -1959,6 +1960,18 @@ private:
         audio.push_back(_section(L("音频输出")));
         audio.push_back(_toggle(L("按钮音效"), L("播放界面导航和确认音效"), 0xE050,
             []() { return cfgGetBool("audio.buttonSfx", true); }, [](bool v) { cfgSetBool("audio.buttonSfx", v); }));
+        const std::vector<int> volumeValues = {0, 25, 50, 75, 100};
+        const std::vector<std::string> volumeLabels = {L("静音"), "25%", "50%", "75%", "100%"};
+        audio.push_back(_selector(L("按键音效音量"), L("调整界面导航和确认音效的音量"), 0xE050,
+            volumeLabels,
+            [volumeValues]() { const int cur = cfgGetInt(KEY_AUDIO_BUTTON_SFX_VOLUME, 100); for (int i = 0; i < static_cast<int>(volumeValues.size()); ++i) if (volumeValues[i] == cur) return i; return 4; },
+            [volumeValues](int i) { if (i >= 0 && i < static_cast<int>(volumeValues.size())) cfgSetInt(KEY_AUDIO_BUTTON_SFX_VOLUME, volumeValues[i]); }));
+        audio.push_back(_toggle(L("播放背景视频声音"), L("播放 MP4 背景中包含的音频；运行游戏时自动暂停"), 0xE050,
+            []() { return cfgGetBool(KEY_AUDIO_BG_VIDEO_ENABLED, false); }, [](bool v) { cfgSetBool(KEY_AUDIO_BG_VIDEO_ENABLED, v); VideoBackgroundView::notifySharedAudioSettingsChanged(); }));
+        audio.push_back(_selector(L("背景视频声音音量"), L("调整 MP4 背景音频的音量"), 0xE050,
+            volumeLabels,
+            [volumeValues]() { const int cur = cfgGetInt(KEY_AUDIO_BG_VIDEO_VOLUME, 50); int best = 2; int delta = std::abs(cur - volumeValues[best]); for (int i = 0; i < static_cast<int>(volumeValues.size()); ++i) { const int candidate = std::abs(cur - volumeValues[i]); if (candidate < delta) { best = i; delta = candidate; } } return best; },
+            [volumeValues](int i) { if (i >= 0 && i < static_cast<int>(volumeValues.size())) cfgSetInt(KEY_AUDIO_BG_VIDEO_VOLUME, volumeValues[i]); }));
         const std::vector<int> targetValues = {60, 90, 120, 160};
         audio.push_back(_selector(L("目标缓冲延迟"), L("越低反馈越快，越高越不容易断音"), 0xE425,
             {"60 ms", "90 ms", "120 ms", "160 ms"},
@@ -4865,6 +4878,40 @@ brls::View *SettingPage::buildAudioTab()
     sfxCell->init("按钮音效", cfgGetBool("audio.buttonSfx", true),
                    [](bool v) { cfgSetBool("audio.buttonSfx", v); });
     box->addView(sfxCell);
+
+    {
+        std::vector<std::string> opts = {L("静音"), "25%", "50%", "75%", "100%"};
+        static const int vals[] = {0, 25, 50, 75, 100};
+        int cur = cfgGetInt(beiklive::SettingKey::KEY_AUDIO_BUTTON_SFX_VOLUME, 100);
+        int idx = 4;
+        for (int i = 0; i < 5; ++i) if (vals[i] == cur) { idx = i; break; }
+        auto *cell = new brls::SelectorCell();
+        cell->init(L("按键音效音量"), opts, idx,
+                   [](int i) { if (i >= 0 && i < 5) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_BUTTON_SFX_VOLUME, vals[i]); });
+        box->addView(cell);
+    }
+
+    auto *backgroundAudioCell = new brls::BooleanCell();
+    backgroundAudioCell->init(L("播放背景视频声音"),
+                              cfgGetBool(beiklive::SettingKey::KEY_AUDIO_BG_VIDEO_ENABLED, false),
+                              [](bool v) { cfgSetBool(beiklive::SettingKey::KEY_AUDIO_BG_VIDEO_ENABLED, v); VideoBackgroundView::notifySharedAudioSettingsChanged(); });
+    box->addView(backgroundAudioCell);
+
+    {
+        std::vector<std::string> opts = {L("静音"), "25%", "50%", "75%", "100%"};
+        static const int vals[] = {0, 25, 50, 75, 100};
+        int cur = cfgGetInt(beiklive::SettingKey::KEY_AUDIO_BG_VIDEO_VOLUME, 50);
+        int idx = 2;
+        int delta = std::abs(cur - vals[idx]);
+        for (int i = 0; i < 5; ++i) {
+            const int candidate = std::abs(cur - vals[i]);
+            if (candidate < delta) { idx = i; delta = candidate; }
+        }
+        auto *cell = new brls::SelectorCell();
+        cell->init(L("背景视频声音音量"), opts, idx,
+                   [](int i) { if (i >= 0 && i < 5) cfgSetInt(beiklive::SettingKey::KEY_AUDIO_BG_VIDEO_VOLUME, vals[i]); });
+        box->addView(cell);
+    }
 
     {
         std::vector<std::string> opts = {"60 ms", "90 ms", "120 ms", "160 ms"};

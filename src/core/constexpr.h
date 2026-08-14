@@ -236,6 +236,9 @@ namespace beiklive::SettingKey
 
     // 音频设置
     constexpr const char *KEY_AUDIO_BUTTON_SFX          = "audio.buttonSfx";          ///< 按钮音效开关
+    constexpr const char *KEY_AUDIO_BUTTON_SFX_VOLUME   = "audio.buttonSfxVolume";    ///< 按钮音效音量（0-100）
+    constexpr const char *KEY_AUDIO_BG_VIDEO_ENABLED    = "audio.backgroundVideoEnabled"; ///< 背景视频音频开关
+    constexpr const char *KEY_AUDIO_BG_VIDEO_VOLUME     = "audio.backgroundVideoVolume";  ///< 背景视频音量（0-100）
     constexpr const char *KEY_AUDIO_TARGET_LATENCY_MS   = "audio.targetLatencyMs";    ///< 音频同步目标缓冲延迟（毫秒）
     constexpr const char *KEY_AUDIO_MAX_LATENCY_MS      = "audio.maxLatencyMs";       ///< 音频最大缓冲延迟（毫秒）
     constexpr const char *KEY_AUDIO_SYNC_STRENGTH       = "audio.syncStrength";       ///< 音画同步修正强度

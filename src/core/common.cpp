@@ -541,6 +541,9 @@ namespace beiklive
 
         // 音频设置
         SettingManager->SetDefault(KEY_AUDIO_BUTTON_SFX, ConfigValue(1));
+        SettingManager->SetDefault(KEY_AUDIO_BUTTON_SFX_VOLUME, ConfigValue(100));
+        SettingManager->SetDefault(KEY_AUDIO_BG_VIDEO_ENABLED, ConfigValue(0));
+        SettingManager->SetDefault(KEY_AUDIO_BG_VIDEO_VOLUME, ConfigValue(50));
         SettingManager->SetDefault(KEY_AUDIO_TARGET_LATENCY_MS, ConfigValue(90));
         SettingManager->SetDefault(KEY_AUDIO_MAX_LATENCY_MS, ConfigValue(180));
         SettingManager->SetDefault(KEY_AUDIO_SYNC_STRENGTH, ConfigValue(0.015f));
