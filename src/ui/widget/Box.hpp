@@ -18,7 +18,7 @@ namespace beiklive
         Box();
         Box(brls::Axis flexDirection);
         ~Box();
-    
+
         beiklive::HeaderBar* getHeader() { return header; }
         brls::BottomBar* getBottomBar() { return bottomBar; }
         void showHeader(bool show);
@@ -46,6 +46,10 @@ namespace beiklive
         beiklive::GifBackgroundView* backgroundGifLayer = nullptr;
         beiklive::VideoBackgroundView* backgroundVideoLayer = nullptr;
         bool backgroundImageLoaded = false;
+        // Page-local visibility takes precedence over the global preference.
+        // Emulator pages set this false while their game surface owns the
+        // screen; frame() must not resurrect a shared GIF/MP4 above it.
+        bool backgroundVisibleRequested = false;
         bool backgroundIsGif = false;
         bool backgroundIsVideo = false;
         // MP4 is deliberately opened only after the first screen has been

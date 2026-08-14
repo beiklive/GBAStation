@@ -63,6 +63,7 @@ namespace beiklive
 
     void Box::showBackground(bool show)
     {
+        backgroundVisibleRequested = show;
         if (show) {
             // Returning from an emulator page resumes the shared MP4 worker.
             VideoBackgroundView::setSharedPlaybackPaused(false);
@@ -182,8 +183,8 @@ namespace beiklive
             !path.empty() && std::filesystem::exists(path);
         if (requestedVideo && !backgroundIsVideo)
             brls::Logger::warning("MP4 background path is unavailable: '{}'", path);
-        const bool show = GET_SETTING_KEY_INT(
-            beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
+        const bool show = backgroundVisibleRequested &&
+            GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
         if (backgroundIsGif) {
             backgroundVideoLoadPending = false;
             backgroundVideoFadeStarted = false;
@@ -516,8 +517,8 @@ namespace beiklive
         // GIF decoding happens off the UI thread. Once its first frame is
         // uploaded, make a previously-hidden background layer visible without
         // requiring the user to toggle the setting or reopen the page.
-        const bool showBackgroundImage = GET_SETTING_KEY_INT(
-            beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
+        const bool showBackgroundImage = backgroundVisibleRequested &&
+            GET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_SHOW_BG_IMAGE, 0) != 0;
         if (backgroundIsGif && backgroundGifLayer && backgroundGifLayer->isLoaded()) {
             // A replacement must finish fading the old dynamic layer out
             // before the normal loaded/fade-in path is allowed to run.  The
