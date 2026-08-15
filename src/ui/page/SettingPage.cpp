@@ -2546,12 +2546,12 @@ private:
             "FBNeo", "arcade.externalNro.path", "/GBAStation/core/GBAStationFBNeoStub.nro",
             "arcade.externalNro.returnPath");
 
-        m_coreItems.push_back(_section(L("画面")));
-        _appendExternalDisplaySettings(
-            "fbneo",
-            {"Auto", "4:3", "16:9", "Stretch", "Original", "1x", "2x"},
-            {L("自动"), "4:3", "16:9", L("拉伸"), L("原始"), "1x", "2x"},
-            "Auto");
+        // m_coreItems.push_back(_section(L("画面")));
+        // _appendExternalDisplaySettings(
+        //     "fbneo",
+        //     {"Auto", "4:3", "16:9", "Stretch", "Original", "1x", "2x"},
+        //     {L("自动"), "4:3", "16:9", L("拉伸"), L("原始"), "1x", "2x"},
+        //     "Auto");
         const std::vector<std::string> shaderValues = {"None", "xBRZ", "Eagle", "CrtEasyMode"};
         m_coreItems.push_back(_selector(
             L("着色器"), L("外部街机核心的画面滤镜"), 0xE40A,
@@ -3398,13 +3398,13 @@ private:
                         "PAD_LSB");
             _addBinding(L("倒带"), L("可绑定单键或双键组合"),
                         beiklive::input_mapping::makeKey(prefix, "handle.rewind"),
-                        "none");
-            _addBinding(L("快速保存"), L("可绑定单键或双键组合"),
-                        beiklive::input_mapping::makeKey(prefix, "hotkey.quicksave.pad"),
-                        "none");
-            _addBinding(L("快速读取"), L("可绑定单键或双键组合"),
-                        beiklive::input_mapping::makeKey(prefix, "hotkey.quickload.pad"),
-                        "none");
+                        "PAD_RSB");
+            // _addBinding(L("快速保存"), L("可绑定单键或双键组合"),
+            //             beiklive::input_mapping::makeKey(prefix, "hotkey.quicksave.pad"),
+            //             "none");
+            // _addBinding(L("快速读取"), L("可绑定单键或双键组合"),
+            //             beiklive::input_mapping::makeKey(prefix, "hotkey.quickload.pad"),
+            //             "none");
             m_mappingFocus = _firstFocusable(m_mappingItems);
             m_mappingScroll = m_mappingTargetScroll = 0.f;
             return;

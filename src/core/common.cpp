@@ -665,7 +665,7 @@ namespace beiklive
         SettingManager->SetDefault("core.ppsspp.display_mode", ConfigValue(std::string("Display")));
         SettingManager->SetDefault("core.ppsspp.display_size", ConfigValue(std::string("16:9")));
 
-        SettingManager->SetDefault("core.fbneo.display_mode", ConfigValue(std::string("Integer")));
+        SettingManager->SetDefault("core.fbneo.display_mode", ConfigValue(std::string("Display")));
         SettingManager->SetDefault("core.fbneo.display_size", ConfigValue(std::string("Auto")));
         SettingManager->SetDefault("core.fbneo.shader_type", ConfigValue(std::string("None")));
 
