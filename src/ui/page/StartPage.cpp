@@ -1197,8 +1197,94 @@ beiklive::enums::FileType platformToFileType(int platform)
         }
 
 #ifdef __SWITCH__
+        std::string drasticLayoutFromGameDb(const std::string& layout)
+        {
+            if (layout == "priority_top" || layout == "hybrid_top" || layout == "hybrid")
+                return "hybrid_top";
+            if (layout == "priority_bottom" || layout == "hybrid_bottom")
+                return "hybrid_bottom";
+            if (layout == "vertical" || layout == "horizontal" || layout == "top" ||
+                layout == "bottom" || layout == "custom")
+                return layout;
+            return "horizontal";
+        }
+
+        int drasticRotationFromGameDb(const std::string& orientation)
+        {
+            if (orientation == "90" || orientation == "right") return 1;
+            if (orientation == "180" || orientation == "flipped") return 2;
+            if (orientation == "270" || orientation == "left") return 3;
+            return 0;
+        }
+
+        std::string drasticFilterFromGameDb(const std::string& filter)
+        {
+            static const std::vector<std::string> supported = {
+                "nearest", "linear", "quilez", "scanline", "scale2x", "hq2x",
+                "fxaa", "fxaa_hq", "smaa"};
+            return std::find(supported.begin(), supported.end(), filter) != supported.end()
+                ? filter : "nearest";
+        }
+
+        bool exportDrasticGameProfile(const std::string& romPath)
+        {
+            if (!beiklive::GameDB)
+                return false;
+
+            const auto entry = beiklive::GameDB->findByPath(romPath);
+            if (!entry.has_value())
+                return false;
+
+            const std::filesystem::path directory("sdmc:/GBAStation/drastic");
+            const std::filesystem::path profile = directory / "launch.cfg";
+            std::error_code ec;
+            std::filesystem::create_directories(directory, ec);
+            if (ec) {
+                brls::Logger::warning("DraStic launch profile directory failed: {}", ec.message());
+                return false;
+            }
+
+            std::ofstream out(profile, std::ios::trunc);
+            if (!out.is_open()) {
+                brls::Logger::warning("DraStic launch profile open failed: {}", profile.string());
+                return false;
+            }
+
+            /* Keep the one-shot profile self-contained: the external host
+             * must use the exact GameDB storage, cheats, mask and custom
+             * layout selected for this title instead of falling back to a
+             * previous game's DraStic preferences. */
+            out << "# Generated for one GBAStation DraStic launch.\n";
+            out << "Wrapper/LaunchRom = " << romPath << "\n";
+            out << "Wrapper/Layout = " << drasticLayoutFromGameDb(entry->ndsScreenLayout) << "\n";
+            out << "Wrapper/Rotation = " << drasticRotationFromGameDb(entry->ndsScreenOrientation) << "\n";
+            out << "Wrapper/ScreenGap = " << std::clamp(entry->ndsScreenGap, 0, 128) << "\n";
+            out << "Wrapper/IntegerScale = " << (entry->ndsIntegerScale ? "true" : "false") << "\n";
+            out << "Wrapper/VideoFilter = " << drasticFilterFromGameDb(entry->NdsShaderType) << "\n";
+            out << "Wrapper/SavePath = " << entry->savePath << "\n";
+            out << "Wrapper/CheatPath = " << entry->cheatPath << "\n";
+            out << "Wrapper/OverlayEnabled = " << (entry->overlayEnabled ? "true" : "false") << "\n";
+            out << "Wrapper/OverlayPath = " << entry->overlayPath << "\n";
+            out << "Wrapper/CustomTopScale = " << entry->ndsTopScale << "\n";
+            out << "Wrapper/CustomTopOffsetX = " << entry->ndsTopOffsetX << "\n";
+            out << "Wrapper/CustomTopOffsetY = " << entry->ndsTopOffsetY << "\n";
+            out << "Wrapper/CustomBottomScale = " << entry->ndsBottomScale << "\n";
+            out << "Wrapper/CustomBottomOffsetX = " << entry->ndsBottomOffsetX << "\n";
+            out << "Wrapper/CustomBottomOffsetY = " << entry->ndsBottomOffsetY << "\n";
+            if (!out.good()) {
+                brls::Logger::warning("DraStic launch profile write failed: {}", profile.string());
+                return false;
+            }
+            brls::Logger::info("DraStic GameDB profile exported: {}", profile.string());
+            return true;
+        }
+
         bool launchNdsExternalNro(const std::string& romPath, const std::string& title)
         {
+            /* The host only reads the launcher's persisted config.cfg.  The
+             * launcher retains ownership of saving it during its normal exit
+             * path, rather than writing global settings on every game launch. */
+            exportDrasticGameProfile(romPath);
             const std::string nroPath = GET_SETTING_KEY_STR("nds.externalNro.path", "/GBAStation/core/GBAStationNDSStub.nro");
             const std::string returnPath = GET_SETTING_KEY_STR("nds.externalNro.returnPath", "sdmc:/switch/GBAStation.nro");
 

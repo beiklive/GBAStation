@@ -31,6 +31,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <functional>
 #include <sstream>
@@ -76,6 +77,19 @@ static std::string cfgGetStr(const std::string &key, const std::string &def)
 static void cfgSetStr(const std::string &key, const std::string &val)
 {
     SET_SETTING_KEY_STR(key, val);
+}
+
+static std::string pointerHotkeyHint(const char* key)
+{
+    if (std::strcmp(key, "hotkey.pointer_mode.pad") == 0)
+        return L("启用或关闭右摇杆控制的 NDS 触控指针");
+    if (std::strcmp(key, "hotkey.pointer_click.pad") == 0)
+        return L("按住时在指针当前位置触摸 NDS 下屏");
+    if (std::strcmp(key, "hotkey.swap_screens.pad") == 0)
+        return L("交换 NDS 上屏与下屏的显示位置");
+    if (std::strcmp(key, "hotkey.mic_input.pad") == 0)
+        return L("按住时向 NDS 模拟麦克风输入吹气白噪声");
+    return L("可绑定单键或双键组合");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1663,7 +1677,8 @@ private:
                 [coreName]() { return coreName + "  >"; }, std::move(open)));
         };
         addCore(L("GBA 核心"), "mGBA", 0xE30F, [this]() { _openMgbaCore(); });
-        addCore(L("NDS 核心"), "melonDS", 0xE322, [this]() { _openMelonDsCore(); });
+        addCore(L("NDS 核心（melonDS 即将弃用；届时所有即时存档都会失效，请注意使用电池存档即时备份）"), "melonDS", 0xE322, [this]() { _openMelonDsCore(); });
+        addCore(L("NDS 核心（DraStic）"), "DraStic", 0xE322, [this]() { _openDrasticCore(); });
         addCore(L("3DS 核心"), "Azahar", 0xE30F, [this]() { _openThreeDsCore(); });
         addCore(L("FC/NES 核心"), "Nestopia", 0xE333,
                 [this]() { _openLibretroCore(L("Nestopia 核心设置"), CoreType::Nestopia); });
@@ -2536,6 +2551,164 @@ private:
         file(L("DLDI SD 镜像"), "core.melonds_dldi_path", {"img","bin"});
         m_coreItems.push_back(_toggle("随机 MAC 地址", "每次启动生成随机无线地址", beiklive::material::WIFI, []() { return cfgGetBool("core.melonds_randomize_mac", false); }, [](bool v) { cfgSetBool("core.melonds_randomize_mac", v); }, "core.melonds_randomize_mac"));
         _finishCorePage(L("melonDS 核心设置"));
+    }
+
+    void _openDrasticCore()
+    {
+        m_coreItems.clear();
+        const std::vector<std::string> layoutValues = {
+            "horizontal", "vertical", "top", "bottom", "hybrid_top", "hybrid_bottom", "custom"};
+        const std::vector<std::string> layoutLabels = {
+            L("横向双屏"), L("纵向双屏"), L("仅上屏"), L("仅下屏"),
+            L("上屏主画面"), L("下屏主画面"), L("自定义布局")};
+        const std::vector<std::string> filterValues = {
+            "nearest", "linear", "quilez", "scanline", "scale2x", "hq2x", "fxaa", "fxaa_hq", "smaa"};
+        const std::vector<std::string> filterLabels = {
+            L("最近邻"), L("线性"), "Quilez", L("扫描线"), "Scale2x", "HQ2x", "FXAA", "FXAA HQ", "SMAA"};
+
+        m_coreItems.push_back(_section(L("画面与布局")));
+        m_coreItems.push_back(_selector(L("屏幕布局"), L("DraStic 上下屏显示方式"), 0xE333, layoutLabels,
+            [layoutValues]() { return findIndex(layoutValues, cfgGetStr("core.drastic.layout", "horizontal")); },
+            [layoutValues](int i) { if (i >= 0 && i < (int)layoutValues.size()) cfgSetStr("core.drastic.layout", layoutValues[i]); }, "core.drastic.layout"));
+        m_coreItems.push_back(_selector(L("画面旋转"), L("以 90 度为单位旋转双屏"), 0xE419,
+            {"0°", "90°", "180°", "270°"}, []() { return std::clamp(cfgGetInt("core.drastic.rotation", 0), 0, 3); },
+            [](int i) { cfgSetInt("core.drastic.rotation", std::clamp(i, 0, 3)); }, "core.drastic.rotation"));
+        m_coreItems.push_back(_selector(L("屏幕间距"), L("调整上下屏之间的像素间距"), 0xE3E8,
+            {"0 px", "4 px", "8 px", "12 px", "16 px", "24 px"}, []() {
+                static const int values[] = {0, 4, 8, 12, 16, 24};
+                const int current = cfgGetInt("core.drastic.screen_gap", 8);
+                for (int i = 0; i < 6; ++i) if (values[i] == current) return i;
+                return 2;
+            }, [](int i) { static const int values[] = {0, 4, 8, 12, 16, 24}; if (i >= 0 && i < 6) cfgSetInt("core.drastic.screen_gap", values[i]); }, "core.drastic.screen_gap"));
+        m_coreItems.push_back(_toggle(L("整数倍缩放"), L("尽量保持像素边缘清晰"), 0xE8FF,
+            []() { return cfgGetBool("core.drastic.integer_scale", false); }, [](bool v) { cfgSetBool("core.drastic.integer_scale", v); }, "core.drastic.integer_scale"));
+        m_coreItems.push_back(_selector(L("画面滤镜"), L("DraStic Vulkan host 内置滤镜"), 0xE40A, filterLabels,
+            [filterValues]() { return findIndex(filterValues, cfgGetStr("core.drastic.video_filter", "nearest")); },
+            [filterValues](int i) { if (i >= 0 && i < (int)filterValues.size()) cfgSetStr("core.drastic.video_filter", filterValues[i]); }, "core.drastic.video_filter"));
+        m_coreItems.push_back(_section(L("性能与快进")));
+        m_coreItems.push_back(_selector(L("CPU 线程数"), L("提高性能，兼容性异常时可降低"), 0xE8EF,
+            {"1", "2", "3"}, []() { return std::clamp(cfgGetInt("core.drastic.cpu_threads", 3) - 1, 0, 2); },
+            [](int i) { cfgSetInt("core.drastic.cpu_threads", std::clamp(i + 1, 1, 3)); }, "core.drastic.cpu_threads"));
+        m_coreItems.push_back(_toggle(L("多线程 3D"), L("使用 DraStic 的多线程 3D 路径"), 0xE8D5,
+            []() { return cfgGetBool("core.drastic.threaded_3d", true); }, [](bool v) { cfgSetBool("core.drastic.threaded_3d", v); }, "core.drastic.threaded_3d"));
+        m_coreItems.push_back(_selector(L("跳帧数量"), L("性能不足时减少渲染帧"), 0xE8D5,
+            {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}, []() { return std::clamp(cfgGetInt("core.drastic.frameskip", 0), 0, 9); },
+            [](int i) { cfgSetInt("core.drastic.frameskip", std::clamp(i, 0, 9)); }, "core.drastic.frameskip"));
+        m_coreItems.push_back(_selector(L("跳帧方式"), L("自动方式通常最平稳"), 0xE8D5,
+            {L("自动"), L("固定"), L("激进"), L("最大")}, []() { return std::clamp(cfgGetInt("core.drastic.frameskip_type", 0), 0, 3); },
+            [](int i) { cfgSetInt("core.drastic.frameskip_type", std::clamp(i, 0, 3)); }, "core.drastic.frameskip_type"));
+        m_coreItems.push_back(_toggle(L("安全跳帧"), L("优先兼容性，可能降低性能"), 0xE8D5,
+            []() { return cfgGetBool("core.drastic.frameskip_safe", false); }, [](bool v) { cfgSetBool("core.drastic.frameskip_safe", v); }, "core.drastic.frameskip_safe"));
+        m_coreItems.push_back(_selector(L("快进速度"), L("按住 NDS 快进快捷键时的速度"), 0xE8D5,
+            {"50%", "150%", "200%", "300%", "400%", L("不限")}, []() { return std::clamp(cfgGetInt("core.drastic.fastforward_speed", 5), 0, 5); },
+            [](int i) { cfgSetInt("core.drastic.fastforward_speed", std::clamp(i, 0, 5)); }, "core.drastic.fastforward_speed"));
+
+        m_coreItems.push_back(_section(L("帧生成（Lossless）")));
+        m_coreItems.push_back(_toggle(L("启用帧生成"), L("需要 sdmc:/GBAStation/drastic/lsfg/Lossless.dll；缺失时请下载核心组件"), 0xE8D5,
+            []() { return cfgGetBool("core.drastic.lsfg_enabled", false); }, [](bool v) {
+                if (v) {
+                    std::error_code ec;
+                    const bool installed = std::filesystem::exists("sdmc:/GBAStation/drastic/lsfg/Lossless.dll", ec)
+                        || std::filesystem::exists("/GBAStation/drastic/lsfg/Lossless.dll", ec);
+                    if (!installed) {
+                        brls::Application::notify(L("核心组件不完整，需要下载 Lossless 帧生成组件"));
+                        return;
+                    }
+                }
+                cfgSetBool("core.drastic.lsfg_enabled", v);
+            }, "core.drastic.lsfg_enabled"));
+        m_coreItems.push_back(_selector(L("光流精度"), L("较高精度更清晰，但显存与性能开销更大"), 0xE8FF,
+            {L("性能（1/4）"), L("质量（1/2）")}, []() { return cfgGetInt("core.drastic.lsfg_flow_scale", 25) == 50 ? 1 : 0; },
+            [](int i) { cfgSetInt("core.drastic.lsfg_flow_scale", i == 1 ? 50 : 25); }, "core.drastic.lsfg_flow_scale"));
+        m_coreItems.push_back(_toggle(L("性能模式"), L("优先帧率；关闭后提高光流处理质量"), 0xE8EF,
+            []() { return cfgGetBool("core.drastic.lsfg_performance", true); }, [](bool v) { cfgSetBool("core.drastic.lsfg_performance", v); }, "core.drastic.lsfg_performance"));
+
+        m_coreItems.push_back(_section(L("声音、输入与系统")));
+        m_coreItems.push_back(_selector(L("音量"), L("DraStic 核心输出音量"), 0xE050,
+            {"0%", "25%", "50%", "75%", "100%"}, []() { return std::clamp(cfgGetInt("core.drastic.volume", 100) / 25, 0, 4); },
+            [](int i) { cfgSetInt("core.drastic.volume", std::clamp(i, 0, 4) * 25); }, "core.drastic.volume"));
+        m_coreItems.push_back(_selector(L("音频延迟"), L("较低延迟可能更容易爆音"), 0xE050,
+            {L("最低"), L("低"), L("正常"), L("高")}, []() { return std::clamp(cfgGetInt("core.drastic.audio_latency", 2), 0, 3); },
+            [](int i) { cfgSetInt("core.drastic.audio_latency", std::clamp(i, 0, 3)); }, "core.drastic.audio_latency"));
+        m_coreItems.push_back(_toggle(L("声音"), L("启用 DraStic 音频输出"), 0xE050,
+            []() { return cfgGetBool("core.drastic.sound_enabled", true); }, [](bool v) { cfgSetBool("core.drastic.sound_enabled", v); }, "core.drastic.sound_enabled"));
+        m_coreItems.push_back(_toggle(L("振动"), L("游戏支持时输出手柄振动"), 0xE8B8,
+            []() { return cfgGetBool("core.drastic.vibration", true); }, [](bool v) { cfgSetBool("core.drastic.vibration", v); }, "core.drastic.vibration"));
+        m_coreItems.push_back(_toggle(L("体感控制"), L("允许体感控制或体感触控"), 0xE3B0,
+            []() { return cfgGetBool("core.drastic.motion", true); }, [](bool v) { cfgSetBool("core.drastic.motion", v); }, "core.drastic.motion"));
+        m_coreItems.push_back(_selector(L("触控模式"), L("右摇杆控制 NDS 下屏指针"), 0xE3B0,
+            {L("关闭"), L("右摇杆"), L("体感控制")}, []() {
+                const auto mode = cfgGetStr("core.drastic.stylus_mode", "stick"); return mode == "motion" ? 2 : (mode == "off" ? 0 : 1);
+            }, [](int i) { cfgSetStr("core.drastic.stylus_mode", i == 2 ? "motion" : (i == 0 ? "off" : "stick")); }, "core.drastic.stylus_mode"));
+        m_coreItems.push_back(_selector(L("触控指针速度"), L("右摇杆移动下屏指针的速度"), 0xE8D5,
+            {"4", "6", "8", "10", "12", "16", "20"}, []() {
+                static const int values[] = {4,6,8,10,12,16,20}; const int current = cfgGetInt("core.drastic.stylus_speed", 8);
+                for (int i = 0; i < 7; ++i) if (values[i] == current) return i; return 2;
+            }, [](int i) { static const int values[] = {4,6,8,10,12,16,20}; if (i >= 0 && i < 7) cfgSetInt("core.drastic.stylus_speed", values[i]); }, "core.drastic.stylus_speed"));
+        m_coreItems.push_back(_toggle(L("金手指总开关"), L("允许读取 usrcheat.dat 与自定义金手指"), 0xE8B9,
+            []() { return cfgGetBool("core.drastic.cheats_enabled", true); }, [](bool v) { cfgSetBool("core.drastic.cheats_enabled", v); }, "core.drastic.cheats_enabled"));
+        m_coreItems.push_back(_toggle(L("使用系统时间 RTC"), L("NDS 实时时钟跟随 Switch 系统时间"), 0xE8B5,
+            []() { return cfgGetBool("core.drastic.rtc_system_time", true); }, [](bool v) { cfgSetBool("core.drastic.rtc_system_time", v); }, "core.drastic.rtc_system_time"));
+        m_coreItems.push_back(_toggle(L("预加载 ROM"), L("启动稍慢，换取读取更稳定"), 0xE8EF,
+            []() { return cfgGetBool("core.drastic.preload_roms", true); }, [](bool v) { cfgSetBool("core.drastic.preload_roms", v); }, "core.drastic.preload_roms"));
+        m_coreItems.push_back(_toggle(L("显示 FPS"), L("显示 DraStic 性能统计"), 0xE8FF,
+            []() { return cfgGetBool("core.drastic.show_fps", false); }, [](bool v) { cfgSetBool("core.drastic.show_fps", v); }, "core.drastic.show_fps"));
+
+        m_coreItems.push_back(_section(L("兼容性与存档")));
+        m_coreItems.push_back(_selector(L("连发速度"), L("A/B 连发功能的触发频率"), 0xE8D5,
+            {"0", "1", "2", "3", "4", "5", "6", "7"}, []() { return std::clamp(cfgGetInt("core.drastic.autofire_speed", 2), 0, 7); },
+            [](int i) { cfgSetInt("core.drastic.autofire_speed", std::clamp(i, 0, 7)); }, "core.drastic.autofire_speed"));
+        m_coreItems.push_back(_selector(L("麦克风音量"), L("DraStic 麦克风输入的默认强度"), 0xE050,
+            {L("关闭"), L("低"), L("中"), L("高")}, []() { return std::clamp(cfgGetInt("core.drastic.mic_level", 1), 0, 3); },
+            [](int i) { cfgSetInt("core.drastic.mic_level", std::clamp(i, 0, 3)); }, "core.drastic.mic_level"));
+        m_coreItems.push_back(_selector(L("Slot-2 外设"), L("为需要 GBA 插槽外设的游戏选择兼容模式"), 0xE30F,
+            {L("无"), "1", "2", "3", "4", "5"}, []() { return std::clamp(cfgGetInt("core.drastic.slot2_type", 1), 0, 5); },
+            [](int i) { cfgSetInt("core.drastic.slot2_type", std::clamp(i, 0, 5)); }, "core.drastic.slot2_type"));
+        m_coreItems.push_back(_toggle(L("即时存档包含电池存档"), L("创建即时存档时同时保存卡带 SRAM"), 0xE161,
+            []() { return cfgGetBool("core.drastic.backup_in_savestates", true); }, [](bool v) { cfgSetBool("core.drastic.backup_in_savestates", v); }, "core.drastic.backup_in_savestates"));
+        m_coreItems.push_back(_toggle(L("忽略卡带容量限制"), L("仅用于特殊 ROM；可能影响兼容性"), 0xE8EF,
+            []() { return cfgGetBool("core.drastic.ignore_gamecard_limit", false); }, [](bool v) { cfgSetBool("core.drastic.ignore_gamecard_limit", v); }, "core.drastic.ignore_gamecard_limit"));
+        m_coreItems.push_back(_toggle(L("16 位色彩输出"), L("降低颜色精度以减少带宽开销"), 0xE40A,
+            []() { return cfgGetBool("core.drastic.use_16bit_color", false); }, [](bool v) { cfgSetBool("core.drastic.use_16bit_color", v); }, "core.drastic.use_16bit_color"));
+        m_coreItems.push_back(_toggle(L("自动裁剪画面"), L("自动裁掉游戏画面中的无效边缘"), 0xE3E8,
+            []() { return cfgGetBool("core.drastic.auto_trim", false); }, [](bool v) { cfgSetBool("core.drastic.auto_trim", v); }, "core.drastic.auto_trim"));
+        m_coreItems.push_back(_toggle(L("修正主引擎屏幕"), L("为少数双屏显示异常的游戏启用兼容修正"), 0xE8EF,
+            []() { return cfgGetBool("core.drastic.fix_main_engine_screen", false); }, [](bool v) { cfgSetBool("core.drastic.fix_main_engine_screen", v); }, "core.drastic.fix_main_engine_screen"));
+        m_coreItems.push_back(_toggle(L("禁用边缘标记"), L("关闭 DraStic 的 3D 边缘标记效果"), 0xE40A,
+            []() { return cfgGetBool("core.drastic.disable_edge_marking", false); }, [](bool v) { cfgSetBool("core.drastic.disable_edge_marking", v); }, "core.drastic.disable_edge_marking"));
+        m_coreItems.push_back(_toggle(L("Lua 脚本"), L("允许核心加载 Lua 脚本"), 0xE86F,
+            []() { return cfgGetBool("core.drastic.lua_enabled", true); }, [](bool v) { cfgSetBool("core.drastic.lua_enabled", v); }, "core.drastic.lua_enabled"));
+        m_coreItems.push_back(_toggle(L("画面混合"), L("启用核心的画面混合选项"), 0xE40A,
+            []() { return cfgGetBool("core.drastic.blend", false); }, [](bool v) { cfgSetBool("core.drastic.blend", v); }, "core.drastic.blend"));
+        m_coreItems.push_back(_toggle(L("原始电池存档格式"), L("保存为未转换的原始 SRAM 格式"), beiklive::material::SAVE,
+            []() { return cfgGetBool("core.drastic.raw_save_format", false); }, [](bool v) { cfgSetBool("core.drastic.raw_save_format", v); }, "core.drastic.raw_save_format"));
+
+        m_coreItems.push_back(_section(L("NDS 固件")));
+        m_coreItems.push_back(_action(L("固件昵称"), L("游戏读取到的 NDS 用户昵称"), 0xE7FD,
+            []() { return cfgGetStr("core.drastic.firmware_nickname", "Switch"); },
+            [this]() { _openThreeDsTextInput(L("NDS 固件昵称"), "core.drastic.firmware_nickname", L("最长 31 个字符"), 31); }));
+        const std::vector<int> firmwareLanguageValues = {-1, 0, 1, 2, 3, 4, 5, 6};
+        m_coreItems.push_back(_selector(L("固件语言"), L("自动时跟随 Switch 系统语言"), 0xE894,
+            {L("自动"), L("日语"), L("英语"), L("法语"), L("德语"), L("意大利语"), L("西班牙语"), L("韩语")},
+            [firmwareLanguageValues]() { const int current = cfgGetInt("core.drastic.firmware_language", -1); for (int i = 0; i < (int)firmwareLanguageValues.size(); ++i) if (firmwareLanguageValues[i] == current) return i; return 0; },
+            [firmwareLanguageValues](int i) { if (i >= 0 && i < (int)firmwareLanguageValues.size()) cfgSetInt("core.drastic.firmware_language", firmwareLanguageValues[i]); }, "core.drastic.firmware_language"));
+        const std::vector<int> firmwareColorValues = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+        std::vector<std::string> firmwareColorLabels;
+        for (int value : firmwareColorValues) firmwareColorLabels.push_back(std::to_string(value));
+        m_coreItems.push_back(_selector(L("固件主题色"), L("NDS 固件用户界面主题颜色"), 0xE40A, firmwareColorLabels,
+            [firmwareColorValues]() { const int current = cfgGetInt("core.drastic.firmware_color", 0); for (int i = 0; i < (int)firmwareColorValues.size(); ++i) if (firmwareColorValues[i] == current) return i; return 0; },
+            [firmwareColorValues](int i) { if (i >= 0 && i < (int)firmwareColorValues.size()) cfgSetInt("core.drastic.firmware_color", firmwareColorValues[i]); }, "core.drastic.firmware_color"));
+        std::vector<std::string> birthdayMonths;
+        std::vector<std::string> birthdayDays;
+        for (int value = 1; value <= 12; ++value) birthdayMonths.push_back(std::to_string(value));
+        for (int value = 1; value <= 31; ++value) birthdayDays.push_back(std::to_string(value));
+        m_coreItems.push_back(_selector(L("固件生日月份"), L("NDS 固件用户资料中的生日"), 0xE8B5, birthdayMonths,
+            []() { return std::clamp(cfgGetInt("core.drastic.firmware_birthday_month", 6) - 1, 0, 11); },
+            [](int i) { cfgSetInt("core.drastic.firmware_birthday_month", std::clamp(i + 1, 1, 12)); }, "core.drastic.firmware_birthday_month"));
+        m_coreItems.push_back(_selector(L("固件生日日期"), L("NDS 固件用户资料中的生日"), 0xE8B5, birthdayDays,
+            []() { return std::clamp(cfgGetInt("core.drastic.firmware_birthday_day", 6) - 1, 0, 30); },
+            [](int i) { cfgSetInt("core.drastic.firmware_birthday_day", std::clamp(i + 1, 1, 31)); }, "core.drastic.firmware_birthday_day"));
+        _finishCorePage(L("DraStic 核心设置"));
     }
 
     void _openFbneoCore()
@@ -3437,7 +3610,19 @@ private:
                 if ((nds && entry.hiddenOnNds) ||
                     (prefix == "3ds." && entry.hiddenOnThreeDs))
                     continue;
-                _addBinding(entry.label, L("右摇杆控制指针；麦克风热键再次按下可取消"), beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
+                _addBinding(entry.label, pointerHotkeyHint(entry.key),
+                            beiklive::input_mapping::makeKey(prefix, entry.key),
+                            entry.defaultValue);
+            }
+        }
+        if (nds)
+        {
+            m_mappingItems.push_back(_section(L("NDS 特殊功能")));
+            for (const auto& entry : beiklive::input_mapping::kNdsSpecialHotkeys)
+            {
+                _addBinding(entry.label, pointerHotkeyHint(entry.key),
+                            beiklive::input_mapping::makeKey(prefix, entry.key),
+                            entry.defaultValue);
             }
         }
         if (beiklive::input_mapping::showsTurboBindingsForPrefix(prefix))
@@ -5106,9 +5291,22 @@ namespace
                 cell->setRightText(cfgGetStr(cfgKey, entry.defaultValue));
                 registerKeyBindActions(cell, cfgKey);
                 box->addView(cell);
+                box->addView(makeHint(pointerHotkeyHint(entry.key)));
             }
-            box->addView(makeHint(L("切换为指针模式后使用右摇杆控制指针")));
-            box->addView(makeHint(L("模拟麦克风输入：按下热键后持续输入静态噪声，再按一次取消")));
+        }
+        if (nds)
+        {
+            box->addView(makeHeader(L("NDS 特殊功能")));
+            for (const auto& entry : beiklive::input_mapping::kNdsSpecialHotkeys)
+            {
+                std::string cfgKey = beiklive::input_mapping::makeKey(prefix, entry.key);
+                auto* cell = new beiklive::DetailCell();
+                cell->setLeftText(std::string(entry.label));
+                cell->setRightText(cfgGetStr(cfgKey, entry.defaultValue));
+                registerKeyBindActions(cell, cfgKey);
+                box->addView(cell);
+                box->addView(makeHint(pointerHotkeyHint(entry.key)));
+            }
         }
 
         if (beiklive::input_mapping::showsTurboBindingsForPrefix(prefix))

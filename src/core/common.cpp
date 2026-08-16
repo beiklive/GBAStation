@@ -721,6 +721,55 @@ namespace beiklive
         SettingManager->SetDefault("core.melonds_randomize_mac", ConfigValue(0));
         SettingManager->SetDefault("core.melonds_firmware_language", ConfigValue(-1));
 
+        // DraStic Vulkan host 启动时读取共享 config.cfg，
+        // 再由 host 导入 sdmc:/GBAStation/drastic/drastic.ini。
+        SettingManager->SetDefault("core.drastic.layout", ConfigValue(std::string("horizontal")));
+        SettingManager->SetDefault("core.drastic.rotation", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.screen_gap", ConfigValue(8));
+        SettingManager->SetDefault("core.drastic.integer_scale", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.video_filter", ConfigValue(std::string("nearest")));
+        SettingManager->SetDefault("core.drastic.volume", ConfigValue(100));
+        SettingManager->SetDefault("core.drastic.microphone_source", ConfigValue(std::string("noise")));
+        SettingManager->SetDefault("core.drastic.vibration", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.motion", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.stylus_mode", ConfigValue(std::string("stick")));
+        SettingManager->SetDefault("core.drastic.stylus_speed", ConfigValue(8));
+        SettingManager->SetDefault("core.drastic.frameskip", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.frameskip_type", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.frameskip_safe", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.fastforward_speed", ConfigValue(2));
+        SettingManager->SetDefault("core.drastic.audio_latency", ConfigValue(2));
+        SettingManager->SetDefault("core.drastic.cpu_threads", ConfigValue(3));
+        SettingManager->SetDefault("core.drastic.threaded_3d", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.hires_3d", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.sound_enabled", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.cheats_enabled", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.mic_enabled", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.rtc_system_time", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.preload_roms", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.show_fps", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.autosave_interval", ConfigValue(300));
+        SettingManager->SetDefault("core.drastic.autofire_speed", ConfigValue(2));
+        SettingManager->SetDefault("core.drastic.mic_level", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.slot2_type", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.backup_in_savestates", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.ignore_gamecard_limit", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.use_16bit_color", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.auto_trim", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.fix_main_engine_screen", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.disable_edge_marking", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.lua_enabled", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.blend", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.raw_save_format", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.firmware_nickname", ConfigValue(std::string("Switch")));
+        SettingManager->SetDefault("core.drastic.firmware_language", ConfigValue(-1));
+        SettingManager->SetDefault("core.drastic.firmware_color", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.firmware_birthday_month", ConfigValue(6));
+        SettingManager->SetDefault("core.drastic.firmware_birthday_day", ConfigValue(6));
+        SettingManager->SetDefault("core.drastic.lsfg_enabled", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.lsfg_flow_scale", ConfigValue(25));
+        SettingManager->SetDefault("core.drastic.lsfg_performance", ConfigValue(1));
+
         SettingManager->SetDefault("core.genesis.region", ConfigValue(std::string("auto")));
         SettingManager->SetDefault("core.genesis.pad_buttons", ConfigValue(6));
         SettingManager->SetDefault("core.genesis.no_sprite_limit", ConfigValue(std::string("disabled")));
@@ -854,6 +903,12 @@ namespace beiklive
         // 3DS 独立运行时不支持倒带，清理旧版本可能写入的无效绑定。
         SettingManager->Remove("3ds.handle.rewind");
         SettingManager->Remove("core.azahar.swap_screens");
+        // DraStic screen order is now a runtime action driven exclusively by
+        // nds.hotkey.swap_screens.pad, never a persisted core toggle.
+        SettingManager->Remove("core.drastic.swap_screens");
+        // The simulated microphone is supported by the DraStic NDS host only.
+        // Keep clearing the legacy 3DS mapping, which has no matching action.
+        SettingManager->Remove("3ds.hotkey.mic_input.pad");
         for (const char* prefix : {"nds.", "3ds."})
         {
             for (const auto& entry : beiklive::input_mapping::kPointerHotkeys)
@@ -864,6 +919,12 @@ namespace beiklive
                     beiklive::input_mapping::makeKey(prefix, entry.key),
                     ConfigValue(std::string(entry.defaultValue)));
             }
+        }
+        for (const auto& entry : beiklive::input_mapping::kNdsSpecialHotkeys)
+        {
+            SettingManager->SetDefault(
+                beiklive::input_mapping::makeKey("nds.", entry.key),
+                ConfigValue(std::string(entry.defaultValue)));
         }
 
         // 摇杆输入设置
