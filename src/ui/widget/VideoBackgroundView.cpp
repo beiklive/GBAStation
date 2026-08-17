@@ -824,6 +824,10 @@ namespace beiklive
         const float drawX = x + (width - drawWidth) * 0.5f;
         const float drawY = y + (height - drawHeight) * 0.5f;
         nvgSave(vg);
+        // View::setAlpha() is not applied automatically to custom NanoVG
+        // drawing. Use the inherited alpha so Box can fade the first startup
+        // frame in instead of presenting it at full opacity immediately.
+        nvgGlobalAlpha(vg, getAlpha());
         nvgIntersectScissor(vg, x, y, width, height);
         nvgBeginPath(vg);
         nvgRect(vg, drawX, drawY, drawWidth, drawHeight);

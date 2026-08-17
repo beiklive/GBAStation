@@ -11,7 +11,7 @@
 #   build_switch/GBAStation.nro
 #
 # 使用：
-#   ./switchbuild.sh [-j JOBS] [--build-dir DIR] [--core-dir DIR]
+#   ./switchbuild.sh [-j JOBS] [--build-dir DIR]
 #
 # ============================================================
 
@@ -81,20 +81,14 @@ echo "[平台] ${PLATFORM}"
 
 usage() {
     cat <<'EOF'
-Usage: ./switchbuild.sh [-j JOBS] [--build-dir DIR] [--core-dir DIR]
+Usage: ./switchbuild.sh [-j JOBS] [--build-dir DIR]
 
-  --core-dir DIR  Directory containing the seven downloaded core Release NROs:
-                  GBAStation3DSStub.nro, GBAStationFBNeoStub.nro,
-                  GBAStationFlycastStub.nro, GBAStationPPSSPPStub.nro,
-                  GBAStationDuckStationStub.nro, GBAStationYabaSanshiroStub.nro
-                  and GBAStationDolphinStub.nro.
   --build-dir DIR CMake build directory (default: build_switch).
   -j, --jobs N   Parallel build jobs.
 EOF
 }
 
 BUILD_DIR_OVERRIDE=""
-CORE_DIR="${CORE_DIR:-}"
 JOBS_OVERRIDE=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -104,9 +98,6 @@ while [ "$#" -gt 0 ]; do
         --build-dir)
             [ "$#" -ge 2 ] || { echo "[错误] --build-dir 需要参数"; exit 2; }
             BUILD_DIR_OVERRIDE="$2"; shift 2 ;;
-        --core-dir)
-            [ "$#" -ge 2 ] || { echo "[错误] --core-dir 需要参数"; exit 2; }
-            CORE_DIR="$2"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "[错误] 未知参数: $1"; usage; exit 2 ;;
     esac
@@ -184,64 +175,7 @@ echo "[线程] ${JOBS}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${BUILD_DIR_OVERRIDE:-${BUILD_DIR:-${ROOT_DIR}/build_switch}}"
 
-if [ -n "${CORE_DIR}" ]; then
-    CORE_DIR="$(cd "${CORE_DIR}" && pwd)"
-    THREEDS_STUB_SOURCE="${CORE_DIR}/GBAStation3DSStub.nro"
-    FBNEO_STUB_SOURCE="${CORE_DIR}/GBAStationFBNeoStub.nro"
-    FLYCAST_STUB_SOURCE="${CORE_DIR}/GBAStationFlycastStub.nro"
-    PPSSPP_STUB_SOURCE="${CORE_DIR}/GBAStationPPSSPPStub.nro"
-    DUCKSTATION_STUB_SOURCE="${CORE_DIR}/GBAStationDuckStationStub.nro"
-    YABASANSHIRO_STUB_SOURCE="${CORE_DIR}/GBAStationYabaSanshiroStub.nro"
-    DOLPHIN_STUB_SOURCE="${CORE_DIR}/GBAStationDolphinStub.nro"
-    echo "[核心] 使用预置 Release 目录: ${CORE_DIR}"
-else
-    THREEDS_STUB_SOURCE="${ROOT_DIR}/../.example/dekopon/build/switch-codex/src/citra_switch/dekopon.nro"
-    FBNEO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_fbneo/GBAStationFBNeoStub.nro"
-    FLYCAST_STUB_SOURCE="${ROOT_DIR}/../GBAStation_flycast/GBAStationFlycastStub.nro"
-    PPSSPP_STUB_SOURCE="${ROOT_DIR}/../GBAStation_ppsspp/GBAStationPPSSPPStub.nro"
-    DUCKSTATION_STUB_SOURCE="${ROOT_DIR}/../GBAStation_duckstation/build-local/GBAStationDuckStationStub.nro"
-    YABASANSHIRO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_yabasanshiro/build-local/GBAStationYabaSanshiroStub.nro"
-    DOLPHIN_STUB_SOURCE="${ROOT_DIR}/../GBAStation_dolphin/build_nx_standalone/GBAStationDolphinStub.nro"
-fi
-
-if [ -n "${CORE_DIR}" ]; then
-    for core in \
-        GBAStation3DSStub.nro \
-        GBAStationFBNeoStub.nro \
-        GBAStationFlycastStub.nro \
-        GBAStationPPSSPPStub.nro \
-        GBAStationDuckStationStub.nro \
-        GBAStationYabaSanshiroStub.nro \
-        GBAStationDolphinStub.nro; do
-        if [ ! -s "${CORE_DIR}/${core}" ]; then
-            echo "[错误] --core-dir 缺少 Release 核心: ${CORE_DIR}/${core}"
-            exit 1
-        fi
-    done
-fi
-EXTERNAL_CORE_NROS=(
-    "FBNeo.nro"
-    "Flycast.nro"
-    "GBAStation3DSStub.nro"
-    "GBAStationFBNeoStub.nro"
-    "GBAStationFlycastStub.nro"
-    "GBAStationPPSSPPStub.nro"
-    "GBAStationDuckStationStub.nro"
-    "GBAStationYabaSanshiroStub.nro"
-    "GBAStationDolphinStub.nro"
-)
-
 mkdir -p "${BUILD_DIR}"
-
-clean_external_core_nro_outputs() {
-    for nro in "${EXTERNAL_CORE_NROS[@]}"; do
-        rm -f "${BUILD_DIR}/${nro}"
-        rm -f "${BUILD_DIR}/GBAStation/core/${nro}"
-        rm -f "${BUILD_DIR}/resources/core/${nro}"
-    done
-}
-
-clean_external_core_nro_outputs
 
 # ────────────────────────────────────────────────────────────
 # 临时目录
@@ -271,28 +205,6 @@ else
 
 fi
 
-# ────────────────────────────────────────────────────────────
-# 外置核心复制
-# ────────────────────────────────────────────────────────────
-
-copy_external_core_stub() {
-    local label="$1"
-    local source="$2"
-    local output_name="$3"
-
-    echo ""
-    echo "[4/4] 复制 ${label} 外置核心..."
-
-    if [ ! -f "${source}" ]; then
-        echo "[错误] 找不到 ${label} 外置核心: ${source}"
-        echo "请先在对应独立仓库构建 ${output_name}"
-        exit 1
-    fi
-
-    mkdir -p "${BUILD_DIR}/GBAStation/core"
-    cp "${source}" "${BUILD_DIR}/GBAStation/core/${output_name}"
-}
-
 print_nro_size() {
     local label="$1"
     local file="$2"
@@ -319,7 +231,7 @@ print_nro_size() {
 cd "${BUILD_DIR}"
 
 echo ""
-echo "[1/4] CMake配置..."
+echo "[1/2] CMake配置..."
 
 cmake .. \
     -DPLATFORM_SWITCH=ON \
@@ -328,36 +240,21 @@ cmake .. \
     -DCMAKE_DEPENDS_USE_COMPILER=FALSE
 
 echo ""
-echo "[2/4] 编译..."
+echo "[2/2] 编译并打包本体与 NDS Stub..."
 
-cmake --build . -j "${JOBS}"
-
-echo ""
-echo "[3/4] 打包 NRO..."
-
-cmake --build . --target GBAStation.nro
-cmake --build . --target GBAStationNDSStub.nro
+cmake --build . --target GBAStation.nro -j "${JOBS}"
+cmake --build . --target GBAStationNDSStub.nro -j "${JOBS}"
 
 cd ..
 
 mkdir -p "${BUILD_DIR}/GBAStation/core"
 if [ -f "${BUILD_DIR}/GBAStationNDSStub.nro" ]; then
-    cp "${BUILD_DIR}/GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
-fi
-if [ -f "${THREEDS_STUB_SOURCE}" ]; then
-    cp "${THREEDS_STUB_SOURCE}" "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
-    echo "[3DS] 已复制最新 GBAStation3DSStub.nro"
+    cp "${BUILD_DIR}/GBAStationNDSStub.nro" \
+       "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
 else
-    echo "[错误] 未找到 3DS Stub: ${THREEDS_STUB_SOURCE}"
+    echo "[错误] NDS Stub 构建产物不存在"
     exit 1
 fi
-
-copy_external_core_stub "FBNeo" "${FBNEO_STUB_SOURCE}" "GBAStationFBNeoStub.nro"
-copy_external_core_stub "Flycast" "${FLYCAST_STUB_SOURCE}" "GBAStationFlycastStub.nro"
-copy_external_core_stub "PPSSPP" "${PPSSPP_STUB_SOURCE}" "GBAStationPPSSPPStub.nro"
-copy_external_core_stub "DuckStation" "${DUCKSTATION_STUB_SOURCE}" "GBAStationDuckStationStub.nro"
-copy_external_core_stub "YabaSanshiro" "${YABASANSHIRO_STUB_SOURCE}" "GBAStationYabaSanshiroStub.nro"
-copy_external_core_stub "Dolphin" "${DOLPHIN_STUB_SOURCE}" "GBAStationDolphinStub.nro"
 
 # ────────────────────────────────────────────────────────────
 # 输出大小
@@ -369,17 +266,13 @@ echo "==================== 编译结果 ===================="
 print_nro_size "GBAStation.nro" "${BUILD_DIR}/GBAStation.nro"
 print_nro_size "GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStationNDSStub.nro"
 print_nro_size "GBAStation/core/GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
-print_nro_size "GBAStation/core/GBAStation3DSStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
-print_nro_size "GBAStation/core/GBAStationFBNeoStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationFBNeoStub.nro"
-print_nro_size "GBAStation/core/GBAStationFlycastStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationFlycastStub.nro"
-print_nro_size "GBAStation/core/GBAStationPPSSPPStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationPPSSPPStub.nro"
-print_nro_size "GBAStation/core/GBAStationDuckStationStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationDuckStationStub.nro"
-print_nro_size "GBAStation/core/GBAStationYabaSanshiroStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationYabaSanshiroStub.nro"
-print_nro_size "GBAStation/core/GBAStationDolphinStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationDolphinStub.nro"
 
 echo ""
 echo "==================== SHA-256 ===================="
-for nro in "${BUILD_DIR}/GBAStation.nro" "${BUILD_DIR}/GBAStationNDSStub.nro" "${BUILD_DIR}/GBAStation/core/"*.nro; do
+for nro in \
+    "${BUILD_DIR}/GBAStation.nro" \
+    "${BUILD_DIR}/GBAStationNDSStub.nro" \
+    "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"; do
     [ -f "${nro}" ] && sha256sum "${nro}"
 done
 
@@ -390,10 +283,3 @@ echo "[完成]"
 echo "${BUILD_DIR}/GBAStation.nro"
 echo "${BUILD_DIR}/GBAStationNDSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStationNDSStub.nro"
-echo "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
-echo "${BUILD_DIR}/GBAStation/core/GBAStationFBNeoStub.nro"
-echo "${BUILD_DIR}/GBAStation/core/GBAStationFlycastStub.nro"
-echo "${BUILD_DIR}/GBAStation/core/GBAStationPPSSPPStub.nro"
-echo "${BUILD_DIR}/GBAStation/core/GBAStationDuckStationStub.nro"
-echo "${BUILD_DIR}/GBAStation/core/GBAStationYabaSanshiroStub.nro"
-echo "${BUILD_DIR}/GBAStation/core/GBAStationDolphinStub.nro"
