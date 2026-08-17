@@ -82,6 +82,9 @@ jobs:
           download_latest beiklive/GBAStation_FBNeo GBAStationFBNeoStub.nro
           download_latest beiklive/GBAStation_flycast GBAStationFlycastStub.nro
           download_latest beiklive/GBAStation_ppsspp GBAStationPPSSPPStub.nro
+          download_latest beiklive/GBAStation_duckstation GBAStationDuckStationStub.nro
+          download_latest beiklive/GBAStation_yabasanshiro GBAStationYabaSanshiroStub.nro
+          download_latest beiklive/GBAStation_dolphin GBAStationDolphinStub.nro
           sha256sum external-cores/*.nro | tee core-release-info/CORE-NRO-SHA256SUMS.txt
 
       - name: Build frontend and stage external cores
@@ -106,7 +109,15 @@ jobs:
           rm -rf "$PACKAGE_DIR"
           mkdir -p "$PACKAGE_DIR/switch" "$PACKAGE_DIR/GBAStation/core"
           cp build_switch/GBAStation.nro "$PACKAGE_DIR/switch/GBAStation.nro"
-          for core in GBAStationNDSStub.nro GBAStation3DSStub.nro GBAStationFBNeoStub.nro GBAStationFlycastStub.nro GBAStationPPSSPPStub.nro; do
+          for core in \
+            GBAStationNDSStub.nro \
+            GBAStation3DSStub.nro \
+            GBAStationFBNeoStub.nro \
+            GBAStationFlycastStub.nro \
+            GBAStationPPSSPPStub.nro \
+            GBAStationDuckStationStub.nro \
+            GBAStationYabaSanshiroStub.nro \
+            GBAStationDolphinStub.nro; do
             test -s "build_switch/GBAStation/core/$core"
             cp "build_switch/GBAStation/core/$core" "$PACKAGE_DIR/GBAStation/core/$core"
           done

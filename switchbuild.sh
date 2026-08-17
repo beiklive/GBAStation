@@ -83,9 +83,11 @@ usage() {
     cat <<'EOF'
 Usage: ./switchbuild.sh [-j JOBS] [--build-dir DIR] [--core-dir DIR]
 
-  --core-dir DIR  Directory containing the four downloaded core Release NROs:
+  --core-dir DIR  Directory containing the seven downloaded core Release NROs:
                   GBAStation3DSStub.nro, GBAStationFBNeoStub.nro,
-                  GBAStationFlycastStub.nro and GBAStationPPSSPPStub.nro.
+                  GBAStationFlycastStub.nro, GBAStationPPSSPPStub.nro,
+                  GBAStationDuckStationStub.nro, GBAStationYabaSanshiroStub.nro
+                  and GBAStationDolphinStub.nro.
   --build-dir DIR CMake build directory (default: build_switch).
   -j, --jobs N   Parallel build jobs.
 EOF
@@ -188,16 +190,29 @@ if [ -n "${CORE_DIR}" ]; then
     FBNEO_STUB_SOURCE="${CORE_DIR}/GBAStationFBNeoStub.nro"
     FLYCAST_STUB_SOURCE="${CORE_DIR}/GBAStationFlycastStub.nro"
     PPSSPP_STUB_SOURCE="${CORE_DIR}/GBAStationPPSSPPStub.nro"
+    DUCKSTATION_STUB_SOURCE="${CORE_DIR}/GBAStationDuckStationStub.nro"
+    YABASANSHIRO_STUB_SOURCE="${CORE_DIR}/GBAStationYabaSanshiroStub.nro"
+    DOLPHIN_STUB_SOURCE="${CORE_DIR}/GBAStationDolphinStub.nro"
     echo "[核心] 使用预置 Release 目录: ${CORE_DIR}"
 else
     THREEDS_STUB_SOURCE="${ROOT_DIR}/../.example/dekopon/build/switch-codex/src/citra_switch/dekopon.nro"
     FBNEO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_fbneo/GBAStationFBNeoStub.nro"
     FLYCAST_STUB_SOURCE="${ROOT_DIR}/../GBAStation_flycast/GBAStationFlycastStub.nro"
     PPSSPP_STUB_SOURCE="${ROOT_DIR}/../GBAStation_ppsspp/GBAStationPPSSPPStub.nro"
+    DUCKSTATION_STUB_SOURCE="${ROOT_DIR}/../GBAStation_duckstation/build-switch/GBAStationDuckStationStub.nro"
+    YABASANSHIRO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_yabasanshiro/build-switch/GBAStationYabaSanshiroStub.nro"
+    DOLPHIN_STUB_SOURCE="${ROOT_DIR}/../GBAStation_dolphin/build_nx_standalone/GBAStationDolphinStub.nro"
 fi
 
 if [ -n "${CORE_DIR}" ]; then
-    for core in GBAStation3DSStub.nro GBAStationFBNeoStub.nro GBAStationFlycastStub.nro GBAStationPPSSPPStub.nro; do
+    for core in \
+        GBAStation3DSStub.nro \
+        GBAStationFBNeoStub.nro \
+        GBAStationFlycastStub.nro \
+        GBAStationPPSSPPStub.nro \
+        GBAStationDuckStationStub.nro \
+        GBAStationYabaSanshiroStub.nro \
+        GBAStationDolphinStub.nro; do
         if [ ! -s "${CORE_DIR}/${core}" ]; then
             echo "[错误] --core-dir 缺少 Release 核心: ${CORE_DIR}/${core}"
             exit 1
@@ -211,6 +226,9 @@ EXTERNAL_CORE_NROS=(
     "GBAStationFBNeoStub.nro"
     "GBAStationFlycastStub.nro"
     "GBAStationPPSSPPStub.nro"
+    "GBAStationDuckStationStub.nro"
+    "GBAStationYabaSanshiroStub.nro"
+    "GBAStationDolphinStub.nro"
 )
 
 mkdir -p "${BUILD_DIR}"
@@ -337,6 +355,9 @@ fi
 copy_external_core_stub "FBNeo" "${FBNEO_STUB_SOURCE}" "GBAStationFBNeoStub.nro"
 copy_external_core_stub "Flycast" "${FLYCAST_STUB_SOURCE}" "GBAStationFlycastStub.nro"
 copy_external_core_stub "PPSSPP" "${PPSSPP_STUB_SOURCE}" "GBAStationPPSSPPStub.nro"
+copy_external_core_stub "DuckStation" "${DUCKSTATION_STUB_SOURCE}" "GBAStationDuckStationStub.nro"
+copy_external_core_stub "YabaSanshiro" "${YABASANSHIRO_STUB_SOURCE}" "GBAStationYabaSanshiroStub.nro"
+copy_external_core_stub "Dolphin" "${DOLPHIN_STUB_SOURCE}" "GBAStationDolphinStub.nro"
 
 # ────────────────────────────────────────────────────────────
 # 输出大小
@@ -352,6 +373,9 @@ print_nro_size "GBAStation/core/GBAStation3DSStub.nro" "${BUILD_DIR}/GBAStation/
 print_nro_size "GBAStation/core/GBAStationFBNeoStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationFBNeoStub.nro"
 print_nro_size "GBAStation/core/GBAStationFlycastStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationFlycastStub.nro"
 print_nro_size "GBAStation/core/GBAStationPPSSPPStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationPPSSPPStub.nro"
+print_nro_size "GBAStation/core/GBAStationDuckStationStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationDuckStationStub.nro"
+print_nro_size "GBAStation/core/GBAStationYabaSanshiroStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationYabaSanshiroStub.nro"
+print_nro_size "GBAStation/core/GBAStationDolphinStub.nro" "${BUILD_DIR}/GBAStation/core/GBAStationDolphinStub.nro"
 
 echo ""
 echo "==================== SHA-256 ===================="
@@ -370,3 +394,6 @@ echo "${BUILD_DIR}/GBAStation/core/GBAStation3DSStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStationFBNeoStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStationFlycastStub.nro"
 echo "${BUILD_DIR}/GBAStation/core/GBAStationPPSSPPStub.nro"
+echo "${BUILD_DIR}/GBAStation/core/GBAStationDuckStationStub.nro"
+echo "${BUILD_DIR}/GBAStation/core/GBAStationYabaSanshiroStub.nro"
+echo "${BUILD_DIR}/GBAStation/core/GBAStationDolphinStub.nro"
