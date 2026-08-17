@@ -214,13 +214,19 @@ static bool parseResourceManifest(const std::string& text,
 
             std::transform(item.type.begin(), item.type.end(), item.type.begin(),
                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            if (item.name.empty() || item.url.empty() || item.path.empty()
-                || item.version.empty() || (item.type != "zip" && item.type != "file")) {
+            const bool isInfo = item.type == "info";
+            if (item.name.empty() || (!isInfo &&
+                (item.url.empty() || item.path.empty() || item.version.empty()
+                 || (item.type != "zip" && item.type != "file")))) {
                 continue;
             }
 
-            const auto localIt = localVersions.find(item.name);
-            item.needsUpdate = localIt == localVersions.end() || localIt->second != item.version;
+            item.needsUpdate = false;
+            if (!isInfo) {
+                const auto localIt = localVersions.find(item.name);
+                item.needsUpdate = localIt == localVersions.end()
+                    || localIt->second != item.version;
+            }
             group.items.push_back(std::move(item));
         }
 
@@ -1451,6 +1457,14 @@ private:
         const auto item = m_manifest.groups[layout.groupIndex].items[layout.itemIndex];
         brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
 
+        if (item.type == "info") {
+            auto* dialog = new brls::Dialog(
+                item.dialog.empty() ? item.name : item.dialog);
+            dialog->addButton(L("确定"), []() {});
+            dialog->open();
+            return;
+        }
+
         auto* dialog = new brls::Dialog(item.dialog.empty() ? L("是否下载此资源？") : item.dialog);
         dialog->addButton(L("取消"), []() {});
         dialog->addButton(L("确认"), [this, item, layout]() {
@@ -1509,6 +1523,18 @@ private:
         nvgFillColor(vg, focused
             ? nvgRGBA(255, 255, 255, 255) : GET_THEME_COLOR("brls/text"));
         nvgText(vg, x + 96.f, y + 29.f, item.name.c_str(), nullptr);
+
+        if (item.type == "info") {
+            nvgFontSize(vg, 14.f);
+            nvgFillColor(vg, nvgRGBA(205, 212, 223, focused ? 220 : 175));
+            nvgSave(vg);
+            nvgIntersectScissor(vg, x + 96.f, y + 40.f,
+                                std::max(20.f, w - 132.f), 34.f);
+            nvgTextBox(vg, x + 96.f, y + 49.f, std::max(20.f, w - 132.f),
+                       item.dialog.c_str(), nullptr);
+            nvgRestore(vg);
+            return;
+        }
 
         nvgFontSize(vg, 14.f);
         nvgFillColor(vg, nvgRGBA(205, 212, 223, focused ? 220 : 175));
