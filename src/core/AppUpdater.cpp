@@ -20,7 +20,7 @@ namespace beiklive {
 
 static const char* VERSION_INI_URL = "https://download.nswiki.cn/hahappify/xlcj/version.ini";
 static const char* DOWNLOAD_URL = "https://download.nswiki.cn/hahappify/xlcj/nro/GBAStation.zip";
-static const char* CHANGELOG_BASE_URL = "https://cdn.jsdelivr.net/gh/beiklive/GBAStation_Release@main";
+static const char* CHANGELOG_URL = "https://file.beiklive.top/file/GBAStation/changelog.txt";
 
 // 缓存目录中的 update.nro 路径
 static std::string cacheNroPath() {
@@ -98,12 +98,6 @@ static std::string trimCopy(const std::string& value) {
         --end;
 
     return value.substr(start, end - start);
-}
-
-static std::string normalizeVersionLabel(const std::string& version) {
-    if (!version.empty() && (version[0] == 'v' || version[0] == 'V'))
-        return version.substr(1);
-    return version;
 }
 
 static std::string zipBaseName(const std::string& name) {
@@ -307,10 +301,8 @@ bool AppUpdater::checkSync() {
     m_info.fileSize = fetchContentLength(m_info.downloadUrl);
     m_info.hasUpdate = isRemoteVersionNewer(m_info.version, APP_VERSION);
     if (m_info.hasUpdate) {
-        std::string versionLabel = normalizeVersionLabel(m_info.version);
         std::string changelogUrl = tools::appendDeviceIdParameter(
-            std::string(CHANGELOG_BASE_URL) + "/" + versionLabel
-            + ".txt?t=" + std::to_string(ts));
+            std::string(CHANGELOG_URL) + "?t=" + std::to_string(ts));
         std::string changelogText = fetchUrl(changelogUrl);
         if (!changelogText.empty())
             m_info.changelog = changelogText;
