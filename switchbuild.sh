@@ -199,8 +199,8 @@ else
     FBNEO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_fbneo/GBAStationFBNeoStub.nro"
     FLYCAST_STUB_SOURCE="${ROOT_DIR}/../GBAStation_flycast/GBAStationFlycastStub.nro"
     PPSSPP_STUB_SOURCE="${ROOT_DIR}/../GBAStation_ppsspp/GBAStationPPSSPPStub.nro"
-    DUCKSTATION_STUB_SOURCE="${ROOT_DIR}/../GBAStation_duckstation/build-switch/GBAStationDuckStationStub.nro"
-    YABASANSHIRO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_yabasanshiro/build-switch/GBAStationYabaSanshiroStub.nro"
+    DUCKSTATION_STUB_SOURCE="${ROOT_DIR}/../GBAStation_duckstation/build-local/GBAStationDuckStationStub.nro"
+    YABASANSHIRO_STUB_SOURCE="${ROOT_DIR}/../GBAStation_yabasanshiro/build-local/GBAStationYabaSanshiroStub.nro"
     DOLPHIN_STUB_SOURCE="${ROOT_DIR}/../GBAStation_dolphin/build_nx_standalone/GBAStationDolphinStub.nro"
 fi
 
