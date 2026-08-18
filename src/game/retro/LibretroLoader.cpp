@@ -611,14 +611,13 @@ void LibretroLoader::unload()
         fn_unload_game();
         m_gameLoaded = false;
     }
+    // Each loader owns its core session. Do not leave a statically linked core
+    // initialized after its callbacks and function bindings have been removed.
+    deinitCore();
     m_diskControl = {};
     m_diskControlExt = {};
     m_hasDiskControl = false;
     m_hasDiskControlExt = false;
-    // retro_deinit() intentionally not called here:
-    // many cores (especially PicoDrive) don't handle repeated init/deinit cycles.
-    // deinitCore() can be called explicitly when program exits.
-
     m_handle = nullptr;
     if (s_current == this) {
         s_current = nullptr;
@@ -687,14 +686,18 @@ bool LibretroLoader::initCore()
 void LibretroLoader::deinitCore()
 {
     if (!m_coreReady) return;
-    brls::Logger::debug("[LibretroLoader] deinitCore: calling retro_deinit()");
-    fn_deinit();
     const size_t idx = static_cast<size_t>(m_coreType);
     if (idx >= s_coreInitialized.size()) {
         brls::Logger::error("[LibretroLoader] deinitCore: invalid core type {}",
                             static_cast<int>(m_coreType));
         m_coreReady = false;
         return;
+    }
+    if (fn_deinit) {
+        brls::Logger::debug("[LibretroLoader] deinitCore: calling retro_deinit()");
+        fn_deinit();
+    } else {
+        brls::Logger::warning("[LibretroLoader] deinitCore: missing retro_deinit callback");
     }
     s_coreInitialized[idx] = false;
     m_coreReady = false;
