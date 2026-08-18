@@ -572,8 +572,17 @@ void AudioManager::audioThreadFunc()
 
             const size_t framesToRead = inputFrames - carryFrames;
             const size_t needed = framesToRead * kOutChannels;
-            m_dataCV.wait_for(lk, std::chrono::milliseconds(18), [&] {
-                return m_available >= needed || m_available >= kOutChannels ||
+            // A 60 Hz core normally supplies about 800 frames at 48 kHz, while
+            // one audout block needs 1026 source frames. Waking for any stereo
+            // frame therefore padded every hardware block with a fade to zero,
+            // which sounds like a periodic dull pop or hiss. Wait for a complete
+            // block; only use the underrun tail when the core genuinely stalls.
+            const auto sourceBlockMs = static_cast<int>(std::ceil(
+                1000.0 * static_cast<double>(framesToRead) /
+                static_cast<double>(std::max(1, m_sampleRate)))) + 8;
+            const auto waitMs = std::clamp(sourceBlockMs, 12, 35);
+            m_dataCV.wait_for(lk, std::chrono::milliseconds(waitMs), [&] {
+                return m_available >= needed ||
                        !m_running.load(std::memory_order_relaxed);
             });
             size_t got = ringRead(m_resampleScratch.data() + carryFrames * kOutChannels, needed);
