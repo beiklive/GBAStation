@@ -657,13 +657,20 @@ void LibretroLoader::unload()
 // 核心生命周期
 // ============================================================
 
-// 跟踪哪些核心类型已经调用了 retro_init()，防止重复初始化
-static bool s_coreInitialized[5] = {false, false, false, false, false};
+// 跟踪哪些核心类型已经调用了 retro_init()，防止重复初始化。
+// CoreType 是连续枚举，数量必须覆盖最后一个枚举值（Gambatte=6）。
+constexpr size_t kCoreTypeCount = static_cast<size_t>(CoreType::Gambatte) + 1;
+static std::array<bool, kCoreTypeCount> s_coreInitialized{};
 
 bool LibretroLoader::initCore()
 {
     if (!m_handle) { brls::Logger::debug("[LibretroLoader] initCore: no handle"); return false; }
-    int idx = static_cast<int>(m_coreType);
+    const size_t idx = static_cast<size_t>(m_coreType);
+    if (idx >= s_coreInitialized.size()) {
+        brls::Logger::error("[LibretroLoader] initCore: invalid core type {}",
+                            static_cast<int>(m_coreType));
+        return false;
+    }
     if (s_coreInitialized[idx]) {
         brls::Logger::debug("[LibretroLoader] initCore: already initialized (idx={})", idx);
         m_coreReady = true;
@@ -682,7 +689,13 @@ void LibretroLoader::deinitCore()
     if (!m_coreReady) return;
     brls::Logger::debug("[LibretroLoader] deinitCore: calling retro_deinit()");
     fn_deinit();
-    int idx = static_cast<int>(m_coreType);
+    const size_t idx = static_cast<size_t>(m_coreType);
+    if (idx >= s_coreInitialized.size()) {
+        brls::Logger::error("[LibretroLoader] deinitCore: invalid core type {}",
+                            static_cast<int>(m_coreType));
+        m_coreReady = false;
+        return;
+    }
     s_coreInitialized[idx] = false;
     m_coreReady = false;
 }
