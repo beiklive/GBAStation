@@ -367,7 +367,9 @@ target_compile_definitions(fceumm_core_obj PRIVATE
     __LIBRETRO__
     PATH_MAX=1024
     FCEU_VERSION_NUMERIC=9900
-    FRONTEND_SUPPORTS_RGB888
+    # Keep 16-bit output for the embedded frontend. FCEUmm's XRGB8888
+    # output takes a separate 32-bit path and is not needed on Switch.
+    FRONTEND_SUPPORTS_RGB565=1
     HAVE_NTSC_FILTER
 )
 
@@ -612,7 +614,9 @@ target_include_directories(gambatte_core_obj PRIVATE
     ${GAMBATTE_LR_DIR}
     ${GAMBATTE_LRC_DIR}/include
 )
-target_compile_definitions(gambatte_core_obj PRIVATE __LIBRETRO__)
+# Use Gambatte's native RGB565 output. It retains the core's 256-pixel row
+# stride while avoiding the XRGB8888 path shared with FCEUmm.
+target_compile_definitions(gambatte_core_obj PRIVATE __LIBRETRO__ VIDEO_RGB565)
 target_compile_options(gambatte_core_obj PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-include;cstdint>")
 if (PLATFORM_SWITCH)
     target_compile_definitions(gambatte_core_obj PRIVATE __SWITCH__ SWITCH HAVE_LIBNX)

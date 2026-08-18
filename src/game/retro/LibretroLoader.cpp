@@ -390,11 +390,15 @@ bool LibretroLoader::load(CoreType coreType)
     unload();
 
     m_coreType = coreType;
-    // Gambatte is built as an XRGB8888 core. Keep this as its fallback in
-    // case a core reload reaches video output before pixel negotiation.
+    // Gambatte is built as RGB565. Keep this as its fallback in case a core
+    // reload reaches video output before pixel negotiation.
     m_pixelFormat = coreType == CoreType::Gambatte
-        ? RETRO_PIXEL_FORMAT_XRGB8888
+        ? RETRO_PIXEL_FORMAT_RGB565
         : RETRO_PIXEL_FORMAT_0RGB1555;
+    m_lastVideoLogWidth = 0;
+    m_lastVideoLogHeight = 0;
+    m_lastVideoLogPitch = 0;
+    m_lastVideoLogFormat = RETRO_PIXEL_FORMAT_0RGB1555;
     brls::Logger::debug("[LibretroLoader] load(CoreType={})", static_cast<int>(coreType));
 
     // 根据核心类型选择对应的符号集
@@ -1324,6 +1328,27 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
                     static_cast<uint8_t>((b5 << 3) | (b5 >> 2)));
             }
         }
+    }
+
+    if (s_current->m_lastVideoLogWidth != width ||
+        s_current->m_lastVideoLogHeight != height ||
+        s_current->m_lastVideoLogPitch != pitch ||
+        s_current->m_lastVideoLogFormat != s_current->m_pixelFormat) {
+        uint32_t sourcePixel = 0;
+        if (s_current->m_pixelFormat == RETRO_PIXEL_FORMAT_XRGB8888)
+            std::memcpy(&sourcePixel, src, sizeof(sourcePixel));
+        else
+            std::memcpy(&sourcePixel, src, sizeof(uint16_t));
+
+        brls::Logger::debug(
+            "[LibretroLoader] video frame: core={} format={} {}x{} pitch={} raw=0x{:08X} rgba=0x{:08X}",
+            static_cast<int>(s_current->m_coreType),
+            static_cast<int>(s_current->m_pixelFormat),
+            width, height, pitch, sourcePixel, vf.pixels.front());
+        s_current->m_lastVideoLogWidth = width;
+        s_current->m_lastVideoLogHeight = height;
+        s_current->m_lastVideoLogPitch = pitch;
+        s_current->m_lastVideoLogFormat = s_current->m_pixelFormat;
     }
 }
 

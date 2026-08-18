@@ -294,7 +294,11 @@ namespace beiklive
     void GamePage::GameViewInitialize()
     {
         #undef ABSOLUTE
-        m_gameView = isMgbaPlatform(m_gameEntry.platform)
+        // GB/GBC 可以使用 mGBA 或 Gambatte。只有 mGBA 才能进入它的专用视图；
+        // Gambatte 通过通用 GameView 驱动 libretro 帧和渲染链。
+        const bool useMgbaView = isMgbaPlatform(m_gameEntry.platform) &&
+                                 m_gameEntry.core != "gambatte";
+        m_gameView = useMgbaView
             ? static_cast<GameViewBase*>(new MgbaGameView(m_gameEntry))
             : static_cast<GameViewBase*>(new GameView(m_gameEntry));
         m_gameView->setWidthPercentage(100.f);

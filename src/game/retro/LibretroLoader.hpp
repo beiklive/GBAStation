@@ -206,6 +206,10 @@ private:
     // ---- 视频帧存储 -------------------------------------------------
     mutable std::mutex   m_videoMutex;
     VideoFrame           m_videoFrame;
+    unsigned             m_lastVideoLogWidth  = 0;
+    unsigned             m_lastVideoLogHeight = 0;
+    size_t               m_lastVideoLogPitch  = 0;
+    retro_pixel_format   m_lastVideoLogFormat = RETRO_PIXEL_FORMAT_0RGB1555;
 
     // ---- 音频环形缓冲区 ---------------------------------------------
     mutable std::mutex       m_audioMutex;
