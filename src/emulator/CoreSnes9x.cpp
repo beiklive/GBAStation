@@ -107,6 +107,10 @@ bool CoreSnes9x::_loadCore()
         m_core.unload();
         return false;
     }
+    // Keep input setup explicit across Snes9x variants.  Relying on the
+    // core's default port device can leave a port as RETRO_DEVICE_NONE.
+    m_core.setControllerPortDevice(0, RETRO_DEVICE_JOYPAD);
+    m_core.setControllerPortDevice(1, RETRO_DEVICE_JOYPAD);
     return true;
 }
 
