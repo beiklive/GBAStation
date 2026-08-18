@@ -790,11 +790,20 @@ void LibretroLoader::unloadGame()
     m_diskControlExt = {};
     m_hasDiskControl = false;
     m_hasDiskControlExt = false;
+    m_loggedFirstRun = false;
 }
 
 void LibretroLoader::run()
 {
-    if (m_gameLoaded) fn_run();
+    if (!m_gameLoaded) return;
+    const bool trace = m_coreType == CoreType::Fceumm && !m_loggedFirstRun;
+    if (trace) {
+        m_loggedFirstRun = true;
+        brls::Logger::debug("[LibretroLoader] FCEUmm retro_run enter");
+    }
+    fn_run();
+    if (trace)
+        brls::Logger::debug("[LibretroLoader] FCEUmm retro_run return");
 }
 
 void LibretroLoader::reset()

@@ -202,6 +202,7 @@ private:
     retro_pixel_format   m_pixelFormat = RETRO_PIXEL_FORMAT_0RGB1555;
     bool m_coreReady  = false;
     bool m_gameLoaded = false;
+    bool m_loggedFirstRun = false;
 
     // ---- 视频帧存储 -------------------------------------------------
     mutable std::mutex   m_videoMutex;

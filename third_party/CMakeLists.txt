@@ -367,9 +367,9 @@ target_compile_definitions(fceumm_core_obj PRIVATE
     __LIBRETRO__
     PATH_MAX=1024
     FCEU_VERSION_NUMERIC=9900
-    # Keep 16-bit output for the embedded frontend. FCEUmm's XRGB8888
-    # output takes a separate 32-bit path and is not needed on Switch.
-    FRONTEND_SUPPORTS_RGB565=1
+    # Match upstream Makefile.libretro's libnx target (WANT_32BPP=1).
+    # The frontend converts XRGB8888 to its internal RGBA snapshot format.
+    FRONTEND_SUPPORTS_RGB888
     HAVE_NTSC_FILTER
 )
 if (PLATFORM_SWITCH)
@@ -384,7 +384,9 @@ if (PLATFORM_SWITCH)
         STATIC_LINKING
         ARM
     )
-    target_compile_options(fceumm_core_obj PRIVATE -mtp=soft)
+    # libnx builds explicitly remove host Linux defines before selecting
+    # Switch-specific VFS and platform code.
+    target_compile_options(fceumm_core_obj PRIVATE -U__linux__ -U__linux -mtp=soft)
 endif()
 
 apply_retro_symbol_rename(fceumm_core_obj fceumm)
