@@ -1342,7 +1342,9 @@ int16_t LibretroLoader::s_inputStateCallback(unsigned port, unsigned device,
                                                unsigned /*index*/, unsigned id)
 {
     if (!s_current || port >= kMaxInputPorts) return 0;
-    if (device != RETRO_DEVICE_JOYPAD && device != RETRO_DEVICE_ANALOG) return 0;
+    // The host currently exposes digital joypad state only.  Do not treat
+    // analog axis ids as button ids (axis 0/1 would otherwise read A/B).
+    if (device != RETRO_DEVICE_JOYPAD) return 0;
     if (id > RETRO_DEVICE_ID_JOYPAD_R3) return 0;
     return s_current->m_buttons[port][id] ? 1 : 0;
 }

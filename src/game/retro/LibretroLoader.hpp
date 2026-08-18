@@ -127,7 +127,7 @@ public:
 
     // ---- 输入 -------------------------------------------------------
 
-    /// 各按钮按下状态，索引 = RETRO_DEVICE_ID_JOYPAD_*。
+    /// 数字手柄按键状态，索引 = RETRO_DEVICE_ID_JOYPAD_*。
     void setButtonState(unsigned port, unsigned id, bool pressed);
     bool getButtonState(unsigned port, unsigned id) const;
 
