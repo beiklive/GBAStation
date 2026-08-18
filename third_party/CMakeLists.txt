@@ -372,6 +372,20 @@ target_compile_definitions(fceumm_core_obj PRIVATE
     FRONTEND_SUPPORTS_RGB565=1
     HAVE_NTSC_FILTER
 )
+if (PLATFORM_SWITCH)
+    # Match FCEUmm's upstream `platform=libnx` build. These flags select
+    # Switch-safe VFS and static-linking paths used before the first emulated
+    # frame, rather than the desktop fallback selected by a generic CMake build.
+    target_compile_definitions(fceumm_core_obj PRIVATE
+        SWITCH=1
+        __SWITCH__
+        HAVE_LIBNX
+        RARCH_INTERNAL
+        STATIC_LINKING
+        ARM
+    )
+    target_compile_options(fceumm_core_obj PRIVATE -mtp=soft)
+endif()
 
 apply_retro_symbol_rename(fceumm_core_obj fceumm)
 apply_data_symbol_rename(fceumm_core_obj fceumm)
