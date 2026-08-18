@@ -390,6 +390,11 @@ bool LibretroLoader::load(CoreType coreType)
     unload();
 
     m_coreType = coreType;
+    // Gambatte is built as an XRGB8888 core. Keep this as its fallback in
+    // case a core reload reaches video output before pixel negotiation.
+    m_pixelFormat = coreType == CoreType::Gambatte
+        ? RETRO_PIXEL_FORMAT_XRGB8888
+        : RETRO_PIXEL_FORMAT_0RGB1555;
     brls::Logger::debug("[LibretroLoader] load(CoreType={})", static_cast<int>(coreType));
 
     // 根据核心类型选择对应的符号集
@@ -1016,9 +1021,13 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
         }
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
             const retro_pixel_format* fmt = static_cast<const retro_pixel_format*>(data);
+            if (!fmt) return false;
             if (*fmt == RETRO_PIXEL_FORMAT_XRGB8888 ||
                 *fmt == RETRO_PIXEL_FORMAT_RGB565) {
                 s_current->m_pixelFormat = *fmt;
+                brls::Logger::debug("[LibretroLoader] pixel format core={} format={}",
+                                    static_cast<int>(s_current->m_coreType),
+                                    static_cast<int>(*fmt));
                 return true;
             }
             return false;
@@ -1251,7 +1260,9 @@ void LibretroLoader::s_videoRefreshCallback(const void* data,
     // 防御性检查：合理范围
     if (width < 16 || width > 720 || height < 16 || height > 576)
         return;
-    if (pitch < width * 2)
+    const size_t bytesPerPixel = s_current->m_pixelFormat == RETRO_PIXEL_FORMAT_XRGB8888
+        ? 4u : 2u;
+    if (pitch < static_cast<size_t>(width) * bytesPerPixel)
         return;
 
     std::lock_guard<std::mutex> lk(s_current->m_videoMutex);
