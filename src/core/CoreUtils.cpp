@@ -8,13 +8,25 @@
 
 namespace beiklive::core_utils {
 
+namespace {
+
+std::filesystem::path sramPath(const std::string& savePath,
+                               const std::string& romName)
+{
+    if (savePath.empty() || romName.empty())
+        return {};
+    return std::filesystem::path(savePath) / (romName + ".sav");
+}
+
+}
+
 bool loadSram(LibretroLoader& core, const std::string& savePath, const std::string& romName)
 {
     size_t sz = core.getMemorySize(RETRO_MEMORY_SAVE_RAM);
     if (sz == 0)
         return true;
 
-    std::string path = savePath + beiklive::path::SPLIT_CHAR + romName + ".sav";
+    const auto path = sramPath(savePath, romName);
     if (path.empty())
         return true;
 
@@ -46,9 +58,14 @@ bool saveSram(LibretroLoader& core, const std::string& savePath, const std::stri
     if (!sramPtr)
         return true;
 
-    std::string path = savePath + beiklive::path::SPLIT_CHAR + romName + ".sav";
+    const auto path = sramPath(savePath, romName);
     if (path.empty())
         return true;
+
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec)
+        return false;
 
     std::ofstream f(path, std::ios::binary);
     if (!f)

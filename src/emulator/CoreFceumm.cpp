@@ -346,13 +346,19 @@ bool CoreFceumm::_checkFdsBios(const std::string& romPath)
 
 bool CoreFceumm::_loadSram()
 {
-    return core_utils::loadSram(m_core, m_gameEntry.savePath,
+    const std::string savePath = m_gameEntry.savePath.empty()
+        ? beiklive::tools::defaultGameSavePath(m_gameEntry.platform, m_gameEntry.path)
+        : m_gameEntry.savePath;
+    return core_utils::loadSram(m_core, savePath,
         beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path));
 }
 
 bool CoreFceumm::_saveSram()
 {
-    return core_utils::saveSram(m_core, m_gameEntry.savePath,
+    const std::string savePath = m_gameEntry.savePath.empty()
+        ? beiklive::tools::defaultGameSavePath(m_gameEntry.platform, m_gameEntry.path)
+        : m_gameEntry.savePath;
+    return core_utils::saveSram(m_core, savePath,
         beiklive::tools::getFileNameWithoutExtension(m_gameEntry.path));
 }
 
