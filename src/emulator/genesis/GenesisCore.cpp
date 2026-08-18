@@ -79,20 +79,7 @@ bool GenesisCore::SetupGame(beiklive::GameEntry gameEntry)
     bitmap.data = reinterpret_cast<uint8*>(m_bitmapStorage.data());
 
     gpgx_configure_defaults();
-    const std::string region = GET_SETTING_KEY_STR("core.genesis.region", "auto");
-    int regionCode = 0;
-    if (region == "ntsc-u") regionCode = 1;
-    else if (region == "pal") regionCode = 2;
-    else if (region == "ntsc-j") regionCode = 3;
-    gpgx_apply_config(
-        regionCode,
-        GET_SETTING_KEY_INT("core.genesis.pad_buttons", 6),
-        GET_SETTING_KEY_STR("core.genesis.low_pass", "enabled") == "enabled",
-        GET_SETTING_KEY_INT("core.genesis.low_pass_range", 60),
-        GET_SETTING_KEY_STR("core.genesis.hq_fm", "enabled") == "enabled",
-        GET_SETTING_KEY_STR("core.genesis.hq_psg", "enabled") == "enabled",
-        GET_SETTING_KEY_STR("core.genesis.mono", "disabled") == "enabled",
-        GET_SETTING_KEY_STR("core.genesis.no_sprite_limit", "disabled") == "enabled");
+    applyConfig();
     system_hw = 0;
 
     std::vector<char> mutablePath(m_gameEntry.path.begin(), m_gameEntry.path.end());
@@ -127,6 +114,30 @@ bool GenesisCore::SetupGame(beiklive::GameEntry gameEntry)
     brls::Logger::info("GenesisCore: ROM loaded: {} ({}x{} @ {:.2f} fps)",
                        m_gameEntry.path, m_width, m_height, m_fps);
     return true;
+}
+
+void GenesisCore::applyConfig()
+{
+    const std::string region = GET_SETTING_KEY_STR("core.genesis.region", "auto");
+    int regionCode = 0;
+    if (region == "ntsc-u") regionCode = 1;
+    else if (region == "pal") regionCode = 2;
+    else if (region == "ntsc-j") regionCode = 3;
+    gpgx_apply_config(
+        regionCode,
+        GET_SETTING_KEY_INT("core.genesis.pad_buttons", 6),
+        GET_SETTING_KEY_STR("core.genesis.low_pass", "enabled") == "enabled",
+        GET_SETTING_KEY_INT("core.genesis.low_pass_range", 60),
+        GET_SETTING_KEY_STR("core.genesis.hq_fm", "enabled") == "enabled",
+        GET_SETTING_KEY_STR("core.genesis.hq_psg", "enabled") == "enabled",
+        GET_SETTING_KEY_STR("core.genesis.mono", "disabled") == "enabled",
+        GET_SETTING_KEY_STR("core.genesis.no_sprite_limit", "disabled") == "enabled");
+}
+
+void GenesisCore::NotifyConfigUpdated()
+{
+    if (m_ready)
+        applyConfig();
 }
 
 void GenesisCore::Cleanup()

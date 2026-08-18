@@ -35,7 +35,7 @@ public:
     double SampleRate() const override { return m_sampleRate; }
 
     void SetFastForwarding(bool ff) override { m_fastForwarding = ff; }
-    void NotifyConfigUpdated() override {}
+    void NotifyConfigUpdated() override;
 
     void ApplyCheats(const std::vector<CheatEntry>& cheats) override;
     void SetCheatPath(const std::string& path) override { m_gameEntry.cheatPath = path; }
@@ -58,6 +58,7 @@ private:
     void updateInput();
     void captureVideoFrame();
     void clearRuntimeState();
+    void applyConfig();
     std::string saveFilePath() const;
 
     beiklive::GameEntry m_gameEntry;
@@ -79,4 +80,3 @@ private:
 };
 
 } // namespace beiklive::genesis
-
