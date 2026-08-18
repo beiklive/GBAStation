@@ -1211,9 +1211,9 @@ bool LibretroLoader::s_environmentCallback(unsigned cmd, void* data)
             return true;
         }
         case RETRO_ENVIRONMENT_GET_VFS_INTERFACE: {
-            // VFS 不可用，返回 true 但 iface 保持 NULL
-            // 核心会回退到 stdio 文件操作
-            return true;
+            // Do not advertise an interface until all of its callbacks are implemented.
+            // Cores that receive true may dereference iface without checking it.
+            return false;
         }
         case RETRO_ENVIRONMENT_GET_LED_INTERFACE:
             // LED 接口不可用，核心不检查返回值
