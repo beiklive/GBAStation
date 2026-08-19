@@ -56,6 +56,16 @@ public:
     /// 设置当前模拟速度倍率（1.0=正常速度，音频线程据此动态调整重采样比例）
     void setSpeed(float speed) { m_currentSpeed.store(speed, std::memory_order_release); }
 
+    /// 设置全局主音量（0.0=静音，1.0=原始音量）。
+    /// 可在任意线程调用；音频线程输出前平滑过渡，避免爆音。
+    void setMasterVolume(float volume);
+
+    /// 查询当前全局主音量。
+    float masterVolume() const { return m_masterVolume.load(std::memory_order_acquire); }
+
+    /// 读取设置中的主音量（0-100）并应用，未初始化时返回 1.0。
+    static float applyMasterVolumeFromSetting();
+
     /// 根据核心采样率设置延迟窗口。target 用于 GameView 音画同步，max 用于写入端限流/丢旧样本。
     void configureLatencyMs(int targetMs, int maxMs);
 
@@ -114,6 +124,8 @@ public:
     void   ringWrite(const int16_t* data, size_t count);
     size_t ringRead(int16_t* out, size_t maxCount);
     void   applyFadeIn(int16_t* out, size_t count);
+    /// 对输出缓冲应用主音量增益（带平滑过渡，须在持有 m_mutex 时调用）。
+    void   applyMasterVolume(int16_t* out, size_t count);
     void   fillUnderrunTailLocked(int16_t* out, size_t validSamples, size_t totalSamples);
     void   rememberOutputTailLocked(const int16_t* data, size_t count);
     void   resetOutputTailLocked();
@@ -125,6 +137,10 @@ public:
     std::atomic<bool> m_running{false};
     int               m_sampleRate = 32768;
     int               m_channels   = 2;
+
+    // ---- 主音量 -----------------------------------------------
+    std::atomic<float> m_masterVolume{1.0f}; ///< 目标主音量（0.0~1.0）
+    float              m_currentGain = 1.0f; ///< 当前实际增益（音频线程内逐步逼近目标，防爆音）
 
     void audioThreadFunc();
 

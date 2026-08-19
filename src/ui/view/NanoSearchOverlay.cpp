@@ -214,7 +214,7 @@ void NanoSearchOverlay::draw(NVGcontext* vg, float x, float y, float w, float h,
     nvgFontSize(vg, 15.f);
     nvgFillColor(vg, uiTextSecondary(0.86f));
     nvgText(vg, panelX + 35.f, panelY + 82.f,
-            L("支持游戏标题和 ROM 文件名模糊匹配").c_str(), nullptr);
+            L("支持游戏标题、ROM 文件名与拼音模糊匹配").c_str(), nullptr);
 
     static const std::string labels[] = {L("输入关键词"), L("应用搜索"), L("清除搜索")};
     static const char32_t icons[] = {0xE8B6, 0xE876, 0xE14C};

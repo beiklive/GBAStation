@@ -21,6 +21,7 @@
 #include "core/SteamGridDb.hpp"
 #include "core/ThreadPool.hpp"
 #include "core/constexpr.h"
+#include "game/audio/AudioManager.hpp"
 #include "game/control/InputMappingDefaults.hpp"
 #include "game/retro/LibretroLoader.hpp"
 
@@ -1990,6 +1991,21 @@ private:
         using namespace beiklive::SettingKey;
         auto& audio = m_categories[4].items;
         audio.push_back(_section(L("音频输出")));
+        const std::vector<int> masterVolumeValues = {0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
+        std::vector<std::string> masterVolumeLabels;
+        for (int v : masterVolumeValues) {
+            masterVolumeLabels.push_back(v == 0 ? L("静音") : std::to_string(v) + "%");
+        }
+        audio.push_back(_selector(L("主音量"), L("全局音量，同时影响游戏音频与界面音效"), 0xE425,
+            masterVolumeLabels,
+            [masterVolumeValues]() { const int cur = cfgGetInt(KEY_AUDIO_MASTER_VOLUME, 100); for (int i = 0; i < static_cast<int>(masterVolumeValues.size()); ++i) if (masterVolumeValues[i] == cur) return i; return 10; },
+            [masterVolumeValues](int i) {
+                if (i < 0 || i >= static_cast<int>(masterVolumeValues.size())) return;
+                const int v = masterVolumeValues[i];
+                cfgSetInt(KEY_AUDIO_MASTER_VOLUME, v);
+                beiklive::AudioManager::instance().setMasterVolume(
+                    static_cast<float>(v) / 100.0f);
+            }, KEY_AUDIO_MASTER_VOLUME));
         audio.push_back(_toggle(L("按钮音效"), L("播放界面导航和确认音效"), 0xE050,
             []() { return cfgGetBool("audio.buttonSfx", true); }, [](bool v) { cfgSetBool("audio.buttonSfx", v); }));
         const std::vector<int> volumeValues = {0, 25, 50, 75, 100};

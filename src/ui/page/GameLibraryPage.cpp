@@ -6,6 +6,7 @@
 #include "core/SteamGridDb.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/forwarder/ForwarderInstaller.hpp"
+#include "core/PinyinTools.hpp"
 #include "ui/utils/MaterialIcons.hpp"
 #include "ui/utils/NdsEnvironment.hpp"
 #include "ui/widget/ButtonBox.hpp"
@@ -27,12 +28,47 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <mutex>
 #include <sstream>
+#include <unordered_map>
 
 namespace
 {
 
 namespace fs = std::filesystem;
+
+/* 游戏搜索匹配键：标题 / ROM 文件名 / 标题拼音全拼 / 标题拼音首字母 */
+struct SearchKeys
+{
+    std::string titleLower;
+    std::string fileNameLower;
+    std::string pinyinFull;
+    std::string pinyinInitials;
+};
+
+/* 按 ROM 路径缓存的搜索键（过滤在后台线程执行，用互斥锁保护） */
+const SearchKeys& searchKeysFor(const beiklive::GameEntry& e)
+{
+    static std::unordered_map<std::string, SearchKeys> cache;
+    static std::mutex mtx;
+    std::lock_guard<std::mutex> lock(mtx);
+    auto it = cache.find(e.path);
+    if (it != cache.end())
+        return it->second;
+
+    SearchKeys keys;
+    keys.titleLower = e.title;
+    std::transform(keys.titleLower.begin(), keys.titleLower.end(),
+        keys.titleLower.begin(), [](unsigned char c) { return std::tolower(c); });
+    keys.fileNameLower = fs::path(e.path).stem().string();
+    std::transform(keys.fileNameLower.begin(), keys.fileNameLower.end(),
+        keys.fileNameLower.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (beiklive::pinyin::containsCjk(e.title)) {
+        keys.pinyinFull = beiklive::pinyin::full(e.title);
+        keys.pinyinInitials = beiklive::pinyin::initials(e.title);
+    }
+    return cache.emplace(e.path, std::move(keys)).first->second;
+}
 
 bool deleteGameFileIfExists(const std::string& path)
 {
@@ -1153,11 +1189,21 @@ namespace beiklive
         {
             std::string lt = searchTerm;
             std::transform(lt.begin(), lt.end(), lt.begin(), [](unsigned char c) { return std::tolower(c); });
+            // 查询词含中文时同步转为拼音，用于匹配标题拼音键
+            const std::string ltPinyin = beiklive::pinyin::full(lt);
             entries.erase(std::remove_if(entries.begin(), entries.end(),
-                [&lt](const GameEntry& e) {
-                    std::string t = e.title;
-                    std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::tolower(c); });
-                    return t.find(lt) == std::string::npos;
+                [&lt, &ltPinyin](const GameEntry& e) {
+                    const SearchKeys& keys = searchKeysFor(e);
+                    if (keys.titleLower.find(lt) != std::string::npos) return false;
+                    if (!keys.fileNameLower.empty() &&
+                        keys.fileNameLower.find(lt) != std::string::npos) return false;
+                    if (!keys.pinyinFull.empty() &&
+                        keys.pinyinFull.find(lt) != std::string::npos) return false;
+                    if (!keys.pinyinInitials.empty() &&
+                        keys.pinyinInitials.find(lt) != std::string::npos) return false;
+                    if (!ltPinyin.empty() && !keys.pinyinFull.empty() &&
+                        keys.pinyinFull.find(ltPinyin) != std::string::npos) return false;
+                    return true;
                 }), entries.end());
         }
 
@@ -1334,16 +1380,6 @@ namespace beiklive
 
     std::string GameLibraryPage::_titleToSortKey(const std::string& title)
     {
-        static nlohmann::json pinyinMap;
-        static bool loaded = false;
-        if (!loaded) {
-            std::ifstream f(BK_RES("pinyin/pingyin.json"));
-            if (f.is_open()) {
-                f >> pinyinMap;
-                loaded = true;
-            }
-        }
-
         std::string key;
         for (size_t i = 0; i < title.size(); i++) {
             std::string ch(1, title[i]);
@@ -1352,8 +1388,9 @@ namespace beiklive
                 ch = title.substr(i, 3);
                 i += 2;
             }
-            if (pinyinMap.contains(ch)) {
-                key += pinyinMap[ch].get<std::string>();
+            const std::string py = beiklive::pinyin::forChar(ch);
+            if (!py.empty()) {
+                key += py;
             } else if (c >= 0x80) {
                 key += "\xFF"; // unknown CJK, sort after everything
             } else if (std::isdigit(c)) {

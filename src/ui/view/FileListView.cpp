@@ -1,6 +1,10 @@
 #include "FileListView.hpp"
 #include "core/Translation.hpp"
+#include "core/PinyinTools.hpp"
 #include "ui/utils/GradientFocus.hpp"
+
+#include <cctype>
+#include <unordered_map>
 
 namespace beiklive {
 
@@ -101,8 +105,26 @@ void FileListView::applyFilter(const std::string& keyword) {
         std::string lowerKw = keyword;
         for (auto& c : lower) c = static_cast<char>(std::tolower((unsigned char)c));
         for (auto& c : lowerKw) c = static_cast<char>(std::tolower((unsigned char)c));
-        if (lower.find(lowerKw) != std::string::npos)
+        if (lower.find(lowerKw) != std::string::npos) {
             m_items.push_back(item);
+            continue;
+        }
+        // 文件名含中文且关键词为 ASCII 时，支持拼音全拼/首字母匹配
+        if (!lowerKw.empty() && beiklive::pinyin::containsCjk(item.text)) {
+            bool pureAscii = true;
+            for (unsigned char c : lowerKw) {
+                if (c >= 0x80 || !std::isalnum(c)) { pureAscii = false; break; }
+            }
+            if (pureAscii) {
+                const std::string pyFull = beiklive::pinyin::full(item.text);
+                const std::string pyInit = beiklive::pinyin::initials(item.text);
+                if ((!pyFull.empty() && pyFull.find(lowerKw) != std::string::npos) ||
+                    (!pyInit.empty() && pyInit.find(lowerKw) != std::string::npos)) {
+                    m_items.push_back(item);
+                    continue;
+                }
+            }
+        }
     }
 
     m_filterActive = true;

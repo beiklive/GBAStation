@@ -204,6 +204,14 @@ static float buttonSfxVolume()
         0.0f, 1.0f);
 }
 
+static float masterVolume()
+{
+    return std::clamp(
+        static_cast<float>(GET_SETTING_KEY_INT(
+            beiklive::SettingKey::KEY_AUDIO_MASTER_VOLUME, 100)) / 100.0f,
+        0.0f, 1.0f);
+}
+
 std::string BKAudioPlayer::soundsDir()
 {
     return beiklive::res_path("sounds/switch/");
@@ -428,7 +436,7 @@ void BKAudioPlayer::playbackThread()
             // The stored WAV remains immutable so changing the selector takes
             // effect on the very next UI sound without cumulative scaling.
             WavData playback = m_sounds[idx];
-            const float volume = buttonSfxVolume();
+            const float volume = buttonSfxVolume() * masterVolume();
             if (volume < 0.999f) {
                 for (auto& sample : playback.samples) {
                     const int scaled = static_cast<int>(std::lround(
