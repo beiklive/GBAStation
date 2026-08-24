@@ -27,8 +27,8 @@ static std::string cacheNroPath() {
     return beiklive::path::cachePath() + "/update.nro";
 }
 
-static std::string cacheNdsStubPath() {
-    return beiklive::path::cachePath() + "/update_nds_stub.nro";
+static std::string cacheNdsCorePath() {
+    return beiklive::path::cachePath() + "/update_nds_core.nro";
 }
 
 static std::string cache3dsStubPath() {
@@ -115,7 +115,7 @@ static std::string normalizeZipPath(const std::string& name) {
 
 static bool extractUpdateFilesFromZip(const std::string& zipPath,
                                       const std::string& mainNroPath,
-                                      const std::string& ndsStubPath,
+                                      const std::string& ndsCorePath,
                                       const std::string& threeDsStubPath) {
     mz_zip_archive zip;
     memset(&zip, 0, sizeof(zip));
@@ -162,7 +162,7 @@ static bool extractUpdateFilesFromZip(const std::string& zipPath,
             &zip, static_cast<mz_uint>(mainIndex), mainNroPath.c_str(), 0);
     if (stubIndex >= 0)
         stubOk = mz_zip_reader_extract_to_file(
-            &zip, static_cast<mz_uint>(stubIndex), ndsStubPath.c_str(), 0);
+            &zip, static_cast<mz_uint>(stubIndex), ndsCorePath.c_str(), 0);
     if (threeDsStubIndex >= 0)
         threeDsStubOk = mz_zip_reader_extract_to_file(
             &zip, static_cast<mz_uint>(threeDsStubIndex), threeDsStubPath.c_str(), 0);
@@ -276,7 +276,7 @@ void AppUpdater::check() {
 bool AppUpdater::checkSync() {
     m_info = UpdateInfo{};
     m_info.hasUpdate = false;
-    m_info.changelog = "检测到新版本后，将更新 GBAStation 主程序与 NDS 运行核心。";
+    m_info.changelog = "检测到新版本后，将更新 GBAStation 主程序。NDS 核心由独立项目发布。";
     m_aborted.store(false);
 
     auto ts = std::chrono::duration_cast<std::chrono::seconds>(
@@ -362,7 +362,7 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     std::filesystem::create_directories(beiklive::path::cachePath(), ec);
     std::filesystem::remove(cacheNroPath(), ec);
     ec.clear();
-    std::filesystem::remove(cacheNdsStubPath(), ec);
+    std::filesystem::remove(cacheNdsCorePath(), ec);
     ec.clear();
     std::filesystem::remove(cache3dsStubPath(), ec);
     ec.clear();
@@ -371,11 +371,11 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     f.write(reinterpret_cast<const char*>(m_downloadedData.data()), m_downloadedData.size());
     f.close();
 
-    if (!extractUpdateFilesFromZip(cacheZipPath(), cacheNroPath(), cacheNdsStubPath(),
+    if (!extractUpdateFilesFromZip(cacheZipPath(), cacheNroPath(), cacheNdsCorePath(),
                                    cache3dsStubPath())) {
         std::filesystem::remove(cacheZipPath(), ec);
         std::filesystem::remove(cacheNroPath(), ec);
-        std::filesystem::remove(cacheNdsStubPath(), ec);
+        std::filesystem::remove(cacheNdsCorePath(), ec);
         std::filesystem::remove(cache3dsStubPath(), ec);
         brls::Logger::error(
             "AppUpdater: 更新包解压失败，缺少或无法解压 GBAStation.nro（Stub 为可选文件）");
@@ -385,7 +385,7 @@ bool AppUpdater::download(std::function<bool(size_t, size_t)> onProgress) {
     std::filesystem::remove(cacheZipPath(), ec);
     m_info.fileSize = m_downloadedData.size();
 
-    const bool hasNdsStub = std::filesystem::exists(cacheNdsStubPath(), ec);
+    const bool hasNdsStub = std::filesystem::exists(cacheNdsCorePath(), ec);
     ec.clear();
     const bool has3dsStub = std::filesystem::exists(cache3dsStubPath(), ec);
     brls::Logger::info(
@@ -407,7 +407,7 @@ bool AppUpdater::install() {
     }
 
     brls::Logger::info("AppUpdater: 安装准备工作完成（NDS Stub={}, 3DS Stub={}）",
-                       std::filesystem::exists(cacheNdsStubPath()) ? "will update" : "keep current",
+                        std::filesystem::exists(cacheNdsCorePath()) ? "will update" : "keep current",
                        std::filesystem::exists(cache3dsStubPath()) ? "will update" : "keep current");
     return true;
 #else
@@ -425,7 +425,7 @@ bool AppUpdater::finishInstall() {
     const std::string ndsStubBackupPath = ndsStubPath + ".update_backup";
     const std::string threeDsStubBackupPath = threeDsStubPath + ".update_backup";
 
-    const bool updateNdsStub = std::filesystem::exists(cacheNdsStubPath());
+    const bool updateNdsStub = std::filesystem::exists(cacheNdsCorePath());
     const bool update3dsStub = std::filesystem::exists(cache3dsStubPath());
 
     romfsExit();
@@ -479,7 +479,7 @@ bool AppUpdater::finishInstall() {
         return false;
     }
 
-    if (updateNdsStub && std::rename(cacheNdsStubPath().c_str(), ndsStubPath.c_str()) != 0) {
+    if (updateNdsStub && std::rename(cacheNdsCorePath().c_str(), ndsStubPath.c_str()) != 0) {
         if (update3dsStub)
             restoreBackup(threeDsStubPath, threeDsStubBackupPath, hadThreeDsStub);
         restoreBackup(ndsStubPath, ndsStubBackupPath, hadNdsStub);

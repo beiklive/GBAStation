@@ -282,6 +282,10 @@ class Application
     static VoidEvent* getGlobalHintsUpdateEvent();
     static Event<InputType>* getGlobalInputTypeChangeEvent();
     static VoidEvent* getRunLoopEvent();
+    // Fired after the framebuffer clear and before NanoVG begins recording
+    // the UI frame. Native renderers can draw a background/game layer here
+    // without interleaving their GL state with NanoVG's deferred batches.
+    static VoidEvent* getPreNVGRenderEvent();
     static VoidEvent* getExitEvent();
     static VoidEvent* getExitDoneEvent();
     static VoidEvent* getWindowSizeChangedEvent();
@@ -429,6 +433,7 @@ class Application
     inline static VoidEvent globalHintsUpdateEvent;
     inline static Event<InputType> globalInputTypeChangeEvent;
     inline static VoidEvent runLoopEvent;
+    inline static VoidEvent preNVGRenderEvent;
     inline static VoidEvent exitEvent;
     inline static VoidEvent exitDoneEvent;
     inline static VoidEvent windowSizeChangedEvent;

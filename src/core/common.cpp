@@ -587,12 +587,6 @@ namespace beiklive
         SettingManager->SetDefault("saturn.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         SettingManager->SetDefault("dolphin.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationDolphinStub.nro")));
         SettingManager->SetDefault("dolphin.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
-        if (auto pathValue = SettingManager->Get("nds.externalNro.path"))
-        {
-            const auto path = pathValue->AsString().value_or("");
-            if (path == "sdmc:/switch/GBAStationNDSStub.nro")
-                SettingManager->Set("nds.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationNDSStub.nro")));
-        }
         if (auto pathValue = SettingManager->Get("arcade.externalNro.path"))
         {
             const auto path = pathValue->AsString().value_or("");

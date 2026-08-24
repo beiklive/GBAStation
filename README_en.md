@@ -16,7 +16,7 @@ This split reduces startup overhead for lightweight platforms while preserving t
 | FC | Built-in core |
 | SFC | Built-in core |
 | MD | Built-in core |
-| NDS | `GBAStationNDSStub.nro` |
+| NDS | Standalone `GBAStationNDS.nro` project |
 | 3DS | `GBAStation3DSStub.nro` |
 | Arcade | `GBAStationFBNeoStub.nro` |
 | Dreamcast | `GBAStationFlycastStub.nro` |
@@ -45,7 +45,7 @@ After extracting a release package, keep the following structure:
 
 ```text
 sdmc:/switch/GBAStation.nro
-sdmc:/GBAStation/core/GBAStationNDSStub.nro
+sdmc:/GBAStation/core/GBAStationNDS.nro
 sdmc:/GBAStation/core/GBAStation3DSStub.nro
 sdmc:/GBAStation/core/GBAStationFBNeoStub.nro
 sdmc:/GBAStation/core/GBAStationFlycastStub.nro
@@ -72,11 +72,13 @@ Local builds copy external cores from neighboring project directories by default
 ../GBAStation_3DS/GBAStation3DSStub.nro
 ```
 
+Build the NDS core separately from the neighboring `GBAStation_melonds`
+project, then place `build_switch/GBAStationNDS.nro` in `sdmc:/GBAStation/core/`.
+
 Build artifacts are generated at:
 
 ```text
 build_switch/GBAStation.nro
-build_switch/GBAStation/core/GBAStationNDSStub.nro
 build_switch/GBAStation/core/GBAStation3DSStub.nro
 build_switch/GBAStation/core/GBAStationFBNeoStub.nro
 build_switch/GBAStation/core/GBAStationFlycastStub.nro

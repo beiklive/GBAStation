@@ -3531,7 +3531,15 @@ void AboutPage::_downloadNdsFirmware() {
     };
 
     std::error_code ec;
+#ifdef __SWITCH__
+    // melonDS and the NDS launcher use the SDMC mount explicitly.  The
+    // generic path helper intentionally remains relative on Switch, so use
+    // the same absolute mount here or downloaded firmware is invisible to
+    // the startup check.
+    const auto ndsDir = std::filesystem::path("sdmc:/GBAStation/bios/nds");
+#else
     const auto ndsDir = std::filesystem::path(beiklive::path::biosPath()) / "nds";
+#endif
     std::filesystem::create_directories(ndsDir, ec);
     if (ec) {
         showMessageDialog(L("创建 NDS 固件目录失败：\n") + ndsDir.string());

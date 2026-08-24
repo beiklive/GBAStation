@@ -780,6 +780,11 @@ void Application::frame()
     videoContext->clear(Application::getTheme().getColor("brls/clear"));
     float scaleFactor = videoContext->getScaleFactor();
 
+    // Native game/video layers must be submitted before NanoVG begins its
+    // deferred command stream. Drawing raw GL from View::draw() can otherwise
+    // be overwritten by nvgEndFrame() and corrupt NanoVG's expected state.
+    Application::preNVGRenderEvent.fire();
+
     nvgBeginFrame(frameContext.vg, Application::windowWidth, Application::windowHeight, scaleFactor);
     nvgScale(frameContext.vg, Application::windowScale, Application::windowScale);
 
@@ -1256,6 +1261,11 @@ Event<InputType>* Application::getGlobalInputTypeChangeEvent()
 VoidEvent* Application::getRunLoopEvent()
 {
     return &Application::runLoopEvent;
+}
+
+VoidEvent* Application::getPreNVGRenderEvent()
+{
+    return &Application::preNVGRenderEvent;
 }
 
 VoidEvent* Application::getExitEvent()

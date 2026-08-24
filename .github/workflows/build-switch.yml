@@ -110,7 +110,6 @@ jobs:
           mkdir -p "$PACKAGE_DIR/switch" "$PACKAGE_DIR/GBAStation/core"
           cp build_switch/GBAStation.nro "$PACKAGE_DIR/switch/GBAStation.nro"
           for core in \
-            GBAStationNDSStub.nro \
             GBAStation3DSStub.nro \
             GBAStationFBNeoStub.nro \
             GBAStationFlycastStub.nro \
@@ -168,20 +167,3 @@ jobs:
         shell: bash
         run: |
           git clone "https://x-access-token:${RELEASE_REPO_TOKEN}@github.com/beiklive/GBAStation_Release.git" release_repo
-
-      - name: Publish NDS stub to legacy release repository
-        if: env.RELEASE_REPO_TOKEN != ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p nds_stub_package release_repo/emu_res/core
-          cp build_switch/GBAStation/core/GBAStationNDSStub.nro nds_stub_package/GBAStationNDSStub.nro
-          cmake -E chdir nds_stub_package cmake -E tar cf ../GBAStationNDSStub.zip --format=zip GBAStationNDSStub.nro
-          cp GBAStationNDSStub.zip release_repo/emu_res/core/GBAStationNDSStub.zip
-          cp "${{ steps.prep.outputs.changelog_file }}" "release_repo/${{ steps.prep.outputs.changelog_file }}"
-          cd release_repo
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git add .
-          git commit -m "Release $GITHUB_REF_NAME" || echo "Nothing to commit"
-          git push

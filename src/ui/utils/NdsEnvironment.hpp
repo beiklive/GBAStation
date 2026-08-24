@@ -8,15 +8,40 @@
 
 namespace beiklive
 {
+    inline const char* ndsCorePath()
+    {
+#ifdef __SWITCH__
+        constexpr const char* path = "sdmc:/GBAStation/core/GBAStationNDSStub.nro";
+        FILE* file = std::fopen(path, "rb");
+        if (file)
+        {
+            std::fclose(file);
+            return path;
+        }
+#endif
+        return "sdmc:/GBAStation/core/GBAStationNDSStub.nro";
+    }
+
     inline bool ensureNdsEnvironmentReady()
     {
 #ifdef __SWITCH__
+        const char* corePath = ndsCorePath();
         constexpr const char* requiredFiles[] = {
-            "sdmc:/GBAStation/core/GBAStationNDSStub.nro",
             "sdmc:/GBAStation/bios/nds/bios7.bin",
             "sdmc:/GBAStation/bios/nds/bios9.bin",
             "sdmc:/GBAStation/bios/nds/firmware.bin",
         };
+
+        FILE* core = std::fopen(corePath, "rb");
+        if (!core)
+        {
+            auto* dialog = new brls::Dialog(
+                "nds运行核心不存在，请到关于页面下载nds核心");
+            dialog->addButton("确认", []() {});
+            dialog->open();
+            return false;
+        }
+        std::fclose(core);
 
         for (const char* path : requiredFiles)
         {

@@ -1285,7 +1285,7 @@ beiklive::enums::FileType platformToFileType(int platform)
              * launcher retains ownership of saving it during its normal exit
              * path, rather than writing global settings on every game launch. */
             exportDrasticGameProfile(romPath);
-            const std::string nroPath = GET_SETTING_KEY_STR("nds.externalNro.path", "/GBAStation/core/GBAStationNDSStub.nro");
+            const std::string nroPath = "/GBAStation/core/GBAStationNDSStub.nro";
             const std::string returnPath = GET_SETTING_KEY_STR("nds.externalNro.returnPath", "sdmc:/switch/GBAStation.nro");
 
             auto result = beiklive::switch_platform::launchNroOnExit({nroPath, romPath, returnPath});

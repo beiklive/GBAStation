@@ -36,11 +36,8 @@ set(PROJECT_AUTHOR "beiklive")
 set(PROJECT_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon/default.png)
 set(PROJECT_RESOURCES ${CMAKE_CURRENT_SOURCE_DIR}/resources)
 
-if (PLATFORM_SWITCH)
-    set(BUILD_MELONDS_CORE ON CACHE BOOL "Build melonDS only for the external NDS Stub NRO" FORCE)
-else()
-    set(BUILD_MELONDS_CORE OFF CACHE BOOL "Build the embedded melonDS native core" FORCE)
-endif()
+# NDS is built and released by the standalone GBAStation_melonds project.
+set(BUILD_MELONDS_CORE OFF CACHE BOOL "Build the embedded melonDS native core" FORCE)
 
 if (USE_LIBROMFS)
     add_libromfs(${PROJECT_NAME} ${PROJECT_RESOURCES})
@@ -210,7 +207,6 @@ include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
-list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/platform/switch/nds_stub/.*")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/emulator/melonds/.*")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/emulator/genesis/.*")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/game/mgba/.*")
@@ -298,14 +294,11 @@ elseif (PLATFORM_SWITCH)
     add_custom_target(${PROJECT_NAME}.nro DEPENDS ${PROJECT_NAME}
         COMMAND ${NX_NACPTOOL_EXE} --create "${PROJECT_NAME}" "${PROJECT_AUTHOR}" "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}" ${PROJECT_NAME}.nacp --titleid=${PROJECT_TITLEID}
         COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_RESOURCES} ${CMAKE_BINARY_DIR}/resources
-        COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/GBAStationNDSStub.nro
         COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/GBAStationFlycastStub.nro
         COMMAND ${CMAKE_COMMAND} -E rm -f ${CMAKE_BINARY_DIR}/resources/core/GBAStationFBNeoStub.nro
         COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/resources/font
         COMMAND ${NX_ELF2NRO_EXE} ${PROJECT_NAME}.elf ${PROJECT_NAME}.nro --icon=${PROJECT_ICON} --nacp=${PROJECT_NAME}.nacp --romfsdir=${CMAKE_BINARY_DIR}/resources
     )
-
-    add_subdirectory(nds_stub)
 
 endif ()
 
@@ -339,7 +332,7 @@ endif()
 # Nestopia      – NES / Famicom       (libretro, nestopia_retro_*)
 # Gambatte      – GB / GBC            (libretro source, gambatte_retro_*)
 # Snes9x 2005   – SNES / SFC          (libretro, snes9x2005_retro_*)
-# NDS runs in GBAStationNDSStub.nro, launched as a separate Switch NRO.
+# NDS runs in the separately built GBAStation_melonds NRO.
 #
 # mGBA 不再构建/加载 mgba_libretro，也不复制 mgba 动态库。
 # ============================================================

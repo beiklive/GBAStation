@@ -16,7 +16,7 @@ GBAStation 是面向 Nintendo Switch 的多核心模拟器前端。主程序负�
 | FC | 主程序内置核心 |
 | SFC | 主程序内置核心 |
 | MD | 主程序内置核心 |
-| NDS | `GBAStationNDSStub.nro` |
+| NDS | 独立项目的 `GBAStationNDS.nro` |
 | 3DS | `GBAStation3DSStub.nro` |
 | 街机 | `GBAStationFBNeoStub.nro` |
 | Dreamcast | `GBAStationFlycastStub.nro` |
@@ -45,7 +45,7 @@ Release 包解压后应保持以下结构：
 
 ```text
 sdmc:/switch/GBAStation.nro
-sdmc:/GBAStation/core/GBAStationNDSStub.nro
+sdmc:/GBAStation/core/GBAStationNDS.nro
 sdmc:/GBAStation/core/GBAStation3DSStub.nro
 sdmc:/GBAStation/core/GBAStationFBNeoStub.nro
 sdmc:/GBAStation/core/GBAStationFlycastStub.nro
@@ -72,11 +72,13 @@ bash switchbuild.sh
 ../GBAStation_3DS/GBAStation3DSStub.nro
 ```
 
+NDS 核心由相邻的 `GBAStation_melonds` 独立构建；将其
+`build_switch/GBAStationNDS.nro` 放入 `sdmc:/GBAStation/core/`。
+
 构建产物位于：
 
 ```text
 build_switch/GBAStation.nro
-build_switch/GBAStation/core/GBAStationNDSStub.nro
 build_switch/GBAStation/core/GBAStation3DSStub.nro
 build_switch/GBAStation/core/GBAStationFBNeoStub.nro
 build_switch/GBAStation/core/GBAStationFlycastStub.nro
