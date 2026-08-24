@@ -8,6 +8,11 @@
 
 namespace beiklive
 {
+    inline void notifyNdsEnvironmentError(const char* message)
+    {
+        brls::Application::notify(message);
+    }
+
     inline const char* ndsCorePath()
     {
 #ifdef __SWITCH__
@@ -35,10 +40,7 @@ namespace beiklive
         FILE* core = std::fopen(corePath, "rb");
         if (!core)
         {
-            auto* dialog = new brls::Dialog(
-                "nds运行核心不存在，请到关于页面下载nds核心");
-            dialog->addButton("确认", []() {});
-            dialog->open();
+            notifyNdsEnvironmentError("nds运行核心不存在，请到关于页面下载nds核心");
             return false;
         }
         std::fclose(core);
@@ -52,10 +54,7 @@ namespace beiklive
                 continue;
             }
 
-            auto* dialog = new brls::Dialog(
-                "nds运行环境不完整，请到关于页面下载nds固件和核心");
-            dialog->addButton("确认", []() {});
-            dialog->open();
+            notifyNdsEnvironmentError("nds运行环境不完整，请到关于页面下载nds固件和核心");
             return false;
         }
 #endif
