@@ -157,6 +157,35 @@ inline std::string GetRootPath()
         {
             return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + BIOS_DIR;
         }
+        // 外置核心固定安装位置（Switch SD 卡根目录）。这些路径由程序内部使用，
+        // 不提供用户修改；页面仅根据文件是否存在决定是否显示相关功能。
+        inline std::string externalCoreDefaultPath(int platform)
+        {
+            switch (platform)
+            {
+            case 6:  return "/GBAStation/core/GBAStationNDSStub.nro";
+            case 7:  return "/GBAStation/core/GBAStation3DSStub.nro";
+            case 9:  return "/GBAStation/core/GBAStationFBNeoStub.nro";
+            case 10: return "/GBAStation/core/GBAStationFlycastStub.nro";
+            case 11: return "/GBAStation/core/GBAStationPPSSPPStub.nro";
+            case 12: return "/GBAStation/core/GBAStationDuckStationStub.nro";
+            case 13: return "/GBAStation/core/GBAStationYabaSanshiroStub.nro";
+            case 14: return "/GBAStation/core/GBAStationDolphinStub.nro";
+            default: return {};
+            }
+        }
+
+        inline bool externalCoreInstalled(int platform)
+        {
+#if !defined(__SWITCH__)
+            (void)platform;
+            return true;
+#else
+            const auto path = externalCoreDefaultPath(platform);
+            std::error_code ec;
+            return !path.empty() && fs::exists(path, ec) && !ec && fs::is_regular_file(path, ec);
+#endif
+        }
         inline std::string dbsPath()
         {
             return ROOT + SPLIT_CHAR + PROGRAM_NAME + SPLIT_CHAR + DBS_DIR;

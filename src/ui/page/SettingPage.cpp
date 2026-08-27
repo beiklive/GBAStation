@@ -1669,43 +1669,52 @@ private:
         cfgSetBool("input.joystick.enabled", true);
         cfgSetBool("input.joystick.diagonal", true);
         auto& emulator = m_categories[0].items;
+        const int externalPlatforms[] = {6, 7, 9, 10, 11, 12, 13, 14};
+        const bool hasMissingExternalCore = std::any_of(
+            std::begin(externalPlatforms), std::end(externalPlatforms),
+            [](int platform) { return !beiklive::path::externalCoreInstalled(platform); });
+        if (hasMissingExternalCore)
+            emulator.push_back(_section(L("部分平台需要外置核心，请前往“关于 → 在线资源”下载")));
         emulator.push_back(_section(L("核心设置")));
         auto addCore = [this, &emulator](const std::string& title,
                                          const std::string& coreName,
+                                         int platform,
                                          char32_t icon,
                                          std::function<void()> open) {
+            if (platform >= 0 && !beiklive::path::externalCoreInstalled(platform))
+                return;
             emulator.push_back(_action(title, L("配置 ") + coreName + L(" 核心参数"), icon,
                 [coreName]() { return coreName + "  >"; }, std::move(open)));
         };
-        addCore(L("GBA 核心"), "mGBA", 0xE30F, [this]() { _openMgbaCore(); });
-        addCore(L("NDS 核心（melonDS）"), "melonDS", 0xE322, [this]() { _openMelonDsCore(); });
-        addCore(L("3DS 核心"), "Azahar", 0xE30F, [this]() { _openThreeDsCore(); });
-        addCore(L("FC/NES 核心"), "Nestopia", 0xE333,
+        addCore(L("GBA 核心"), "mGBA", -1, 0xE30F, [this]() { _openMgbaCore(); });
+        addCore(L("NDS 核心（melonDS）"), "melonDS", 6, 0xE322, [this]() { _openMelonDsCore(); });
+        addCore(L("3DS 核心"), "Azahar", 7, 0xE30F, [this]() { _openThreeDsCore(); });
+        addCore(L("FC/NES 核心"), "Nestopia", -1, 0xE333,
                 [this]() { _openLibretroCore(L("Nestopia 核心设置"), CoreType::Nestopia); });
         LibretroLoader::discoverCoreOptions(CoreType::Fceumm, beiklive::SettingManager);
         if (!LibretroLoader::coreOptions(CoreType::Fceumm).empty()) {
-            addCore(L("FC/NES 核心"), "FCEUmm", 0xE333,
+            addCore(L("FC/NES 核心"), "FCEUmm", -1, 0xE333,
                     [this]() { _openLibretroCore(L("FCEUmm 核心设置"), CoreType::Fceumm); });
         }
-        addCore(L("SFC 核心"), "Snes9x", 0xE338,
+        addCore(L("SFC 核心"), "Snes9x", -1, 0xE338,
                 [this]() { _openLibretroCore(L("Snes9x 核心设置"), CoreType::Snes9x); });
-        addCore(L("SFC 核心"), "Snes9x 2005", 0xE338,
+        addCore(L("SFC 核心"), "Snes9x 2005", -1, 0xE338,
                 [this]() { _openLibretroCore(L("Snes9x 2005 核心设置"), CoreType::Snes9x2005); });
-        addCore(L("GB/GBC 核心"), "GameBattle", 0xE30F,
+        addCore(L("GB/GBC 核心"), "GameBattle", -1, 0xE30F,
                 [this]() { _openLibretroCore(L("GameBattle 核心设置"), CoreType::Gambatte); });
-        addCore(L("MD 核心"), "Genesis Plus GX", 0xE338,
+        addCore(L("MD 核心"), "Genesis Plus GX", -1, 0xE338,
                 [this]() { _openGenesisCore(); });
-        addCore(L("Arcade 核心"), "FBNeo", 0xE30F,
+        addCore(L("Arcade 核心"), "FBNeo", 9, 0xE30F,
                 [this]() { _openFbneoCore(); });
-        addCore(L("Dreamcast 核心"), "Flycast", 0xE30F,
+        addCore(L("Dreamcast 核心"), "Flycast", 10, 0xE30F,
                 [this]() { _openFlycastCore(); });
-        addCore(L("PSP 核心"), "PPSSPP", 0xE30F,
+        addCore(L("PSP 核心"), "PPSSPP", 11, 0xE30F,
                 [this]() { _openPpssppCore(); });
-        addCore(L("PS1 核心"), "DuckStation", 0xE30F,
+        addCore(L("PS1 核心"), "DuckStation", 12, 0xE30F,
                 [this]() { _openDuckStationCore(); });
-        addCore(L("Saturn 核心"), "YabaSanshiro", 0xE30F,
+        addCore(L("Saturn 核心"), "YabaSanshiro", 13, 0xE30F,
                 [this]() { _openYabaSanshiroCore(); });
-        addCore(L("GC / Wii 核心"), "Dolphin", 0xE30F,
+        addCore(L("GC / Wii 核心"), "Dolphin", 14, 0xE30F,
                 [this]() { _openDolphinCore(); });
 
         emulator.push_back(_section(L("存档与封面")));
@@ -1850,22 +1859,28 @@ private:
 
         auto& key = m_categories[1].items;
         key.push_back(_section(L("游戏平台")));
-        struct Platform { std::string name; std::string prefix; std::string hint; bool nds; };
+        struct Platform { std::string name; std::string prefix; std::string hint; bool nds; int externalPlatform; };
         static const Platform platforms[] = {
-            {L("GBA 按键映射"), "", L("Game Boy Advance 游戏"), false},
-            {L("GBC 按键映射"), "gbc.", L("Game Boy Color 游戏"), false},
-            {L("GB 按键映射"), "gb.", L("Game Boy 游戏"), false},
-            {L("FC/NES 按键映射"), "nes.", L("Nintendo Entertainment System 游戏"), false},
-            {L("SFC 按键映射"), "sfc.", L("Super Famicom 游戏"), false},
-            {L("NDS 按键映射"), "nds.", L("Nintendo DS 游戏与触摸指针热键"), true},
-            {L("3DS 按键映射"), "3ds.", L("Nintendo 3DS 游戏与双摇杆控制"), false},
-            {L("MD 按键映射"), "md.", L("Mega Drive 六键手柄与 Mode 键"), false},
-            {L("Arcade 按键映射"), "arcade.", L("外部街机核心按键与热键"), false},
-            {L("DC 按键映射"), "dc.", L("Dreamcast 外部核心按键与热键"), false},
-            {L("PSP 按键映射"), "psp.", L("PPSSPP 外部核心按键与热键"), false},
+            {L("GBA 按键映射"), "", L("Game Boy Advance 游戏"), false, -1},
+            {L("GBC 按键映射"), "gbc.", L("Game Boy Color 游戏"), false, -1},
+            {L("GB 按键映射"), "gb.", L("Game Boy 游戏"), false, -1},
+            {L("FC/NES 按键映射"), "nes.", L("Nintendo Entertainment System 游戏"), false, -1},
+            {L("SFC 按键映射"), "sfc.", L("Super Famicom 游戏"), false, -1},
+            {L("NDS 按键映射"), "nds.", L("Nintendo DS 游戏与触摸指针热键"), true, 6},
+            {L("3DS 按键映射"), "3ds.", L("Nintendo 3DS 游戏与双摇杆控制"), false, 7},
+            {L("MD 按键映射"), "md.", L("Mega Drive 六键手柄与 Mode 键"), false, -1},
+            {L("Arcade 按键映射"), "arcade.", L("外部街机核心按键与热键"), false, 9},
+            {L("DC 按键映射"), "dc.", L("Dreamcast 外部核心按键与热键"), false, 10},
+            {L("PSP 按键映射"), "psp.", L("PPSSPP 外部核心按键与热键"), false, 11},
+            {L("PS1 按键映射"), "ps1.", L("DuckStation 外部核心按键与热键"), false, 12},
+            {L("Saturn 按键映射"), "saturn.", L("YabaSanshiro 外部核心按键与热键"), false, 13},
+            {L("GC / Wii 按键映射"), "dolphin.", L("Dolphin 外部核心按键与热键"), false, 14},
         };
         for (const auto& platform : platforms)
         {
+            if (platform.externalPlatform >= 0 &&
+                !beiklive::path::externalCoreInstalled(platform.externalPlatform))
+                continue;
             NanoSettingItem item;
             item.kind = NanoSettingKind::Platform;
             item.title = platform.name;
@@ -2281,27 +2296,6 @@ private:
         invalidate();
     }
 
-    void _appendExternalCorePaths(const std::string& coreName,
-                                  const std::string& pathKey,
-                                  const std::string& defaultPath,
-                                  const std::string& returnKey)
-    {
-        m_coreItems.push_back(_action(
-            coreName + L(" NRO 路径"), L("链式调用时启动的外部核心 Stub"), beiklive::material::DESCRIPTION,
-            [pathKey, defaultPath]() {
-                const auto p = cfgGetStr(pathKey, defaultPath);
-                return p.empty() ? L("未设置  >") : beiklive::tools::getFileName(p) + "  >";
-            },
-            [this, pathKey]() { _pickFile(pathKey, {"nro"}); }));
-        m_coreItems.push_back(_action(
-            L("返回主程序路径"), L("外部核心退出游戏后返回的 GBAStation NRO"), beiklive::material::DESCRIPTION,
-            [returnKey]() {
-                const auto p = cfgGetStr(returnKey, "sdmc:/switch/GBAStation.nro");
-                return p.empty() ? L("未设置  >") : beiklive::tools::getFileName(p) + "  >";
-            },
-            [this, returnKey]() { _pickFile(returnKey, {"nro"}); }));
-    }
-
     void _appendExternalDisplaySettings(const std::string& prefix,
                                         const std::vector<std::string>& sizeValues,
                                         const std::vector<std::string>& sizeLabels,
@@ -2571,11 +2565,6 @@ private:
     void _openFbneoCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section(L("外部核心")));
-        _appendExternalCorePaths(
-            "FBNeo", "arcade.externalNro.path", "/GBAStation/core/GBAStationFBNeoStub.nro",
-            "arcade.externalNro.returnPath");
-
         // m_coreItems.push_back(_section(L("画面")));
         // _appendExternalDisplaySettings(
         //     "fbneo",
@@ -2628,11 +2617,6 @@ private:
     void _openFlycastCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section(L("外部核心")));
-        _appendExternalCorePaths(
-            "Flycast", "dc.externalNro.path", "/GBAStation/core/GBAStationFlycastStub.nro",
-            "dc.externalNro.returnPath");
-
         m_coreItems.push_back(_section(L("画面")));
         _appendExternalDisplaySettings(
             "flycast",
@@ -2738,11 +2722,6 @@ private:
     void _openPpssppCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section(L("外部核心")));
-        _appendExternalCorePaths(
-            "PPSSPP", "psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro",
-            "psp.externalNro.returnPath");
-
         m_coreItems.push_back(_section(L("性能与画面")));
         _appendExternalDisplaySettings(
             "ppsspp",
@@ -2833,11 +2812,6 @@ private:
     void _openDuckStationCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section(L("外部核心")));
-        _appendExternalCorePaths(
-            "DuckStation", "ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
-            "ps1.externalNro.returnPath");
-
         m_coreItems.push_back(_section(L("画面与启动")));
         const std::vector<std::string> resolutionValues = {"1", "2", "3", "4"};
         m_coreItems.push_back(_selector(
@@ -2876,10 +2850,6 @@ private:
     void _openYabaSanshiroCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section(L("外部核心")));
-        _appendExternalCorePaths(
-            "YabaSanshiro", "saturn.externalNro.path", "/GBAStation/core/GBAStationYabaSanshiroStub.nro",
-            "saturn.externalNro.returnPath");
         m_coreItems.push_back(_section(L("系统")));
         m_coreItems.push_back(_toggle(
             L("使用 HLE BIOS"), L("没有 Saturn BIOS 文件时使用内置高层模拟，兼容性较低"), 0xE8B5,
@@ -2901,10 +2871,6 @@ private:
     void _openDolphinCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section(L("外部核心")));
-        _appendExternalCorePaths(
-            "Dolphin", "dolphin.externalNro.path", "/GBAStation/core/GBAStationDolphinStub.nro",
-            "dolphin.externalNro.returnPath");
         m_coreItems.push_back(_section(L("GameCube / Wii")));
         m_coreItems.push_back(_toggle(
             L("宽屏"), L("为支持的 GameCube 和 Wii 游戏启用宽屏补丁"), 0xE3F4,

@@ -57,6 +57,71 @@ struct ImportSharedConfig
     bool shaderEnabled = false;
 };
 
+static std::string trimNameIniText(std::string value)
+{
+    const auto isSpace = [](unsigned char c) { return std::isspace(c) != 0; };
+    value.erase(value.begin(), std::find_if(value.begin(), value.end(), [&](char c) {
+        return !isSpace(static_cast<unsigned char>(c));
+    }));
+    value.erase(std::find_if(value.rbegin(), value.rend(), [&](char c) {
+        return !isSpace(static_cast<unsigned char>(c));
+    }).base(), value.end());
+    return value;
+}
+
+static std::string readNameIniMapping(const fs::path& romPath)
+{
+    std::ifstream input(romPath.parent_path() / "name.ini");
+    if (!input)
+        return {};
+
+    const std::string fileName = romPath.filename().string();
+    const std::string stem = romPath.stem().string();
+    std::string line;
+    while (std::getline(input, line))
+    {
+        line = trimNameIniText(line);
+        if (line.empty() || line[0] == '#' || line[0] == ';')
+            continue;
+        const size_t equal = line.find('=');
+        if (equal == std::string::npos)
+            continue;
+        const std::string key = trimNameIniText(line.substr(0, equal));
+        const std::string value = trimNameIniText(line.substr(equal + 1));
+        if ((key == fileName || key == stem) && !value.empty())
+            return value;
+    }
+    return {};
+}
+
+static std::string resolveScanTitle(const fs::path& romPath, int platform,
+                                    bool useNameMapping)
+{
+    const std::string stem = romPath.stem().string();
+    if (const std::string mapped = readNameIniMapping(romPath); !mapped.empty())
+        return mapped;
+
+    std::string embedded;
+    if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP))
+        embedded = beiklive::psp_meta::ExtractTitle(romPath.string());
+    else if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
+        embedded = beiklive::ExtractNdsHeaderTitle(romPath.string());
+    else if (platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
+        embedded = beiklive::ExtractThreeDsTitle(romPath.string());
+    if (!embedded.empty())
+        return embedded;
+
+    if (useNameMapping && beiklive::NameMappingManager)
+    {
+        if (auto nameVal = beiklive::NameMappingManager->Get(stem))
+        {
+            if (auto nameStr = nameVal->AsString(); nameStr && !nameStr->empty())
+                return *nameStr;
+        }
+    }
+    return stem;
+}
+
 class QRCodeView : public brls::View
 {
 public:
@@ -1363,23 +1428,24 @@ struct ScanPlatformConfig
     const std::vector<const char*> exts;
     char32_t icon;
     int platform;
+    int externalPlatform;
 };
 
 const ScanPlatformConfig kScanPlatforms[] = {
-    {L("FC/NES"), beiklive::SettingKey::KEY_SCAN_PATH_NES,    {"nes", "fds"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuNES)},
-    {L("SFC"),    beiklive::SettingKey::KEY_SCAN_PATH_SNES,   {"sfc", "smc"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES)},
-    {L("GB"),     beiklive::SettingKey::KEY_SCAN_PATH_GB,     {"gb"},         material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGB)},
-    {L("GBC"),    beiklive::SettingKey::KEY_SCAN_PATH_GBC,    {"gbc"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC)},
-    {L("GBA"),    beiklive::SettingKey::KEY_SCAN_PATH_GBA,    {"gba"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA)},
-    {L("NDS"),    beiklive::SettingKey::KEY_SCAN_PATH_NDS,    {"nds"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)},
-    {L("3DS"),    beiklive::SettingKey::KEY_SCAN_PATH_3DS,    {"cci", "3ds"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS)},
-    {L("Arcade"), beiklive::SettingKey::KEY_SCAN_PATH_ARCADE, {"zip", "7z"},  material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade)},
-    {L("DC"),     beiklive::SettingKey::KEY_SCAN_PATH_DC,     {"cdi", "gdi", "chd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast)},
-    {L("MD"),     beiklive::SettingKey::KEY_SCAN_PATH_GENESIS,{"md", "gen", "bin", "smd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)},
-    {L("PSP"),    beiklive::SettingKey::KEY_SCAN_PATH_PSP,    {"iso", "cso", "pbp"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)},
-    {L("PS1"),    beiklive::SettingKey::KEY_SCAN_PATH_PS1,    {"cue", "bin", "chd", "pbp", "m3u"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1)},
-    {L("Saturn"), beiklive::SettingKey::KEY_SCAN_PATH_SATURN, {"cue", "bin", "chd", "m3u", "ccd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn)},
-    {L("GC / Wii"), beiklive::SettingKey::KEY_SCAN_PATH_DOLPHIN, {"iso", "gcm", "rvz", "wbfs", "wad", "ciso"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin)},
+    {L("FC/NES"), beiklive::SettingKey::KEY_SCAN_PATH_NES,    {"nes", "fds"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuNES), -1},
+    {L("SFC"),    beiklive::SettingKey::KEY_SCAN_PATH_SNES,   {"sfc", "smc"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES), -1},
+    {L("GB"),     beiklive::SettingKey::KEY_SCAN_PATH_GB,     {"gb"},         material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGB), -1},
+    {L("GBC"),    beiklive::SettingKey::KEY_SCAN_PATH_GBC,    {"gbc"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC), -1},
+    {L("GBA"),    beiklive::SettingKey::KEY_SCAN_PATH_GBA,    {"gba"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA), -1},
+    {L("NDS"),    beiklive::SettingKey::KEY_SCAN_PATH_NDS,    {"nds"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS), 6},
+    {L("3DS"),    beiklive::SettingKey::KEY_SCAN_PATH_3DS,    {"cci", "3ds"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS), 7},
+    {L("Arcade"), beiklive::SettingKey::KEY_SCAN_PATH_ARCADE, {"zip", "7z"},  material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade), 9},
+    {L("DC"),     beiklive::SettingKey::KEY_SCAN_PATH_DC,     {"cdi", "gdi", "chd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast), 10},
+    {L("MD"),     beiklive::SettingKey::KEY_SCAN_PATH_GENESIS,{"md", "gen", "bin", "smd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis), -1},
+    {L("PSP"),    beiklive::SettingKey::KEY_SCAN_PATH_PSP,    {"iso", "cso", "pbp"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP), 11},
+    {L("PS1"),    beiklive::SettingKey::KEY_SCAN_PATH_PS1,    {"cue", "bin", "chd", "pbp", "m3u"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1), 12},
+    {L("Saturn"), beiklive::SettingKey::KEY_SCAN_PATH_SATURN, {"cue", "bin", "chd", "m3u", "ccd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn), 13},
+    {L("GC / Wii"), beiklive::SettingKey::KEY_SCAN_PATH_DOLPHIN, {"iso", "gcm", "rvz", "wbfs", "wad", "ciso"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin), 14},
 };
 constexpr size_t kScanPlatformCount = sizeof(kScanPlatforms) / sizeof(kScanPlatforms[0]);
 
@@ -1387,36 +1453,46 @@ void DataManagementPage::init()
 {
     using Canvas = DataManagementCanvas;
     std::vector<Canvas::Tab> tabs;
+    const int externalPlatforms[] = {6, 7, 9, 10, 11, 12, 13, 14};
+    const bool hasMissingExternalCore = std::any_of(
+        std::begin(externalPlatforms), std::end(externalPlatforms),
+        [](int platform) { return !beiklive::path::externalCoreInstalled(platform); });
 
     Canvas::Tab bundle;
     bundle.title = L("整合包导入");
     bundle.summary = L("从 RetroArch 播放列表导入游戏，并沿用列表中的游戏名称与现有缩略图。");
-    bundle.detail = L("请选择与播放列表内容一致的平台。导入前会检查 ROM 类型，选择错误时不会写入游戏库。");
+    bundle.detail = hasMissingExternalCore
+        ? L("部分平台需要外置核心，请前往“关于 → 在线资源”下载。")
+        : L("请选择与播放列表内容一致的平台。导入前会检查 ROM 类型，选择错误时不会写入游戏库。");
     bundle.icon = material::DESCRIPTION;
     struct BundlePlatform
     {
         std::string title;
         std::string badge;
         int platform;
+        int externalPlatform;
     };
     const BundlePlatform bundlePlatforms[] = {
-        {L("导入 GBA lpl文件"), "GBA · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBA)},
-        {L("导入 GBC lpl文件"), "GBC · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBC)},
-        {L("导入 GB lpl文件"), "GB · .lpl", static_cast<int>(enums::EmuPlatform::EmuGB)},
-        {L("导入 FC lpl文件"), "FC · .lpl", static_cast<int>(enums::EmuPlatform::EmuNES)},
-        {L("导入 SFC lpl文件"), "SFC · .lpl", static_cast<int>(enums::EmuPlatform::EmuSNES)},
-        {L("导入 NDS lpl文件"), "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS)},
-        {L("导入 3DS lpl文件"), "3DS · .lpl", static_cast<int>(enums::EmuPlatform::Emu3DS)},
-        {L("导入 MD lpl文件"), "MD · .lpl", static_cast<int>(enums::EmuPlatform::EmuGenesis)},
-        {L("导入 街机 lpl文件"), "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade)},
-        {L("导入 DC lpl文件"), "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast)},
-        {L("导入 PSP lpl文件"), "PSP · .lpl", static_cast<int>(enums::EmuPlatform::EmuPSP)},
-        {L("导入 PS1 lpl文件"), "PS1 · .lpl", static_cast<int>(enums::EmuPlatform::EmuPS1)},
-        {L("导入 Saturn lpl文件"), "Saturn · .lpl", static_cast<int>(enums::EmuPlatform::EmuSaturn)},
-        {L("导入 GC / Wii lpl文件"), "GC / Wii · .lpl", static_cast<int>(enums::EmuPlatform::EmuDolphin)},
+        {L("导入 GBA lpl文件"), "GBA · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBA), -1},
+        {L("导入 GBC lpl文件"), "GBC · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBC), -1},
+        {L("导入 GB lpl文件"), "GB · .lpl", static_cast<int>(enums::EmuPlatform::EmuGB), -1},
+        {L("导入 FC lpl文件"), "FC · .lpl", static_cast<int>(enums::EmuPlatform::EmuNES), -1},
+        {L("导入 SFC lpl文件"), "SFC · .lpl", static_cast<int>(enums::EmuPlatform::EmuSNES), -1},
+        {L("导入 NDS lpl文件"), "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS), 6},
+        {L("导入 3DS lpl文件"), "3DS · .lpl", static_cast<int>(enums::EmuPlatform::Emu3DS), 7},
+        {L("导入 MD lpl文件"), "MD · .lpl", static_cast<int>(enums::EmuPlatform::EmuGenesis), -1},
+        {L("导入 街机 lpl文件"), "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade), 9},
+        {L("导入 DC lpl文件"), "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast), 10},
+        {L("导入 PSP lpl文件"), "PSP · .lpl", static_cast<int>(enums::EmuPlatform::EmuPSP), 11},
+        {L("导入 PS1 lpl文件"), "PS1 · .lpl", static_cast<int>(enums::EmuPlatform::EmuPS1), 12},
+        {L("导入 Saturn lpl文件"), "Saturn · .lpl", static_cast<int>(enums::EmuPlatform::EmuSaturn), 13},
+        {L("导入 GC / Wii lpl文件"), "GC / Wii · .lpl", static_cast<int>(enums::EmuPlatform::EmuDolphin), 14},
     };
     for (const auto& platform : bundlePlatforms)
     {
+        if (platform.externalPlatform >= 0 &&
+            !beiklive::path::externalCoreInstalled(platform.externalPlatform))
+            continue;
         bundle.items.push_back({
             platform.title,
             L("选择 RetroArch playlists 目录中的对应文件"),
@@ -1451,7 +1527,7 @@ void DataManagementPage::init()
     Canvas::Tab scan;
     scan.title = L("扫描导入");
     scan.summary = L("为每个机型设置 ROM 扫描目录，点击开始扫描批量导入游戏库。");
-    scan.detail = L("NDS/3DS/PSP 入库时始终提取内置图标与标题。");
+    scan.detail = L("仅扫描已设置目录；标题按 name.ini → 内置标题 → name_mapping.cfg → 文件名匹配，图片规则不变。");
     scan.icon = material::SEARCH;
     scan.items.push_back({
         L("开始扫描"),
@@ -1467,9 +1543,10 @@ void DataManagementPage::init()
     });
     scan.items.push_back({L("扫描子目录"), L("同时扫描所选目录下的所有子目录，请做好游戏目录分类，部分游戏后缀相同，可能导致导入错误"), "",
                           material::STORAGE, {}, &m_autoSubDir, false});
-    scan.items.push_back({L("读取映射名称"), L("存在名称映射时使用中文或规范化标题"), "",
-                          material::EDIT, {}, &m_useNameMapping, false});
     for (size_t i = 0; i < kScanPlatformCount; ++i) {
+        if (kScanPlatforms[i].externalPlatform >= 0 &&
+            !beiklive::path::externalCoreInstalled(kScanPlatforms[i].externalPlatform))
+            continue;
         const std::string path = scanPathFor(static_cast<int>(i));
         scan.items.push_back({
             kScanPlatforms[i].name,
@@ -2078,8 +2155,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                 entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(romPath);
             entry.logoPath = logoPath;
             if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)) {
-                // PSP ROM：开启读取映射名称且映射名存在时使用映射名（不用 TITLE）；
-                // 否则 TITLE 优先于 lpl 的文件名称。无 RetroArch 缩略图时
+                // PSP LPL 导入沿用现有名称优先级；无 RetroArch 缩略图时
                 // 提取 ICON0 作为封面（保存在该 ROM 的专属存档目录下）。
                 std::string mappedName;
                 if (m_useNameMapping) {
@@ -2218,10 +2294,11 @@ void DataManagementPage::refreshScanTab()
     });
     items.push_back({L("扫描子目录"), L("同时扫描所选目录下的所有子目录，请做好游戏目录分类，部分游戏后缀相同，可能导致导入错误"), "",
                      material::STORAGE, {}, &m_autoSubDir, false});
-    items.push_back({L("读取映射名称"), L("存在名称映射时使用中文或规范化标题"), "",
-                     material::EDIT, {}, &m_useNameMapping, false});
     for (size_t i = 0; i < kScanPlatformCount; ++i)
     {
+        if (kScanPlatforms[i].externalPlatform >= 0 &&
+            !beiklive::path::externalCoreInstalled(kScanPlatforms[i].externalPlatform))
+            continue;
         const std::string path = scanPathFor(static_cast<int>(i));
         items.push_back({
             kScanPlatforms[i].name,
@@ -2273,7 +2350,9 @@ void DataManagementPage::startScanAll()
 {
     int configured = 0;
     for (size_t i = 0; i < kScanPlatformCount; ++i)
-        if (!scanPathFor(static_cast<int>(i)).empty())
+        if ((kScanPlatforms[i].externalPlatform < 0 ||
+             beiklive::path::externalCoreInstalled(kScanPlatforms[i].externalPlatform)) &&
+            !scanPathFor(static_cast<int>(i)).empty())
             ++configured;
     if (configured == 0)
     {
@@ -2310,6 +2389,9 @@ void DataManagementPage::startScanAll()
         int total = 0;
         for (size_t i = 0; i < kScanPlatformCount; ++i)
         {
+            if (kScanPlatforms[i].externalPlatform >= 0 &&
+                !beiklive::path::externalCoreInstalled(kScanPlatforms[i].externalPlatform))
+                continue;
             std::string dir = scanPathFor(static_cast<int>(i));
             if (dir.empty())
                 continue;
@@ -2411,17 +2493,7 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
             continue;
         }
 
-        std::string displayName = romStem;
-        if (m_useNameMapping)
-        {
-            auto nameVal = beiklive::NameMappingManager->Get(romStem);
-            if (nameVal)
-            {
-                auto nameStr = nameVal->AsString();
-                if (nameStr && !nameStr->empty())
-                    displayName = *nameStr;
-            }
-        }
+        const std::string displayName = resolveScanTitle(romPath, platform, m_useNameMapping);
         updateProgressName(displayName);
 
         beiklive::GameEntry entry;
@@ -2476,7 +2548,7 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
         // NDS / 3DS / PSP：始终提取内置元数据（图标与名称）。
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP))
         {
-            // TITLE：开启读取映射名称且映射名存在时保留映射名，否则 TITLE 优先。
+            // 标题已由 name.ini → 内置 TITLE → name_mapping.cfg → 文件名解析。
             if (!(m_useNameMapping && displayName != romStem))
             {
                 const std::string realTitle = beiklive::psp_meta::ExtractTitle(path);
