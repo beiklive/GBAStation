@@ -2027,7 +2027,7 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
 
                 return true;
             });
-        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "nds", "cia", "cci", "3ds", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "cdi", "gdi", "chd", "iso", "cso", "pbp", "zip", "7z", "png"});
+        m_fileListPage->setFliter(beiklive::enums::FilterMode::Whitelist, {"gba", "gbc", "gb", "nes", "fds", "sfc", "smc", "nds", "cia", "cci", "3ds", "md", "gen", "bin", "smd", "sms", "gg", "sg", "cue", "cdi", "gdi", "chd", "iso", "cso", "pbp", "img", "ecm", "mds", "m3u", "ccd", "gcm", "rvz", "wbfs", "wad", "ciso", "tgc", "gcz", "wia", "nfs", "dol", "elf", "zip", "7z", "png"});
 
         m_fileListPage->onFileSelected = [this](beiklive::DirListData dirItem)
         {
@@ -2057,6 +2057,9 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
             case beiklive::enums::FileType::ARCADE_ROM:
             case beiklive::enums::FileType::DREAMCAST_ROM:
             case beiklive::enums::FileType::PSP_ROM:
+            case beiklive::enums::FileType::PS1_ROM:
+            case beiklive::enums::FileType::SATURN_ROM:
+            case beiklive::enums::FileType::DOLPHIN_ROM:
                 brls::Application::notify(L("启动游戏：") + dirItem.fileName);
                 _pushGameActivity(dirItem, this);
                 break;

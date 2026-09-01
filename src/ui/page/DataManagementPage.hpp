@@ -4,6 +4,7 @@
 #include "ui/widget/Box.hpp"
 
 #include <atomic>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -76,6 +77,8 @@ namespace beiklive
 
         brls::View* buildBundleImportTab();
         brls::View* buildDataProcessingTab();
+        void openLplPlatformSelector();
+        void openScanDirectoryManager();
         void rememberFocusBeforeModal();
         void restoreFocusAfterModal();
         brls::View* getFallbackFocus();
@@ -83,7 +86,7 @@ namespace beiklive
         void onSelectLpl(int platform);
         void startImport(const std::string& lplPath, int platform);
         void startScanAll();
-        void pickScanDir(int platformIndex);
+        void pickScanDir(int platformIndex, std::function<void()> onChanged = {});
         void refreshScanTab();
         void removeInvalidGames();
         void clearGameLibrary();

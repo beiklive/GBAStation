@@ -6,6 +6,7 @@
 #include "ui/utils/GradientFocus.hpp"
 #include "ui/utils/MaterialIcons.hpp"
 #include "ui/widget/DetailCell.hpp"
+#include "ui/widget/GridBox.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/rom/PspMeta.hpp"
 #include "core/rom/ThreeDsIcon.hpp"
@@ -216,7 +217,7 @@ public:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(255, 255, 255, 246));
         nvgText(vg, x + 108.f, y + 43.f,
-                L("导入 RetroArch 播放列表").c_str(), nullptr);
+                L("导入 RetroArch 游戏列表").c_str(), nullptr);
 
         const std::string platformLabel = L("目标平台  ") + m_platformName;
         nvgFontSize(vg, 17.f);
@@ -281,7 +282,7 @@ public:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFillColor(vg, nvgRGBA(181, 188, 202, 225));
         nvgText(vg, x + 30.f, y + 229.f,
-                L("将读取播放列表并导入有效 ROM，文件中的平台需与目标平台一致。").c_str(), nullptr);
+                L("将读取游戏列表并导入有效 ROM，文件中的平台需与目标平台一致。").c_str(), nullptr);
     }
 
 private:
@@ -724,6 +725,15 @@ public:
         std::vector<Item> items;
     };
 
+    struct ModalCard
+    {
+        std::string title;
+        std::string detail;
+        std::string badge;
+        char32_t icon = material::FOLDER;
+        std::function<void()> action;
+    };
+
     DataManagementCanvas(std::vector<Tab> tabs, std::function<void()> onBack)
         : m_tabs(std::move(tabs))
         , m_onBack(std::move(onBack))
@@ -738,22 +748,42 @@ public:
         setCustomNavigationRoute(brls::FocusDirection::RIGHT, this);
 
         auto previousTab = [this](brls::View*) -> bool {
+            if (m_modalOpen) {
+                if (_acceptNavigation(1))
+                    _moveModalFocus(-1);
+                return true;
+            }
             if (_acceptNavigation(1))
                 _switchTab(-1);
             return true;
         };
         auto nextTab = [this](brls::View*) -> bool {
+            if (m_modalOpen) {
+                if (_acceptNavigation(2))
+                    _moveModalFocus(1);
+                return true;
+            }
             if (_acceptNavigation(2))
                 _switchTab(1);
             return true;
         };
         auto moveUp = [this](brls::View*) -> bool {
-            if (_acceptNavigation(3))
+            if (m_modalOpen)
+            {
+                if (_acceptNavigation(3))
+                    _moveModalFocus(-3);
+            }
+            else if (_acceptNavigation(3))
                 _moveFocus(-1);
             return true;
         };
         auto moveDown = [this](brls::View*) -> bool {
-            if (_acceptNavigation(4))
+            if (m_modalOpen)
+            {
+                if (_acceptNavigation(4))
+                    _moveModalFocus(3);
+            }
+            else if (_acceptNavigation(4))
                 _moveFocus(1);
             return true;
         };
@@ -761,8 +791,16 @@ public:
         registerAction("", brls::BUTTON_RIGHT, nextTab, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_LEFT, previousTab, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_RIGHT, nextTab, true, true, brls::SOUND_NONE);
-        registerAction(L("上一页"), brls::BUTTON_LB, previousTab, true, false, brls::SOUND_NONE);
-        registerAction(L("下一页"), brls::BUTTON_RB, nextTab, true, false, brls::SOUND_NONE);
+        registerAction(L("上一页"), brls::BUTTON_LB, [this](brls::View*) -> bool {
+            if (!m_modalOpen && _acceptNavigation(1))
+                _switchTab(-1);
+            return true;
+        }, true, false, brls::SOUND_NONE);
+        registerAction(L("下一页"), brls::BUTTON_RB, [this](brls::View*) -> bool {
+            if (!m_modalOpen && _acceptNavigation(2))
+                _switchTab(1);
+            return true;
+        }, true, false, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_UP, moveUp, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_DOWN, moveDown, true, true, brls::SOUND_NONE);
         registerAction("", brls::BUTTON_NAV_UP, moveUp, true, true, brls::SOUND_NONE);
@@ -780,6 +818,38 @@ public:
         m_savedScroll.assign(m_tabs.size(), 0.f);
         m_lastFrameTime = std::chrono::steady_clock::now();
     }
+
+    void OpenModal(std::string title, std::string subtitle, std::vector<ModalCard> cards)
+    {
+        m_modalTitle = std::move(title);
+        m_modalSubtitle = std::move(subtitle);
+        m_modalCards = std::move(cards);
+        m_modalFocus = 0;
+        m_modalScroll = 0.f;
+        m_modalTargetScroll = 0.f;
+        m_modalOpen = true;
+        m_clicking = false;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_CLICK);
+        brls::Application::giveFocus(this);
+        invalidate();
+    }
+
+    void CloseModal()
+    {
+        if (!m_modalOpen)
+            return;
+        m_modalOpen = false;
+        m_modalCards.clear();
+        m_modalTitle.clear();
+        m_modalSubtitle.clear();
+        m_modalFocus = 0;
+        m_modalScroll = m_modalTargetScroll = 0.f;
+        brls::Application::giveFocus(this);
+        brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
+        invalidate();
+    }
+
+    bool IsModalOpen() const { return m_modalOpen; }
 
     /// 替换某个标签页的条目列表并重绘（用于扫描路径选择后的刷新）。
     void UpdateTabItems(size_t tabIndex, std::vector<Item> items)
@@ -836,6 +906,7 @@ public:
         }
 
         m_scroll += (m_targetScroll - m_scroll) * std::min(1.f, dt * 13.f);
+        m_modalScroll += (m_modalTargetScroll - m_modalScroll) * std::min(1.f, dt * 13.f);
         invalidate();
     }
 
@@ -873,6 +944,8 @@ public:
         nvgRestore(vg);
 
         _drawFooter(vg, x, y, w, h, pageAlpha);
+        if (m_modalOpen)
+            _drawModal(vg, x, y, w, h);
     }
 
 private:
@@ -905,6 +978,13 @@ private:
     bool m_clicking = false;
     bool m_closing = false;
     bool m_closeQueued = false;
+    bool m_modalOpen = false;
+    std::string m_modalTitle;
+    std::string m_modalSubtitle;
+    std::vector<ModalCard> m_modalCards;
+    int m_modalFocus = 0;
+    float m_modalScroll = 0.f;
+    float m_modalTargetScroll = 0.f;
     std::chrono::steady_clock::time_point m_lastFrameTime;
     std::chrono::steady_clock::time_point m_lastNavigationTime;
     int m_lastNavigationAction = 0;
@@ -1125,7 +1205,7 @@ private:
         {
             _drawBadge(vg, badgeX, badgeY, "LPL", nvgRGB(79, 193, 255));
             badgeX += 62.f;
-            _drawBadge(vg, badgeX, badgeY, L("6 平台"), nvgRGB(100, 220, 150));
+            _drawBadge(vg, badgeX, badgeY, L("先选平台"), nvgRGB(100, 220, 150));
         }
         else if (m_tab == 1)
         {
@@ -1318,7 +1398,7 @@ private:
 
     void _switchTab(int direction)
     {
-        if (m_closing || m_clicking || m_pageEntrance < 0.72f
+        if (m_modalOpen || m_closing || m_clicking || m_pageEntrance < 0.72f
             || m_tabEntrance < 0.72f || m_tabs.size() <= 1)
             return;
         m_savedScroll[static_cast<size_t>(m_tab)] = m_targetScroll;
@@ -1333,6 +1413,11 @@ private:
 
     void _moveFocus(int direction)
     {
+        if (m_modalOpen)
+        {
+            _moveModalFocus(direction);
+            return;
+        }
         if (m_closing || m_clicking || m_pageEntrance < 0.72f
             || m_tabEntrance < 0.72f)
             return;
@@ -1362,6 +1447,11 @@ private:
 
     void _activateFocused()
     {
+        if (m_modalOpen)
+        {
+            _activateModalFocus();
+            return;
+        }
         if (m_closing || m_clicking || m_pageEntrance < 0.85f
             || m_tabEntrance < 0.85f || _currentTab().items.empty())
             return;
@@ -1387,11 +1477,268 @@ private:
 
     void _beginClose()
     {
+        if (m_modalOpen)
+        {
+            CloseModal();
+            return;
+        }
         if (m_closing || m_clicking)
             return;
         m_closing = true;
         brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
     }
+
+    void _moveModalFocus(int direction)
+    {
+        if (m_modalCards.empty())
+            return;
+        constexpr int columns = 3;
+        const int count = static_cast<int>(m_modalCards.size());
+        const int column = m_modalFocus % columns;
+        int next = m_modalFocus;
+        if (direction == -1)
+        {
+            if (column == 0) return;
+            --next;
+        }
+        else if (direction == 1)
+        {
+            if (column == columns - 1 || m_modalFocus + 1 >= count) return;
+            ++next;
+        }
+        else if (direction == -columns)
+        {
+            if (m_modalFocus < columns) return;
+            next -= columns;
+        }
+        else if (direction == columns)
+        {
+            if (m_modalFocus + columns >= count) return;
+            next += columns;
+        }
+        if (next < 0 || next >= static_cast<int>(m_modalCards.size()))
+            return;
+        if (next == m_modalFocus)
+            return;
+        m_modalFocus = next;
+        constexpr float cardH = 68.f;
+        constexpr float gap = 8.f;
+        constexpr float viewport = 430.f;
+        const float top = (m_modalFocus / columns) * (cardH + gap);
+        if (top < m_modalTargetScroll + 12.f)
+            m_modalTargetScroll = std::max(0.f, top - 12.f);
+        else if (top + cardH > m_modalTargetScroll + viewport - 12.f)
+            m_modalTargetScroll = top + cardH - viewport + 12.f;
+        const float content = ((m_modalCards.size() + columns - 1) / columns) * (cardH + gap);
+        m_modalTargetScroll = std::clamp(m_modalTargetScroll, 0.f,
+            std::max(0.f, content - viewport));
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
+        invalidate();
+    }
+
+    void _activateModalFocus()
+    {
+        if (m_modalCards.empty() || m_modalFocus < 0 ||
+            m_modalFocus >= static_cast<int>(m_modalCards.size()))
+            return;
+        auto action = m_modalCards[static_cast<size_t>(m_modalFocus)].action;
+        if (action)
+            action();
+    }
+
+    void _drawModal(NVGcontext* vg, float x, float y, float w, float h)
+    {
+        nvgSave(vg);
+        nvgGlobalAlpha(vg, 0.98f);
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, w, h);
+        nvgFillColor(vg, nvgRGBA(0, 0, 0, 142));
+        nvgFill(vg);
+        constexpr int columns = 3;
+        const float panelW = std::min(900.f, w - 120.f);
+        const float rows = std::max(1.f, std::ceil(static_cast<float>(m_modalCards.size()) / columns));
+        const float panelH = std::min(h - 110.f, 118.f + rows * 78.f);
+        const Rect panel{x + (w - panelW) * 0.5f, y + (h - panelH) * 0.5f, panelW, panelH};
+        _drawPanel(vg, panel, 9.f);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, panel.x + 1.f, panel.y + 1.f, panel.w - 2.f, panel.h - 2.f, 8.f);
+        nvgFillColor(vg, nvgRGBA(30, 30, 30, 255)); // VS Code editor background.
+        nvgFill(vg);
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, panel.x + 0.5f, panel.y + 0.5f, panel.w - 1.f, panel.h - 1.f, 8.5f);
+        nvgStrokeColor(vg, nvgRGBA(60, 60, 60, 255));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        nvgFontFaceId(vg, m_defaultFont);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        nvgFontSize(vg, 22.f);
+        nvgFillColor(vg, nvgRGBA(230, 230, 230, 255));
+        nvgText(vg, panel.x + 24.f, panel.y + 31.f, m_modalTitle.c_str(), nullptr);
+        nvgFontSize(vg, 14.f);
+        nvgFillColor(vg, nvgRGBA(175, 175, 175, 255));
+        nvgText(vg, panel.x + 24.f, panel.y + 56.f, m_modalSubtitle.c_str(), nullptr);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, panel.x + 24.f, panel.y + 72.f);
+        nvgLineTo(vg, panel.x + panel.w - 24.f, panel.y + 72.f);
+        nvgStrokeColor(vg, nvgRGBA(60, 60, 60, 255));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+        const float gridX = panel.x + 26.f;
+        const float gridY = panel.y + 88.f;
+        const float gridW = panel.w - 52.f;
+        const float cardW = (gridW - 16.f) / columns;
+        constexpr float cardH = 68.f;
+        constexpr float gap = 8.f;
+        nvgSave(vg);
+        nvgIntersectScissor(vg, gridX - 4.f, gridY - 4.f, gridW + 8.f, panel.h - 114.f);
+        for (size_t i = 0; i < m_modalCards.size(); ++i)
+        {
+            const float cardX = gridX + (i % columns) * (cardW + gap);
+            const float cardY = gridY + (i / columns) * (cardH + gap) - m_modalScroll;
+            if (cardY + cardH < gridY || cardY > panel.y + panel.h - 34.f)
+                continue;
+            const bool focused = static_cast<int>(i) == m_modalFocus;
+            Rect r{cardX, cardY, cardW, cardH};
+            nvgBeginPath(vg);
+            nvgRoundedRect(vg, r.x, r.y, r.w, r.h, 6.f);
+            nvgFillColor(vg, focused ? nvgRGBA(9, 71, 113, 255) : nvgRGBA(37, 37, 38, 255));
+            nvgFill(vg);
+            if (focused)
+                beiklive::ui::drawGradientFocusBorder(vg, r.x, r.y, r.w, r.h, 6.f, 2.f, 1.f,
+                    beiklive::ui::gradientFocusAnimationOffset(m_time));
+            else
+            {
+                nvgStrokeColor(vg, nvgRGBA(60, 60, 60, 255));
+                nvgStrokeWidth(vg, 1.f);
+                nvgStroke(vg);
+            }
+            nvgFontFaceId(vg, m_materialFont);
+            nvgFontSize(vg, 22.f);
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, focused ? nvgRGBA(220, 235, 245, 255) : nvgRGBA(190, 190, 190, 255));
+            nvgText(vg, r.x + 26.f, r.y + r.h * 0.5f, encodeDataIcon(m_modalCards[i].icon).c_str(), nullptr);
+            nvgFontFaceId(vg, m_defaultFont);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFontSize(vg, focused ? 17.f : 16.f);
+            nvgFillColor(vg, focused ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(212, 212, 212, 255));
+            const float titleY = m_modalCards[i].detail.empty()
+                ? r.y + r.h * 0.5f + 2.f : r.y + 27.f;
+            nvgText(vg, r.x + 50.f, titleY, m_modalCards[i].title.c_str(), nullptr);
+            if (!m_modalCards[i].detail.empty())
+            {
+                nvgFontSize(vg, 12.f);
+                nvgFillColor(vg, nvgRGBA(158, 158, 158, 255));
+                nvgTextBox(vg, r.x + 50.f, r.y + 45.f, r.w - 62.f,
+                           m_modalCards[i].detail.c_str(), nullptr);
+            }
+            if (!m_modalCards[i].badge.empty())
+            {
+                nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+                nvgFillColor(vg, nvgRGBA(158, 158, 158, 255));
+                nvgText(vg, r.x + r.w - 14.f, r.y + r.h * 0.5f, m_modalCards[i].badge.c_str(), nullptr);
+            }
+        }
+        nvgRestore(vg);
+        nvgFontSize(vg, 13.f);
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, nvgRGBA(158, 158, 158, 255));
+        nvgText(vg, panel.x + panel.w - 24.f, panel.y + panel.h - 18.f,
+                L("方向键选择  ·  A 确认  ·  B 关闭").c_str(), nullptr);
+        nvgRestore(vg);
+    }
+};
+
+class DataManagementGridPage final : public brls::Box
+{
+public:
+    struct Card
+    {
+        std::string title;
+        std::string detail;
+        std::string badge;
+        std::string iconPath;
+        std::function<void()> action;
+    };
+
+    DataManagementGridPage(std::string title, std::string subtitle,
+                           std::vector<Card> cards, std::function<void()> onBack)
+        : brls::Box(brls::Axis::COLUMN), m_onBack(std::move(onBack))
+    {
+        setFocusable(true);
+        setGrow(1.f);
+        setWidthPercentage(100.f);
+        setPadding(56.f, 34.f, 44.f, 34.f);
+
+        auto* heading = new brls::Box(brls::Axis::COLUMN);
+        heading->setFocusable(false);
+        auto* titleLabel = new brls::Label();
+        titleLabel->setText(title);
+        titleLabel->setFontSize(28.f);
+        titleLabel->setTextColor(GET_THEME_COLOR("brls/text"));
+        titleLabel->setFocusable(false);
+        heading->addView(titleLabel);
+        auto* subtitleLabel = new brls::Label();
+        subtitleLabel->setText(subtitle);
+        subtitleLabel->setFontSize(16.f);
+        subtitleLabel->setTextColor(uiTextSecondary(0.82f));
+        subtitleLabel->setMarginTop(6.f);
+        subtitleLabel->setFocusable(false);
+        heading->addView(subtitleLabel);
+        addView(heading);
+
+        m_grid = new beiklive::GridBox(2);
+        m_grid->setGrow(1.f);
+        m_grid->setMarginTop(20.f);
+        m_grid->hideHighlight(true);
+        std::vector<std::function<void()>> actions;
+        actions.reserve(cards.size());
+        for (size_t i = 0; i < cards.size(); ++i)
+        {
+            actions.push_back(cards[i].action);
+            const Card card = std::move(cards[i]);
+            m_grid->addItem([card]() {
+                auto* cell = new beiklive::DetailCell();
+                cell->setHeight(86.f);
+                cell->setLeftText(card.title);
+                cell->setLeftTextSize(18.f);
+                if (!card.detail.empty())
+                    cell->addRightLabel(card.detail);
+                if (!card.badge.empty())
+                    cell->addRightLabel(card.badge);
+                return cell;
+            });
+        }
+        m_grid->onItemClicked = [actions = std::move(actions)](int index) mutable {
+            if (index >= 0 && index < static_cast<int>(actions.size()) && actions[index])
+                actions[index]();
+        };
+        m_grid->commit();
+        addView(m_grid);
+
+        auto* hint = new brls::Label();
+        hint->setText(L("方向键选择  ·  A 确认  ·  B 返回"));
+        hint->setFontSize(15.f);
+        hint->setTextColor(uiTextSecondary(0.72f));
+        hint->setFocusable(false);
+        hint->setMarginTop(10.f);
+        addView(hint);
+
+        registerAction(L("返回"), brls::BUTTON_B, [this](brls::View*) -> bool {
+            if (m_onBack)
+                m_onBack();
+            return true;
+        });
+    }
+
+    void focusFirstCard()
+    {
+        if (m_grid && m_grid->getItemView(0))
+            brls::Application::giveFocus(m_grid->getItemView(0));
+    }
+
+private:
+    beiklive::GridBox* m_grid = nullptr;
+    std::function<void()> m_onBack;
 };
 
 DataManagementPage::DataManagementPage()
@@ -1443,9 +1790,9 @@ const ScanPlatformConfig kScanPlatforms[] = {
     {L("DC"),     beiklive::SettingKey::KEY_SCAN_PATH_DC,     {"cdi", "gdi", "chd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast), 10},
     {L("MD"),     beiklive::SettingKey::KEY_SCAN_PATH_GENESIS,{"md", "gen", "bin", "smd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis), -1},
     {L("PSP"),    beiklive::SettingKey::KEY_SCAN_PATH_PSP,    {"iso", "cso", "pbp"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP), 11},
-    {L("PS1"),    beiklive::SettingKey::KEY_SCAN_PATH_PS1,    {"cue", "bin", "chd", "pbp", "m3u"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1), 12},
-    {L("Saturn"), beiklive::SettingKey::KEY_SCAN_PATH_SATURN, {"cue", "bin", "chd", "m3u", "ccd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn), 13},
-    {L("GC / Wii"), beiklive::SettingKey::KEY_SCAN_PATH_DOLPHIN, {"iso", "gcm", "rvz", "wbfs", "wad", "ciso"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin), 14},
+    {L("PS1"),    beiklive::SettingKey::KEY_SCAN_PATH_PS1,    {"cue", "bin", "img", "iso", "chd", "ecm", "mds", "pbp", "m3u"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1), 12},
+    {L("Saturn"), beiklive::SettingKey::KEY_SCAN_PATH_SATURN, {"cue", "bin", "iso", "chd", "mds", "m3u", "ccd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn), 13},
+    {L("GC / Wii"), beiklive::SettingKey::KEY_SCAN_PATH_DOLPHIN, {"gcm", "bin", "iso", "tgc", "wbfs", "ciso", "gcz", "wia", "rvz", "nfs", "dol", "elf", "wad"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin), 14},
 };
 constexpr size_t kScanPlatformCount = sizeof(kScanPlatforms) / sizeof(kScanPlatforms[0]);
 
@@ -1460,52 +1807,23 @@ void DataManagementPage::init()
 
     Canvas::Tab bundle;
     bundle.title = L("整合包导入");
-    bundle.summary = L("从 RetroArch 播放列表导入游戏，并沿用列表中的游戏名称与现有缩略图。");
+    bundle.summary = L("从 RetroArch 游戏列表导入游戏，并沿用列表中的游戏名称与现有缩略图。");
     bundle.detail = hasMissingExternalCore
         ? L("部分平台需要外置核心，请前往“关于 → 在线资源”下载。")
-        : L("请选择与播放列表内容一致的平台。导入前会检查 ROM 类型，选择错误时不会写入游戏库。");
+        : L("请选择与游戏列表内容一致的平台。导入前会检查 ROM 类型，选择错误时不会写入游戏库。");
     bundle.icon = material::DESCRIPTION;
-    struct BundlePlatform
-    {
-        std::string title;
-        std::string badge;
-        int platform;
-        int externalPlatform;
-    };
-    const BundlePlatform bundlePlatforms[] = {
-        {L("导入 GBA lpl文件"), "GBA · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBA), -1},
-        {L("导入 GBC lpl文件"), "GBC · .lpl", static_cast<int>(enums::EmuPlatform::EmuGBC), -1},
-        {L("导入 GB lpl文件"), "GB · .lpl", static_cast<int>(enums::EmuPlatform::EmuGB), -1},
-        {L("导入 FC lpl文件"), "FC · .lpl", static_cast<int>(enums::EmuPlatform::EmuNES), -1},
-        {L("导入 SFC lpl文件"), "SFC · .lpl", static_cast<int>(enums::EmuPlatform::EmuSNES), -1},
-        {L("导入 NDS lpl文件"), "NDS · .lpl", static_cast<int>(enums::EmuPlatform::EmuNDS), 6},
-        {L("导入 3DS lpl文件"), "3DS · .lpl", static_cast<int>(enums::EmuPlatform::Emu3DS), 7},
-        {L("导入 MD lpl文件"), "MD · .lpl", static_cast<int>(enums::EmuPlatform::EmuGenesis), -1},
-        {L("导入 街机 lpl文件"), "Arcade · .lpl", static_cast<int>(enums::EmuPlatform::EmuArcade), 9},
-        {L("导入 DC lpl文件"), "DC · .lpl", static_cast<int>(enums::EmuPlatform::EmuDreamcast), 10},
-        {L("导入 PSP lpl文件"), "PSP · .lpl", static_cast<int>(enums::EmuPlatform::EmuPSP), 11},
-        {L("导入 PS1 lpl文件"), "PS1 · .lpl", static_cast<int>(enums::EmuPlatform::EmuPS1), 12},
-        {L("导入 Saturn lpl文件"), "Saturn · .lpl", static_cast<int>(enums::EmuPlatform::EmuSaturn), 13},
-        {L("导入 GC / Wii lpl文件"), "GC / Wii · .lpl", static_cast<int>(enums::EmuPlatform::EmuDolphin), 14},
-    };
-    for (const auto& platform : bundlePlatforms)
-    {
-        if (platform.externalPlatform >= 0 &&
-            !beiklive::path::externalCoreInstalled(platform.externalPlatform))
-            continue;
-        bundle.items.push_back({
-            platform.title,
-            L("选择 RetroArch playlists 目录中的对应文件"),
-            platform.badge,
-            material::DESCRIPTION,
-            [this, value = platform.platform]() {
-                if (!m_importing.load(std::memory_order_acquire))
-                    onSelectLpl(value);
-            },
-            nullptr,
-            false,
-        });
-    }
+    bundle.items.push_back({
+        L("导入 LPL 游戏列表"),
+        L("先选择游戏平台，再选择对应的 .lpl 文件"),
+        ".lpl",
+        material::DESCRIPTION,
+        [this]() {
+            if (!m_importing.load(std::memory_order_acquire))
+                openLplPlatformSelector();
+        },
+        nullptr,
+        false,
+    });
     tabs.push_back(std::move(bundle));
 
     // 从配置载入各机型的扫描路径。
@@ -1543,24 +1861,13 @@ void DataManagementPage::init()
     });
     scan.items.push_back({L("扫描子目录"), L("同时扫描所选目录下的所有子目录，请做好游戏目录分类，部分游戏后缀相同，可能导致导入错误"), "",
                           material::STORAGE, {}, &m_autoSubDir, false});
-    for (size_t i = 0; i < kScanPlatformCount; ++i) {
-        if (kScanPlatforms[i].externalPlatform >= 0 &&
-            !beiklive::path::externalCoreInstalled(kScanPlatforms[i].externalPlatform))
-            continue;
-        const std::string path = scanPathFor(static_cast<int>(i));
-        scan.items.push_back({
-            kScanPlatforms[i].name,
-            path.empty() ? L("未设置，点击选择扫描目录") : path,
-            L("选择目录"),
-            kScanPlatforms[i].icon,
-            [this, i]() {
-                if (!m_importing.load(std::memory_order_acquire))
-                    pickScanDir(static_cast<int>(i));
-            },
-            nullptr,
-            false,
-        });
-    }
+    scan.items.push_back({L("读取映射名称"), L("扫描时读取 name_mapping.cfg 中的自定义名称"), "",
+                          material::EDIT, {}, &m_useNameMapping, false});
+    scan.items.push_back({L("设置各平台游戏扫描目录"), L("按游戏平台管理各自的 ROM 扫描目录"), "管理",
+                          material::FOLDER, [this]() {
+                              if (!m_importing.load(std::memory_order_acquire))
+                                  openScanDirectoryManager();
+                          }, nullptr, false});
     tabs.push_back(std::move(scan));
     m_scanTabIndex = static_cast<int>(tabs.size()) - 1;
 
@@ -1980,6 +2287,69 @@ void DataManagementPage::finishWorker()
         m_importThread.join();
 }
 
+void DataManagementPage::openLplPlatformSelector()
+{
+    if (!m_mainCanvas)
+        return;
+    std::vector<DataManagementCanvas::ModalCard> cards;
+    cards.reserve(kScanPlatformCount);
+    for (size_t i = 0; i < kScanPlatformCount; ++i)
+    {
+        const auto& platform = kScanPlatforms[i];
+        if (platform.externalPlatform >= 0 &&
+            !beiklive::path::externalCoreInstalled(platform.externalPlatform))
+            continue;
+        cards.push_back({
+            platform.name,
+            {},
+            ".lpl",
+            material::DESCRIPTION,
+            [this, value = platform.platform]() {
+                if (m_mainCanvas)
+                    static_cast<DataManagementCanvas*>(m_mainCanvas)->CloseModal();
+                onSelectLpl(value);
+            },
+        });
+    }
+    static_cast<DataManagementCanvas*>(m_mainCanvas)->OpenModal(
+        L("选择游戏平台"), L("请选择与 LPL 游戏列表内容一致的平台"), std::move(cards));
+}
+
+void DataManagementPage::openScanDirectoryManager()
+{
+    if (!m_mainCanvas)
+        return;
+    std::vector<DataManagementCanvas::ModalCard> cards;
+    cards.reserve(kScanPlatformCount);
+    for (size_t i = 0; i < kScanPlatformCount; ++i)
+    {
+        const auto& platform = kScanPlatforms[i];
+        if (platform.externalPlatform >= 0 &&
+            !beiklive::path::externalCoreInstalled(platform.externalPlatform))
+            continue;
+        const std::string path = scanPathFor(static_cast<int>(i));
+        cards.push_back({
+            platform.name,
+            path.empty() ? L("未配置扫描目录") : path,
+            path.empty() ? L("未配置") : L("已配置"),
+            material::FOLDER,
+            [this, i]() {
+                if (!m_importing.load(std::memory_order_acquire))
+                {
+                    if (m_mainCanvas)
+                        static_cast<DataManagementCanvas*>(m_mainCanvas)->CloseModal();
+                    pickScanDir(static_cast<int>(i), [this]() {
+                        openScanDirectoryManager();
+                    });
+                }
+            },
+        });
+    }
+    static_cast<DataManagementCanvas*>(m_mainCanvas)->OpenModal(
+        L("设置各平台游戏扫描目录"),
+        L("选择平台后按 A 打开目录选择器，修改会立即保存"), std::move(cards));
+}
+
 void DataManagementPage::onSelectLpl(int platform)
 {
     auto* flPage = new beiklive::FileListPage();
@@ -2294,33 +2664,21 @@ void DataManagementPage::refreshScanTab()
     });
     items.push_back({L("扫描子目录"), L("同时扫描所选目录下的所有子目录，请做好游戏目录分类，部分游戏后缀相同，可能导致导入错误"), "",
                      material::STORAGE, {}, &m_autoSubDir, false});
-    for (size_t i = 0; i < kScanPlatformCount; ++i)
-    {
-        if (kScanPlatforms[i].externalPlatform >= 0 &&
-            !beiklive::path::externalCoreInstalled(kScanPlatforms[i].externalPlatform))
-            continue;
-        const std::string path = scanPathFor(static_cast<int>(i));
-        items.push_back({
-            kScanPlatforms[i].name,
-            path.empty() ? L("未设置，点击选择扫描目录") : path,
-            L("选择目录"),
-            kScanPlatforms[i].icon,
-            [this, i]() {
-                if (!m_importing.load(std::memory_order_acquire))
-                    pickScanDir(static_cast<int>(i));
-            },
-            nullptr,
-            false,
-        });
-    }
+    items.push_back({L("读取映射名称"), L("扫描时读取 name_mapping.cfg 中的自定义名称"), "",
+                     material::EDIT, {}, &m_useNameMapping, false});
+    items.push_back({L("设置各平台游戏扫描目录"), L("按游戏平台管理各自的 ROM 扫描目录"), "管理",
+                     material::FOLDER, [this]() {
+                         if (!m_importing.load(std::memory_order_acquire))
+                             openScanDirectoryManager();
+                     }, nullptr, false});
     canvas->UpdateTabItems(static_cast<size_t>(m_scanTabIndex), std::move(items));
 }
 
-void DataManagementPage::pickScanDir(int platformIndex)
+void DataManagementPage::pickScanDir(int platformIndex, std::function<void()> onChanged)
 {
     auto* flPage = new beiklive::FileListPage();
     flPage->setDirSelectionMode(true);
-    flPage->registerAction(L("选择目录"), brls::BUTTON_Y, [this, flPage, platformIndex](brls::View*) -> bool {
+    flPage->registerAction(L("选择目录"), brls::BUTTON_Y, [this, flPage, platformIndex, onChanged](brls::View*) -> bool {
         std::string dirPath = flPage->getHeader()->getPath();
         if (dirPath.empty())
             return true;
@@ -2328,6 +2686,8 @@ void DataManagementPage::pickScanDir(int platformIndex)
         brls::Application::popActivity(brls::TransitionAnimation::NONE);
         setScanPath(platformIndex, dirPath);
         refreshScanTab();
+        if (onChanged)
+            onChanged();
         return true;
     });
 
