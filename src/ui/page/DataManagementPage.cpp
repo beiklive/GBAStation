@@ -1,4 +1,5 @@
 #include "DataManagementPage.hpp"
+#include "core/Archive.hpp"
 #include "core/Translation.hpp"
 
 #include "ui/page/FileListPage.hpp"
@@ -1778,12 +1779,32 @@ struct ScanPlatformConfig
     int externalPlatform;
 };
 
+static bool archiveContainsPlatformRom(const fs::path& archivePath, int platform)
+{
+    using E = beiklive::enums::EmuPlatform;
+    for (const auto& member : beiklive::archive::list(archivePath)) {
+        std::string ext = member.name;
+        const auto dot = ext.find_last_of('.');
+        ext = dot == std::string::npos ? std::string() : ext.substr(dot + 1);
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if ((platform == static_cast<int>(E::EmuGBA) && ext == "gba") ||
+            (platform == static_cast<int>(E::EmuGBC) && ext == "gbc") ||
+            (platform == static_cast<int>(E::EmuGB) && ext == "gb") ||
+            (platform == static_cast<int>(E::EmuNES) && (ext == "nes" || ext == "fds")) ||
+            (platform == static_cast<int>(E::EmuSNES) && (ext == "sfc" || ext == "smc")) ||
+            (platform == static_cast<int>(E::EmuGenesis) && (ext == "md" || ext == "gen" || ext == "smd")))
+            return true;
+    }
+    return false;
+}
+
 const ScanPlatformConfig kScanPlatforms[] = {
-    {L("FC/NES"), beiklive::SettingKey::KEY_SCAN_PATH_NES,    {"nes", "fds"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuNES), -1},
-    {L("SFC"),    beiklive::SettingKey::KEY_SCAN_PATH_SNES,   {"sfc", "smc"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES), -1},
-    {L("GB"),     beiklive::SettingKey::KEY_SCAN_PATH_GB,     {"gb"},         material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGB), -1},
-    {L("GBC"),    beiklive::SettingKey::KEY_SCAN_PATH_GBC,    {"gbc"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC), -1},
-    {L("GBA"),    beiklive::SettingKey::KEY_SCAN_PATH_GBA,    {"gba"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA), -1},
+    {L("FC/NES"), beiklive::SettingKey::KEY_SCAN_PATH_NES,    {"nes", "fds", "zip", "7z"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuNES), -1},
+    {L("SFC"),    beiklive::SettingKey::KEY_SCAN_PATH_SNES,   {"sfc", "smc", "zip", "7z"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES), -1},
+    {L("GB"),     beiklive::SettingKey::KEY_SCAN_PATH_GB,     {"gb", "zip", "7z"},         material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGB), -1},
+    {L("GBC"),    beiklive::SettingKey::KEY_SCAN_PATH_GBC,    {"gbc", "zip", "7z"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC), -1},
+    {L("GBA"),    beiklive::SettingKey::KEY_SCAN_PATH_GBA,    {"gba", "zip", "7z"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA), -1},
     {L("NDS"),    beiklive::SettingKey::KEY_SCAN_PATH_NDS,    {"nds"},        material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS), 6},
     {L("3DS"),    beiklive::SettingKey::KEY_SCAN_PATH_3DS,    {"cci", "3ds"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS), 7},
     {L("Arcade"), beiklive::SettingKey::KEY_SCAN_PATH_ARCADE, {"zip", "7z"},  material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade), 9},
@@ -2482,6 +2503,15 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
                 continue;
             }
 
+            const std::string archiveExt = beiklive::tools::getFileExtension(romPath);
+            if ((archiveExt == "zip" || archiveExt == "7z") &&
+                !archiveContainsPlatformRom(fs::path(romPath), config.platform))
+            {
+                m_importSkipped.fetch_add(1, std::memory_order_relaxed);
+                m_progress.store(i + 1, std::memory_order_release);
+                continue;
+            }
+
             // 游戏库中已存在该 ROM：跳过，绝不覆盖用户已有的独立配置
             // （遮罩/着色器/显示/金手指/收藏/游玩统计等）。
             if (beiklive::GameDB->findByPath(romPath))
@@ -2843,6 +2873,10 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
     {
         const auto& romPath = roms[i];
         std::string path = romPath.string();
+        if ((beiklive::tools::getFileExtension(romPath) == "zip" ||
+             beiklive::tools::getFileExtension(romPath) == "7z") &&
+            !archiveContainsPlatformRom(romPath, platform))
+            continue;
         std::string romStem = romPath.stem().string();
         m_progress.store(startIndex + i + 1, std::memory_order_release);
 

@@ -344,7 +344,7 @@ bool MgbaNativeCore::SetupGame(beiklive::GameEntry gameEntry)
     }
 
     brls::Logger::debug("MgbaNativeCore: SetupGame begin");
-    if (!loadRom(m_gameEntry.path))
+    if (!loadRom(m_gameEntry.runtimePath.empty() ? m_gameEntry.path : m_gameEntry.runtimePath))
         return false;
 
     brls::Logger::debug("MgbaNativeCore: SetupGame loadRom ok");

@@ -119,6 +119,8 @@ namespace beiklive // 结构体
     struct GameEntry
     {
         std::string path = "";                                  // 游戏文件路径
+        // 非持久化运行文件路径。压缩包在 GamePage 解压后使用；path 始终保留压缩包身份。
+        std::string runtimePath = "";
         std::string title = "";                                 // 显示标题（默认为映射名）
         std::string threeDsTitleId = "";                        // 3DS Title ID（16位十六进制）
         int playCount = 0;                                      // 玩过的次数
@@ -173,6 +175,7 @@ namespace beiklive // 结构体
         std::string subText;  // 子标题
         std::string iconPath; // 图标路径
         std::string data;     // 额外数据（如游戏路径）
+        char32_t materialIcon = 0; // 可选 Material Icons 字形（非零时优先于图片）
     };
 
     typedef std::vector<ListItem> ListItemList; // 列表数据类型定义

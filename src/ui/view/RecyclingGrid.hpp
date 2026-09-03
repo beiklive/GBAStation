@@ -234,10 +234,14 @@ private:
     void _moveDown();
     void _moveLeft();
     void _moveRight();
+    void _movePageUp();
+    void _movePageDown();
     bool _tryMoveUp();
     bool _tryMoveDown();
     bool _tryMoveLeft();
     bool _tryMoveRight();
+    bool _tryMovePageUp();
+    bool _tryMovePageDown();
     void _captureInputState();
 
     void _drawItem(NVGcontext* vg, const GridDrawItem& item, float x, float y, float w, float h, bool focused, int idx);

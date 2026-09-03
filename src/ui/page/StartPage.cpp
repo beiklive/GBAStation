@@ -1134,6 +1134,17 @@ beiklive::enums::FileType platformToFileType(int platform)
                 entry.savePath = beiklive::tools::defaultGameSavePath(entry.platform, entry.path);
                 changed = true;
             }
+            if ((beiklive::tools::getFileExtension(entry.path) == "zip" ||
+                 beiklive::tools::getFileExtension(entry.path) == "7z") &&
+                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA) &&
+                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC) &&
+                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuGB) &&
+                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNES) &&
+                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES) &&
+                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)) {
+                brls::Application::notify(L("该压缩包平台暂不支持内置运行"));
+                return;
+            }
             if (entry.logoPath.empty()) {
                 entry.logoPath = beiklive::tools::getDefaultLogoPath(
                     static_cast<beiklive::enums::EmuPlatform>(entry.platform),

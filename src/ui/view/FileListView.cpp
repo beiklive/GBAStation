@@ -2,11 +2,35 @@
 #include "core/Translation.hpp"
 #include "core/PinyinTools.hpp"
 #include "ui/utils/GradientFocus.hpp"
+#include "ui/utils/MaterialIcons.hpp"
 
 #include <cctype>
 #include <unordered_map>
 
 namespace beiklive {
+
+namespace {
+std::string encodeMaterialIcon(char32_t codepoint)
+{
+    std::string out;
+    if (codepoint <= 0x7F) {
+        out.push_back(static_cast<char>(codepoint));
+    } else if (codepoint <= 0x7FF) {
+        out.push_back(static_cast<char>(0xC0 | (codepoint >> 6)));
+        out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else if (codepoint <= 0xFFFF) {
+        out.push_back(static_cast<char>(0xE0 | (codepoint >> 12)));
+        out.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    } else {
+        out.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+        out.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+    }
+    return out;
+}
+}
 
 FileListView::FileListView() {
     this->setFocusable(true);
@@ -314,8 +338,18 @@ void FileListView::drawItem(NVGcontext* vg, int index, float itemX, float itemY,
 
     }
 
-    // Icon
-    if (!item.iconPath.empty()) {
+    // Icon: archive/game entries use the bundled Material Icons font so they
+    // remain crisp at every scale. Custom artwork still takes precedence when
+    // no glyph was supplied.
+    if (item.materialIcon != 0) {
+        const std::string glyph = encodeMaterialIcon(item.materialIcon);
+        nvgFontFaceId(vg, brls::Application::getFont(brls::FONT_MATERIAL_ICONS));
+        nvgFontSize(vg, m_iconSize * 0.78f);
+        nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+        nvgFillColor(vg, textColor);
+        nvgText(vg, padX + m_iconSize * 0.5f, itemY + m_itemHeight * 0.5f,
+                glyph.c_str(), nullptr);
+    } else if (!item.iconPath.empty()) {
         int img = getCachedIcon(item.iconPath);
         if (img > 0) {
             NVGpaint paint = nvgImagePattern(vg, padX, itemY + padY,

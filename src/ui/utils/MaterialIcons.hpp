@@ -34,4 +34,6 @@ namespace beiklive::material
     constexpr char32_t SPORTS_ESPORTS     = 0xEAE2;
     constexpr char32_t VIDEOGAME_ASSET    = 0xEA1F;
     constexpr char32_t PHONE_ANDROID      = 0xE324;
+    constexpr char32_t ARCHIVE            = 0xE149;
+    constexpr char32_t FILE_GAME          = 0xE338;
 }

@@ -134,6 +134,7 @@ enum class PlatformFilter : int
         std::shared_ptr<std::atomic<bool>> m_aliveToken =
             std::make_shared<std::atomic<bool>>(true);
         std::atomic<uint64_t> m_reloadGeneration{0};
+        std::atomic<uint64_t> m_filterRequestGeneration{0};
         PreparedData m_deferredPreparedData;
         bool m_hasPresentedInitialData = false;
     };

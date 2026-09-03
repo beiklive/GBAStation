@@ -1,12 +1,16 @@
 #include "GamePage.hpp"
 #include "core/Translation.hpp"
 #include "core/Tools.hpp"
+#include "core/Archive.hpp"
 #include "core/GameSignal.hpp"
 #include "ui/utils/AnimationHelper.hpp"
 
 #include <borealis/views/dialog.hpp>
 
 #include <filesystem>
+#include <algorithm>
+#include <cctype>
+#include <cmath>
 
 namespace beiklive
 {
@@ -18,8 +22,150 @@ namespace beiklive
     static constexpr int EXIT_SAVE_TIMEOUT_MS = 8000; ///< 自动存档异常未回执时的最大等待时间
     static constexpr int EXIT_CLEANUP_DIALOG_DELAY_MS = 120; ///< 给退出清理对话框留出可见首帧
 
+    #undef ABSOLUTE
     namespace
     {
+        class ArchivePickerOverlay final : public brls::View
+        {
+        public:
+            std::function<void(int)> onPicked;
+
+            ArchivePickerOverlay()
+            {
+                setFocusable(true);
+                setVisibility(brls::Visibility::GONE);
+                setPositionType(brls::PositionType::ABSOLUTE);
+                setPositionTop(0.f); setPositionLeft(0.f);
+                setWidthPercentage(100.f); setHeightPercentage(100.f);
+                HIDE_BRLS_HIGHLIGHT(this);
+                auto nav = [this](brls::View*) -> bool { return m_open; };
+                registerAction("", brls::BUTTON_UP, nav, true, true, brls::SOUND_NONE);
+                registerAction("", brls::BUTTON_DOWN, nav, true, true, brls::SOUND_NONE);
+                registerAction("", brls::BUTTON_NAV_UP, nav, true, true, brls::SOUND_NONE);
+                registerAction("", brls::BUTTON_NAV_DOWN, nav, true, true, brls::SOUND_NONE);
+                registerAction(L("选择"), brls::BUTTON_A, [this](brls::View*) -> bool {
+                    if (!m_open) return false;
+                    if (m_loading) return true;
+                    m_loading = true;
+                    if (onPicked) onPicked(m_selected);
+                    return true;
+                }, false, false, brls::SOUND_NONE);
+                registerAction(L("取消"), brls::BUTTON_B, [this](brls::View*) -> bool {
+                    if (!m_open || m_loading) return false;
+                    finish(-1);
+                    return true;
+                }, false, false, brls::SOUND_NONE);
+            }
+
+            void open(std::string title, std::vector<archive::Entry> entries)
+            {
+                m_title = std::move(title); m_entries = std::move(entries);
+                m_selected = 0; m_open = true; m_loading = false; m_spinner = 0.f;
+                const auto& st = brls::Application::getControllerState();
+                m_prevUp = st.buttons[brls::BUTTON_UP] || st.buttons[brls::BUTTON_NAV_UP];
+                m_prevDown = st.buttons[brls::BUTTON_DOWN] || st.buttons[brls::BUTTON_NAV_DOWN];
+                setVisibility(brls::Visibility::VISIBLE);
+                brls::Application::giveFocus(this);
+            }
+            bool isOpen() const { return m_open; }
+            void close() { m_open = false; setVisibility(brls::Visibility::GONE); }
+            void finishLoading() { close(); }
+
+            void draw(NVGcontext* vg, float x, float y, float w, float h,
+                      brls::Style, brls::FrameContext*) override
+            {
+                if (!m_open || !vg) return;
+                const float panelW = std::min(860.f, w - 80.f);
+                const float rowH = 52.f;
+                const int visibleRows = std::min(9, static_cast<int>(m_entries.size()));
+                const float panelH = 94.f + visibleRows * rowH + 28.f;
+                const float px = x + (w - panelW) * .5f, py = y + (h - panelH) * .5f;
+                nvgSave(vg);
+                if (m_loading) {
+                    nvgBeginPath(vg); nvgRoundedRect(vg, px, py, panelW, panelH, 14.f);
+                    nvgFillColor(vg, nvgRGBA(30,30,30,255)); nvgFill(vg);
+                    nvgFontFaceId(vg, brls::Application::getDefaultFont());
+                    nvgFontSize(vg, 22.f); nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                    nvgFillColor(vg, nvgRGBA(245,245,245,255));
+                    nvgText(vg, px + panelW * .5f, py + panelH * .5f + 8.f,
+                            L("正在解压游戏，请稍候...").c_str(), nullptr);
+                    nvgBeginPath(vg);
+                    nvgArc(vg, px + panelW * .5f, py + panelH * .5f - 34.f, 15.f,
+                           m_spinner, m_spinner + 4.6f, NVG_SOLID);
+                    nvgStrokeColor(vg, nvgRGBA(0,122,204,255)); nvgStrokeWidth(vg, 4.f); nvgStroke(vg);
+                    nvgRestore(vg);
+                    return;
+                }
+                nvgBeginPath(vg); nvgRoundedRect(vg, px, py, panelW, panelH, 14.f);
+                nvgFillColor(vg, nvgRGBA(30,30,30,255)); nvgFill(vg);
+                nvgStrokeColor(vg, nvgRGBA(90,90,90,255)); nvgStrokeWidth(vg, 1.f); nvgStroke(vg);
+                int font = brls::Application::getDefaultFont();
+                nvgFontFaceId(vg, font); nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+                nvgFontSize(vg, 24.f); nvgFillColor(vg, nvgRGBA(245,245,245,255));
+                nvgText(vg, px + 26.f, py + 32.f, L("选择压缩包内的游戏").c_str(), nullptr);
+                nvgFontSize(vg, 14.f); nvgFillColor(vg, nvgRGBA(180,180,180,255));
+                nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+                nvgText(vg, px + panelW - 26.f, py + 32.f, m_title.c_str(), nullptr);
+                const int first = std::max(0, std::min(m_selected - visibleRows + 1,
+                    static_cast<int>(m_entries.size()) - visibleRows));
+                for (int row = 0; row < visibleRows; ++row) {
+                    const int i = first + row; const float ry = py + 76.f + row * rowH;
+                    const bool focused = i == m_selected;
+                    nvgBeginPath(vg); nvgRoundedRect(vg, px + 18.f, ry, panelW - 36.f, rowH - 6.f, 8.f);
+                    nvgFillColor(vg, focused ? nvgRGBA(0,122,204,220) : nvgRGBA(55,55,55,220)); nvgFill(vg);
+                    nvgFontSize(vg, 17.f); nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+                    nvgFillColor(vg, nvgRGBA(245,245,245,255));
+                    nvgText(vg, px + 34.f, ry + (rowH - 6.f) * .5f, m_entries[i].name.c_str(), nullptr);
+                }
+                nvgRestore(vg);
+            }
+
+            void frame(brls::FrameContext* ctx) override
+            {
+                brls::View::frame(ctx);
+                if (!m_open) return;
+                if (m_loading) {
+                    m_spinner += 0.12f;
+                    invalidate();
+                    return;
+                }
+                const auto& st = brls::Application::getControllerState();
+                const bool up = st.buttons[brls::BUTTON_UP] || st.buttons[brls::BUTTON_NAV_UP];
+                const bool down = st.buttons[brls::BUTTON_DOWN] || st.buttons[brls::BUTTON_NAV_DOWN];
+                if (up && !m_prevUp && m_selected > 0) --m_selected;
+                if (down && !m_prevDown && m_selected + 1 < static_cast<int>(m_entries.size())) ++m_selected;
+                m_prevUp = up; m_prevDown = down;
+            }
+
+        private:
+            void finish(int result) { auto cb = onPicked; close(); if (cb) cb(result); }
+            bool m_open = false, m_loading = false; int m_selected = 0; float m_spinner = 0.f; std::string m_title;
+            std::vector<archive::Entry> m_entries;
+            bool m_prevUp = false, m_prevDown = false;
+        };
+
+        bool isArchivePlatform(int platform)
+        {
+            using E = beiklive::enums::EmuPlatform;
+            return platform == static_cast<int>(E::EmuGBA) || platform == static_cast<int>(E::EmuGBC) ||
+                   platform == static_cast<int>(E::EmuGB) || platform == static_cast<int>(E::EmuNES) ||
+                   platform == static_cast<int>(E::EmuSNES) || platform == static_cast<int>(E::EmuGenesis);
+        }
+
+        bool memberMatchesPlatform(const std::string& name, int platform)
+        {
+            std::string ext = std::filesystem::path(name).extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            using E = beiklive::enums::EmuPlatform;
+            if (platform == static_cast<int>(E::EmuGBA)) return ext == ".gba";
+            if (platform == static_cast<int>(E::EmuGBC)) return ext == ".gbc";
+            if (platform == static_cast<int>(E::EmuGB)) return ext == ".gb";
+            if (platform == static_cast<int>(E::EmuNES)) return ext == ".nes" || ext == ".fds";
+            if (platform == static_cast<int>(E::EmuSNES)) return ext == ".sfc" || ext == ".smc";
+            if (platform == static_cast<int>(E::EmuGenesis)) return ext == ".md" || ext == ".gen" || ext == ".smd";
+            return false;
+        }
+
         bool isMgbaPlatform(int platform)
         {
             using beiklive::enums::EmuPlatform;
@@ -72,6 +218,9 @@ namespace beiklive
 
     GamePage::~GamePage()
     {
+        if (!m_archiveTempPath.empty()) {
+            std::error_code ec; std::filesystem::remove(m_archiveTempPath, ec);
+        }
         brls::Logger::debug("GamePage destructor called for game: " + m_gameEntry.title);
     }
 
@@ -298,9 +447,13 @@ namespace beiklive
         // Gambatte 通过通用 GameView 驱动 libretro 帧和渲染链。
         const bool useMgbaView = isMgbaPlatform(m_gameEntry.platform) &&
                                  m_gameEntry.core != "gambatte";
+        // Keep the archive path in GameView so titles, saves, thumbnails and
+        // database updates continue to use the archive identity. The selected
+        // temp ROM is carried separately in GameEntry::runtimePath and is only
+        // consumed by the emulator core during SetupGame().
         m_gameView = useMgbaView
-            ? static_cast<GameViewBase*>(new MgbaGameView(m_gameEntry))
-            : static_cast<GameViewBase*>(new GameView(m_gameEntry));
+            ? static_cast<GameViewBase*>(new MgbaGameView(m_runtimeGameEntry))
+            : static_cast<GameViewBase*>(new GameView(m_runtimeGameEntry));
         m_gameView->setWidthPercentage(100.f);
         m_gameView->setHeightPercentage(100.f);
         // m_gameView->setBackgroundColor(nvgRGBA(114, 187, 255, 255)); // 设置游戏视图背景为黑色
@@ -547,6 +700,8 @@ namespace beiklive
 
     void GamePage::_setupGame()
     {
+        if (!_prepareArchiveGame())
+            return;
         PageInit();
         GameViewInitialize();
         GameMenuInitialize();
@@ -568,6 +723,51 @@ namespace beiklive
     {
         if (!m_gameView)
             _setupGame();
+    }
+
+    bool GamePage::_prepareArchiveGame()
+    {
+        if (m_archivePrepared) return true;
+        m_runtimeGameEntry = m_gameEntry;
+        if (!archive::isArchive(m_gameEntry.path)) { m_archivePrepared = true; return true; }
+        if (!isArchivePlatform(m_gameEntry.platform)) {
+            brls::Application::notify(L("该平台暂不支持压缩包运行"));
+            return false;
+        }
+        std::vector<archive::Entry> candidates;
+        for (const auto& e : archive::list(m_gameEntry.path))
+            if (memberMatchesPlatform(e.name, m_gameEntry.platform)) candidates.push_back(e);
+        if (candidates.empty()) {
+            brls::Application::notify(L("压缩包内没有匹配当前平台的游戏文件"));
+            return false;
+        }
+        auto extractArchive = [this, candidates](int index, ArchivePickerOverlay* picker) {
+            if (index < 0 || index >= static_cast<int>(candidates.size())) {
+                // 取消压缩包选择时，走项目统一的页面返回链路，恢复
+                // 启动前页面及其焦点状态，而不是直接弹出 Borealis Activity。
+                brls::delay(0, [this]() { beiklive::popActivity(this, false); });
+                return;
+            }
+            brls::delay(60, [this, candidates, index, picker]() {
+                const auto ext = std::filesystem::path(candidates[index].name).extension().string();
+                m_archiveTempPath = (std::filesystem::path(beiklive::path::cachePath()) / ("temp" + ext)).string();
+                if (!archive::extract(m_gameEntry.path, candidates[index].name, m_archiveTempPath)) {
+                    brls::Application::notify(L("解压游戏失败"));
+                    if (picker) picker->close();
+                    return;
+                }
+                if (picker) picker->close();
+                m_runtimeGameEntry.runtimePath = m_archiveTempPath;
+                m_archivePrepared = true;
+                _setupGame();
+            });
+        };
+        if (candidates.size() == 1) { extractArchive(0, nullptr); return false; }
+        auto* picker = new ArchivePickerOverlay();
+        picker->onPicked = [extractArchive, picker](int index) { extractArchive(index, picker); };
+        getContentBox()->addView(picker);
+        picker->open(std::filesystem::path(m_gameEntry.path).filename().string(), std::move(candidates));
+        return false;
     }
 
     void GamePage::_finishExitAndPop()

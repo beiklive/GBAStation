@@ -711,6 +711,61 @@ void GameGridView::_moveRight()
     }
 }
 
+bool GameGridView::_tryMovePageUp()
+{
+    if (m_viewMode != ViewMode::LIST || m_items.empty())
+        return false;
+    const int visible = std::max(1, static_cast<int>(std::floor(
+        _getViewportHeight() / _getRowHeight())));
+    const int step = std::max(1, visible - 1);
+    const int next = std::max(0, m_selectedIndex - step);
+    if (next == m_selectedIndex)
+        return false;
+    m_selectedIndex = next;
+    m_preferredColumn = 0;
+    return true;
+}
+
+bool GameGridView::_tryMovePageDown()
+{
+    if (m_viewMode != ViewMode::LIST || m_items.empty())
+        return false;
+    const int visible = std::max(1, static_cast<int>(std::floor(
+        _getViewportHeight() / _getRowHeight())));
+    const int step = std::max(1, visible - 1);
+    const int next = std::min(static_cast<int>(m_items.size()) - 1,
+                              m_selectedIndex + step);
+    if (next == m_selectedIndex)
+        return false;
+    m_selectedIndex = next;
+    m_preferredColumn = 0;
+    return true;
+}
+
+void GameGridView::_movePageUp()
+{
+    if (_tryMovePageUp()) {
+        m_focusMoved = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+    } else {
+        m_shakeTime = 0.3f;
+        m_shakeDir = -1.f;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
+    }
+}
+
+void GameGridView::_movePageDown()
+{
+    if (_tryMovePageDown()) {
+        m_focusMoved = true;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
+    } else {
+        m_shakeTime = 0.3f;
+        m_shakeDir = 1.f;
+        brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_ERROR);
+    }
+}
+
 void GameGridView::_updateVisibleRange()
 {
     if (m_items.empty()) return;
@@ -1216,7 +1271,10 @@ void GameGridView::_handleInput(float dt)
     if (leftNow && !m_prevLeft) {
         m_holdLeftTime = 0.f;
         m_holdLeftRepeat = 0.f;
-        _moveLeft();
+        if (m_viewMode == ViewMode::LIST)
+            _movePageUp();
+        else
+            _moveLeft();
     }
     if (leftNow) {
         m_holdLeftTime += dt;
@@ -1225,7 +1283,9 @@ void GameGridView::_handleInput(float dt)
             float interval = m_holdLeftTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
             while (m_holdLeftRepeat >= interval) {
                 m_holdLeftRepeat -= interval;
-                if (_tryMoveLeft()) {
+                const bool moved = m_viewMode == ViewMode::LIST
+                    ? _tryMovePageUp() : _tryMoveLeft();
+                if (moved) {
                     m_focusMoved = true;
                     brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
                 }
@@ -1238,7 +1298,10 @@ void GameGridView::_handleInput(float dt)
     if (rightNow && !m_prevRight) {
         m_holdRightTime = 0.f;
         m_holdRightRepeat = 0.f;
-        _moveRight();
+        if (m_viewMode == ViewMode::LIST)
+            _movePageDown();
+        else
+            _moveRight();
     }
     if (rightNow) {
         m_holdRightTime += dt;
@@ -1247,7 +1310,9 @@ void GameGridView::_handleInput(float dt)
             float interval = m_holdRightTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
             while (m_holdRightRepeat >= interval) {
                 m_holdRightRepeat -= interval;
-                if (_tryMoveRight()) {
+                const bool moved = m_viewMode == ViewMode::LIST
+                    ? _tryMovePageDown() : _tryMoveRight();
+                if (moved) {
                     m_focusMoved = true;
                     brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
                 }
@@ -1328,7 +1393,10 @@ void GameGridView::_handleInput(float dt)
     if (stickLeft && !m_prevStickLeft) {
         m_holdLeftTime = 0.f;
         m_holdLeftRepeat = 0.f;
-        _moveLeft();
+        if (m_viewMode == ViewMode::LIST)
+            _movePageUp();
+        else
+            _moveLeft();
     }
     if (stickLeft) {
         m_holdLeftTime += dt;
@@ -1337,7 +1405,9 @@ void GameGridView::_handleInput(float dt)
             float interval = m_holdLeftTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
             while (m_holdLeftRepeat >= interval) {
                 m_holdLeftRepeat -= interval;
-                if (_tryMoveLeft()) {
+                const bool moved = m_viewMode == ViewMode::LIST
+                    ? _tryMovePageUp() : _tryMoveLeft();
+                if (moved) {
                     m_focusMoved = true;
                     brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
                 }
@@ -1349,7 +1419,10 @@ void GameGridView::_handleInput(float dt)
     if (stickRight && !m_prevStickRight) {
         m_holdRightTime = 0.f;
         m_holdRightRepeat = 0.f;
-        _moveRight();
+        if (m_viewMode == ViewMode::LIST)
+            _movePageDown();
+        else
+            _moveRight();
     }
     if (stickRight) {
         m_holdRightTime += dt;
@@ -1358,7 +1431,9 @@ void GameGridView::_handleInput(float dt)
             float interval = m_holdRightTime > HOLD_ACCEL_TIME ? HOLD_REPEAT_FAST : HOLD_REPEAT;
             while (m_holdRightRepeat >= interval) {
                 m_holdRightRepeat -= interval;
-                if (_tryMoveRight()) {
+                const bool moved = m_viewMode == ViewMode::LIST
+                    ? _tryMovePageDown() : _tryMoveRight();
+                if (moved) {
                     m_focusMoved = true;
                     brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_SIDEBAR);
                 }
@@ -2354,6 +2429,10 @@ void GameGridView::_drawFooter(NVGcontext* vg, float x, float y, float w, float 
     drawRightAlignedHint(brls::BUTTON_X, L("多选").c_str());
     drawRightAlignedHint(brls::BUTTON_RT, L("搜索").c_str());
     drawRightAlignedHint(brls::BUTTON_LT, L("排序").c_str());
+    if (m_viewMode == ViewMode::LIST) {
+        drawRightAlignedHint(brls::BUTTON_LEFT, L("上翻一页").c_str());
+        drawRightAlignedHint(brls::BUTTON_RIGHT, L("下翻一页").c_str());
+    }
 }
 
 void GameGridView::_drawDetailsPanel(NVGcontext* vg, float x, float y,

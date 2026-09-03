@@ -68,6 +68,14 @@ bool isLibraryRomType(beiklive::enums::FileType type)
 		   type == beiklive::enums::FileType::DOLPHIN_ROM;
 }
 
+bool isEmbeddedArchivePlatform(int platform)
+{
+    using E = beiklive::enums::EmuPlatform;
+    return platform == static_cast<int>(E::EmuGBA) || platform == static_cast<int>(E::EmuGBC) ||
+           platform == static_cast<int>(E::EmuGB) || platform == static_cast<int>(E::EmuNES) ||
+           platform == static_cast<int>(E::EmuSNES) || platform == static_cast<int>(E::EmuGenesis);
+}
+
 std::optional<std::string> parseDirectLaunchRom(int argc, char* argv[])
 {
 	for (int i = 1; i < argc; ++i)
@@ -204,10 +212,29 @@ void ensureDirectGameDbEntry(const std::string& romPath, beiklive::enums::FileTy
 bool launchDirectGameActivity(const std::string& romPath)
 {
 	const auto fileType = beiklive::tools::getFileType(romPath);
-	if (!isLibraryRomType(fileType))
+	const bool isArchive = fileType == beiklive::enums::FileType::ZIP_FILE;
+	if (!isLibraryRomType(fileType) && !isArchive)
 	{
 		brls::Logger::error("Direct launch path is not a supported ROM: {}", romPath);
 		return false;
+	}
+
+	if (isArchive)
+	{
+		// A forwarder contains only the ROM path. Its database entry retains the
+		// platform selected at installation time, so GamePage can handle the archive.
+		auto entry = beiklive::GameDB ? beiklive::GameDB->findByPath(romPath) : std::nullopt;
+		if (!entry || !isEmbeddedArchivePlatform(entry->platform))
+		{
+			brls::Logger::error("Direct archive launch has no supported embedded platform: {}", romPath);
+			return false;
+		}
+		auto* gamePage = new beiklive::GamePage(*entry, true);
+		auto* frame = new brls::AppletFrame(gamePage);
+		HIDE_BRLS_BAR(frame);
+		brls::Application::pushActivity(new brls::Activity(frame), brls::TransitionAnimation::NONE);
+		gamePage->startGame();
+		return true;
 	}
 
 	ensureDirectGameDbEntry(romPath, fileType);

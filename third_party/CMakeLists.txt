@@ -132,6 +132,10 @@ if (PLATFORM_SWITCH)
     set(USE_SQLITE3     OFF CACHE BOOL "" FORCE)
 endif ()
 
+# The frontend archive adapter reuses mGBA's vendored 7-Zip LZMA SDK on every
+# target, including LIBMGBA_ONLY Switch builds.
+set(USE_LZMA ON CACHE BOOL "Enable mGBA 7-Zip support" FORCE)
+
 set(BUILD_PERF     OFF CACHE BOOL "" FORCE)
 set(BUILD_TEST     OFF CACHE BOOL "" FORCE)
 set(BUILD_SUITE    OFF CACHE BOOL "" FORCE)

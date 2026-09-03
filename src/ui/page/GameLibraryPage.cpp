@@ -869,6 +869,9 @@ namespace beiklive
 
         m_libraryView->registerAction(L("切换视图"), brls::BUTTON_Y, [this](brls::View*) -> bool {
             if (m_isClosing || m_libraryView->isDeleteAnimationRunning()) return true;
+            // A pending filter query may finish after this input event. It must
+            // not open a stale selector on top of the newly selected view.
+            ++m_filterRequestGeneration;
             m_libraryView->toggleViewMode();
             SET_SETTING_KEY_INT(beiklive::SettingKey::KEY_UI_LIBRARY_VIEW_MODE,
                 m_libraryView->getViewMode() == GameGridView::ViewMode::LIST ? 1 : 0);
@@ -1228,8 +1231,10 @@ namespace beiklive
     void GameLibraryPage::_showFilterDropdown()
     {
         auto alive = m_aliveToken;
-        ThreadPool::instance().enqueue([this, alive]() {
-            if (!alive->load()) return;
+        const uint64_t requestGeneration = ++m_filterRequestGeneration;
+        ThreadPool::instance().enqueue([this, alive, requestGeneration]() {
+            if (!alive->load() || m_filterRequestGeneration.load() != requestGeneration)
+                return;
             auto ae = beiklive::GameDB ? beiklive::GameDB->getAll() : std::vector<beiklive::GameEntry>{};
             bool hG = false, hC = false, hB = false, hN = false, hS = false, hD = false, h3 = false;
             bool hMD = false, hArcade = false, hDc = false, hPsp = false, hPs1 = false, hSaturn = false, hDolphin = false;
@@ -1254,8 +1259,9 @@ namespace beiklive
                     default: break;
                 }
             }
-            brls::sync([this, alive, hG, hC, hB, hN, hS, hD, h3, hMD, hArcade, hDc, hPsp, hPs1, hSaturn, hDolphin, favCount]() {
-                if (!alive->load()) return;
+            brls::sync([this, alive, requestGeneration, hG, hC, hB, hN, hS, hD, h3, hMD, hArcade, hDc, hPsp, hPs1, hSaturn, hDolphin, favCount]() {
+                if (!alive->load() || m_filterRequestGeneration.load() != requestGeneration)
+                    return;
                 std::vector<std::string> opts;
                 std::vector<PlatformFilter> map;
                 opts.push_back(L("所有")); map.push_back(PlatformFilter::ALL);

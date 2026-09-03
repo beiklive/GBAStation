@@ -65,7 +65,8 @@ bool GenesisCore::SetupGame(beiklive::GameEntry gameEntry)
         return false;
     }
 
-    if (m_gameEntry.path.empty() || !std::filesystem::exists(m_gameEntry.path))
+    const std::string& runtimePath = m_gameEntry.runtimePath.empty() ? m_gameEntry.path : m_gameEntry.runtimePath;
+    if (runtimePath.empty() || !std::filesystem::exists(runtimePath))
     {
         brls::Logger::error("GenesisCore: ROM not found: {}", m_gameEntry.path);
         return false;
@@ -82,7 +83,7 @@ bool GenesisCore::SetupGame(beiklive::GameEntry gameEntry)
     applyConfig();
     system_hw = 0;
 
-    std::vector<char> mutablePath(m_gameEntry.path.begin(), m_gameEntry.path.end());
+    std::vector<char> mutablePath(runtimePath.begin(), runtimePath.end());
     mutablePath.push_back('\0');
     if (load_rom(mutablePath.data()) <= 0 || system_hw != SYSTEM_MD)
     {

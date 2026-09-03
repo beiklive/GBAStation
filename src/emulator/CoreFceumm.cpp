@@ -148,12 +148,13 @@ bool CoreFceumm::SetupGame(beiklive::GameEntry GameEntry)
 {
     m_gameEntry = std::move(GameEntry);
     m_lastError.clear();
-    if (!_checkFdsBios(m_gameEntry.path))
+    const std::string& runtimePath = m_gameEntry.runtimePath.empty() ? m_gameEntry.path : m_gameEntry.runtimePath;
+    if (!_checkFdsBios(runtimePath))
         return false;
     _initConfig();
     if (_loadCore())
     {
-        if (_loadRom(m_gameEntry.path))
+        if (_loadRom(runtimePath))
         {
             m_core.reset();
             _loadSram();

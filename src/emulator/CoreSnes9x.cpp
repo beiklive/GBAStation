@@ -14,7 +14,7 @@ bool CoreSnes9x::SetupGame(beiklive::GameEntry GameEntry)
     _initConfig();
     if (_loadCore())
     {
-        if (_loadRom(m_gameEntry.path))
+        if (_loadRom(m_gameEntry.runtimePath.empty() ? m_gameEntry.path : m_gameEntry.runtimePath))
         {
             m_core.reset();
             _loadSram();

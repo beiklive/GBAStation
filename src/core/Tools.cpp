@@ -199,15 +199,7 @@ std::vector<int> candidatePlatformsForExtension(const std::string& ext)
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuGB),
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuNES),
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS),
-                static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin)};
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)};
     }
     return {};
 }

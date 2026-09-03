@@ -207,6 +207,8 @@ include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz)
 include_directories(AFTER ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mongoose)
 file(GLOB_RECURSE MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+list(APPEND MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/core/Archive.cpp)
+list(REMOVE_DUPLICATES MAIN_SRC)
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/emulator/melonds/.*")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/emulator/genesis/.*")
 list(FILTER MAIN_SRC EXCLUDE REGEX ".*/src/game/mgba/.*")
@@ -358,6 +360,7 @@ if (TARGET snes9x2005_core)
 endif()
 if (TARGET mgba)
     target_link_libraries(${PROJECT_NAME} PRIVATE mgba)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE USE_LZMA)
     target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/mgba/include
         ${CMAKE_BINARY_DIR}/third_party/mgba/include

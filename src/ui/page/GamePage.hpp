@@ -36,10 +36,14 @@ namespace beiklive
         void _showExitCleanupDialogThenPop();
 
         void _setupGame();
+        bool _prepareArchiveGame();
 
 
         beiklive::DirListData m_gameData;
         beiklive::GameEntry m_gameEntry;                          // 游戏条目数据，包含路径、标题等信息
+        beiklive::GameEntry m_runtimeGameEntry;                   // 传给核心的实际 ROM 路径（压缩包会是 temp.xxx）
+        std::string m_archiveTempPath;
+        bool m_archivePrepared = false;
         GameViewBase *m_gameView               = nullptr;         // 游戏视图实例，负责游戏的渲染显示和输入处理
         GameMenuView *m_gameMenuView           = nullptr;         // 游戏菜单视图实例，负责游戏菜单的渲染显示和输入处理
         RewindSelectorView *m_rewindSelectorView = nullptr;       // 可视化倒带选择界面（显示倒带缩略图列表）
