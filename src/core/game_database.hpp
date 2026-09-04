@@ -70,10 +70,12 @@ namespace beiklive
         // ── 通用字段访问接口（基于 JSON 中间层，方便新增字段无需修改调用代码）──
 
         /// 通过 crc32 设置游戏条目的某个字段（支持 GameEntry 中的所有 JSON 字段名）
-        bool set(int crc32, const std::string &key, const nlohmann::json &value);
+        bool set(int crc32, const std::string &key, const nlohmann::json &value,
+                 bool triggerAutoSave = true);
 
         /// 通过文件路径设置游戏条目的某个字段
-        bool set(const std::string &path, const std::string &key, const nlohmann::json &value);
+        bool set(const std::string &path, const std::string &key, const nlohmann::json &value,
+                 bool triggerAutoSave = true);
 
         /// 通过 crc32 获取游戏条目的某个字段，不存在则返回 defaultValue
         nlohmann::json get(int crc32, const std::string &key, const nlohmann::json &defaultValue = nullptr) const;

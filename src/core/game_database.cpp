@@ -682,7 +682,8 @@ namespace beiklive
 
     // ── 通用字段访问接口实现 ──────────────────────────────────────────────────
 
-    bool GameDatabase::set(int crc32, const std::string &key, const nlohmann::json &value)
+    bool GameDatabase::set(int crc32, const std::string &key, const nlohmann::json &value,
+                           bool triggerAutoSave)
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         auto it = crc32Index_.find(crc32);
@@ -700,11 +701,15 @@ namespace beiklive
         {
             return false;
         }
-        markDirtyAndAutoSave();
+        if (triggerAutoSave)
+            markDirtyAndAutoSave();
+        else
+            dirty_ = true;
         return true;
     }
 
-    bool GameDatabase::set(const std::string &path, const std::string &key, const nlohmann::json &value)
+    bool GameDatabase::set(const std::string &path, const std::string &key, const nlohmann::json &value,
+                           bool triggerAutoSave)
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         auto it = pathIndex_.find(path);
@@ -722,7 +727,10 @@ namespace beiklive
         {
             return false;
         }
-        markDirtyAndAutoSave();
+        if (triggerAutoSave)
+            markDirtyAndAutoSave();
+        else
+            dirty_ = true;
         return true;
     }
 

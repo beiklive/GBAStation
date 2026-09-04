@@ -56,6 +56,7 @@ namespace beiklive
 
             /// 向画面设置页追加由具体游戏视图拥有的平台专属控件。
             void addCoreDisplaySettingView(brls::View* view);
+            void requestConfigSave();
 
             /// 画面设置回调
             void setDisplayModeCallback(std::function<void(const std::string&)> cb) { m_displayModeCallback = std::move(cb); }
@@ -93,6 +94,8 @@ namespace beiklive
             std::function<void(float, float, float)> m_customScaleCallback; ///< custom x/y/scale 变更回调
             std::function<void(bool)> m_overlayToggleCallback;        ///< 遮罩开关回调
             std::function<void(const std::string&)> m_overlayPathCallback; ///< 遮罩路径变更回调
+            size_t m_configSaveDelayId = 0;
+            bool m_configSavePending = false;
 
             beiklive::TabFrame* m_panel = nullptr;
             brls::Label* m_title = nullptr;

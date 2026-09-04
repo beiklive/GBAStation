@@ -414,6 +414,24 @@ namespace beiklive
 
     GameMenuView::~GameMenuView()
     {
+        if (m_configSaveDelayId)
+            brls::cancelDelay(m_configSaveDelayId);
+        if (m_configSavePending && beiklive::SettingManager)
+            beiklive::SettingManager->Save();
+    }
+
+    void GameMenuView::requestConfigSave()
+    {
+        m_configSavePending = true;
+        if (m_configSaveDelayId)
+            brls::cancelDelay(m_configSaveDelayId);
+        m_configSaveDelayId = brls::delay(180, [this]() {
+            m_configSaveDelayId = 0;
+            if (!m_configSavePending || !beiklive::SettingManager)
+                return;
+            m_configSavePending = false;
+            beiklive::SettingManager->Save();
+        });
     }
 
     void GameMenuView::addCoreDisplaySettingView(brls::View* view)
@@ -1715,9 +1733,12 @@ namespace beiklive
             ffCell->setText(L("快进倍率"));
             ffCell->setOptions(ffLabels, ffIdx);
             ffCell->setOnSelect(
-                [](int i) {
+                [this](int i) {
                     static const float vals[] = {0.1f, 0.5f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f};
-                    if (i >= 0 && i < 15) SET_SETTING_KEY_FLOAT("fastforward.multiplier", vals[i]);
+                    if (i >= 0 && i < 15 && beiklive::SettingManager) {
+                        beiklive::SettingManager->Set("fastforward.multiplier", beiklive::ConfigValue(vals[i]));
+                        requestConfigSave();
+                    }
                 });
             box->addView(ffCell);
             box->addView(makeHint(L("小于1倍时可在快进触发时实现慢动作效果")));
@@ -1740,9 +1761,10 @@ namespace beiklive
                 solarCell->setText(L("太阳传感器等级"));
                 solarCell->setOptions(solarLabels, curSolar);
                 solarCell->setOnSelect(
-                    [](int idx) {
-                        if (idx >= 0 && idx <= 10) {
-                            SET_SETTING_KEY_STR("core.mgba_solar_sensor_level", std::to_string(idx));
+                    [this](int idx) {
+                        if (idx >= 0 && idx <= 10 && beiklive::SettingManager) {
+                            beiklive::SettingManager->Set("core.mgba_solar_sensor_level", beiklive::ConfigValue(std::to_string(idx)));
+                            requestConfigSave();
                             GameSignal::instance().requestConfigUpdate();
                         }
                     });
@@ -1891,11 +1913,11 @@ namespace beiklive
 
             auto closeAct = [this](brls::View *)
             {
-                beiklive::GameDB->set(m_gameEntry.path, "shaderEnabled", nlohmann::json(m_gameEntry.shaderEnabled));
-                beiklive::GameDB->set(m_gameEntry.path, "shaderPath", nlohmann::json(m_gameEntry.shaderPath));
-                beiklive::GameDB->set(m_gameEntry.path, "shaderParaPath", nlohmann::json(m_gameEntry.shaderParaPath));
-                beiklive::GameDB->set(m_gameEntry.path, "shaderParaNames", nlohmann::json(m_gameEntry.shaderParaNames));
-                beiklive::GameDB->set(m_gameEntry.path, "shaderParaValues", nlohmann::json(m_gameEntry.shaderParaValues));
+                beiklive::GameDB->set(m_gameEntry.path, "shaderEnabled", nlohmann::json(m_gameEntry.shaderEnabled), false);
+                beiklive::GameDB->set(m_gameEntry.path, "shaderPath", nlohmann::json(m_gameEntry.shaderPath), false);
+                beiklive::GameDB->set(m_gameEntry.path, "shaderParaPath", nlohmann::json(m_gameEntry.shaderParaPath), false);
+                beiklive::GameDB->set(m_gameEntry.path, "shaderParaNames", nlohmann::json(m_gameEntry.shaderParaNames), false);
+                beiklive::GameDB->set(m_gameEntry.path, "shaderParaValues", nlohmann::json(m_gameEntry.shaderParaValues), false);
                 beiklive::GameDB->flush();
 
                 {

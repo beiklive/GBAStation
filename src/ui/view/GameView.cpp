@@ -203,6 +203,10 @@ namespace beiklive
 
     GameView::~GameView()
     {
+        if (m_displaySettingsSaveDelayId)
+            brls::cancelDelay(m_displaySettingsSaveDelayId);
+        if (m_displaySettingsSavePending)
+            _flushDisplaySettings();
         brls::Logger::debug("[GameView] destructor: platform={}, path={}",
             m_gameEntry.platform, m_gameEntry.path);
 #ifdef __SWITCH__
@@ -3319,8 +3323,8 @@ namespace beiklive
         // 持久化画面模式到数据库
         if (beiklive::GameDB && !m_gameEntry.path.empty()) {
             beiklive::GameDB->set(m_gameEntry.path, "displayMode",
-                nlohmann::json(m_gameEntry.displayMode));
-            beiklive::GameDB->flush();
+                nlohmann::json(m_gameEntry.displayMode), false);
+            _scheduleDisplaySettingsSave();
         }
     }
 
@@ -3330,8 +3334,8 @@ namespace beiklive
 
         if (beiklive::GameDB && !m_gameEntry.path.empty()) {
             beiklive::GameDB->set(m_gameEntry.path, "integerAspectRatio",
-                nlohmann::json(static_cast<float>(scale)));
-            beiklive::GameDB->flush();
+                nlohmann::json(static_cast<float>(scale)), false);
+            _scheduleDisplaySettingsSave();
         }
     }
 
@@ -3344,13 +3348,32 @@ namespace beiklive
         // 持久化自定义值到数据库
         if (beiklive::GameDB && !m_gameEntry.path.empty()) {
             beiklive::GameDB->set(m_gameEntry.path, "customOffsetX",
-                nlohmann::json(static_cast<double>(x)));
+                nlohmann::json(static_cast<double>(x)), false);
             beiklive::GameDB->set(m_gameEntry.path, "customOffsetY",
-                nlohmann::json(static_cast<double>(y)));
+                nlohmann::json(static_cast<double>(y)), false);
             beiklive::GameDB->set(m_gameEntry.path, "customScale",
-                nlohmann::json(static_cast<double>(scale)));
-            beiklive::GameDB->flush();
+                nlohmann::json(static_cast<double>(scale)), false);
+            _scheduleDisplaySettingsSave();
         }
+    }
+
+    void GameView::_scheduleDisplaySettingsSave()
+    {
+        m_displaySettingsSavePending = true;
+        if (m_displaySettingsSaveDelayId)
+            brls::cancelDelay(m_displaySettingsSaveDelayId);
+        m_displaySettingsSaveDelayId = brls::delay(180, [this]() {
+            m_displaySettingsSaveDelayId = 0;
+            _flushDisplaySettings();
+        });
+    }
+
+    void GameView::_flushDisplaySettings()
+    {
+        if (!m_displaySettingsSavePending || !beiklive::GameDB || m_gameEntry.path.empty())
+            return;
+        m_displaySettingsSavePending = false;
+        beiklive::GameDB->flush();
     }
 
     void GameView::_onOverlayToggle(bool enabled)
