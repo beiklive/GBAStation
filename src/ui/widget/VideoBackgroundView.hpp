@@ -37,6 +37,8 @@ namespace beiklive
         // Used while an emulator core owns CPU time. The decoded texture is
         // retained, but the worker stops filling frames until UI resumes.
         static void setSharedPlaybackPaused(bool paused);
+        /// Stops/restarts the shared background audio output around GamePage.
+        static void setSharedAudioSuspended(bool suspended);
         void frame(brls::FrameContext* ctx) override;
         void draw(NVGcontext* vg, float x, float y, float width, float height,
                   brls::Style style, brls::FrameContext* ctx) override;

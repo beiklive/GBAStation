@@ -496,7 +496,6 @@ namespace beiklive
         SettingManager->SetDefault(KEY_UI_SHOW_BG_IMAGE, ConfigValue(0));
         SettingManager->SetDefault(KEY_UI_BG_IMAGE_PATH, ConfigValue(std::string("")));
         SettingManager->SetDefault(KEY_UI_BG_GIF_SPEED, ConfigValue(1.0f));
-        SettingManager->SetDefault(KEY_UI_BG_VIDEO_FRAME_RATE, ConfigValue(30));
         SettingManager->SetDefault(KEY_UI_BG_BLUR_ENABLED, ConfigValue(0));
         SettingManager->SetDefault(KEY_UI_BG_BLUR_RADIUS, ConfigValue(12.0f));
         SettingManager->SetDefault(KEY_UI_SHOW_XMB_BG, ConfigValue(0));
@@ -548,6 +547,8 @@ namespace beiklive
         SettingManager->SetDefault(KEY_AUDIO_MAX_LATENCY_MS, ConfigValue(180));
         SettingManager->SetDefault(KEY_AUDIO_SYNC_STRENGTH, ConfigValue(0.015f));
         SettingManager->SetDefault(KEY_AUDIO_TRANSITION_FADE_MS, ConfigValue(6));
+        SettingManager->SetDefault(KEY_UI_BG_VIDEO_AUDIO, ConfigValue(0));
+        SettingManager->SetDefault(KEY_UI_BG_VIDEO_VOLUME, ConfigValue(60));
 
         // 快进设置
         SettingManager->SetDefault("fastforward.enabled", ConfigValue(1));

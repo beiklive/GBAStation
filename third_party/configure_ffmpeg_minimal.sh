@@ -60,12 +60,13 @@ OPTIONS=(
     --disable-programs --disable-doc
     --disable-avdevice --disable-avfilter
     --disable-everything
-    --enable-avcodec --enable-avformat --enable-avutil --enable-swscale --disable-swresample
-    # The player has one RGBA output path and supports the common video codecs
-    # routinely stored in an MP4 container. Filters, encoders and network/file
+    --enable-avcodec --enable-avformat --enable-avutil --enable-swscale --enable-swresample
+    # The player has one RGBA output path and a PCM audio path, supporting the
+    # common video/audio codecs routinely stored in an MP4 container. Filters,
+    # encoders and network/file
     # protocols remain excluded: custom AVIO is used.
     --enable-demuxer=mov
-    --enable-decoder=h264,hevc,mpeg4,mpeg2video,mjpeg,vp8,vp9,av1
+    --enable-decoder=h264,hevc,mpeg4,mpeg2video,mjpeg,vp8,vp9,av1,aac,mp3,opus,vorbis,ac3
     --enable-parser=h264,hevc,mpeg4video,mpegvideo,mjpeg,vc1
     --enable-static --disable-shared --disable-network --disable-pthreads
     --disable-autodetect --disable-iconv --disable-zlib --disable-bzlib --disable-lzma
@@ -79,4 +80,4 @@ fi
 
 ./configure "${OPTIONS[@]}"
 make -j1 libavutil/libavutil.a libavcodec/libavcodec.a \
-    libavformat/libavformat.a libswscale/libswscale.a
+    libavformat/libavformat.a libswscale/libswscale.a libswresample/libswresample.a

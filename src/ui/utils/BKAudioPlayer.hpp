@@ -42,6 +42,7 @@ class BKAudioPlayer : public brls::AudioPlayer
 
     static void setGameAudioActive(bool active);
     static bool isGameAudioActive();
+    static bool isAnyPlaying();
 
   private:
     /// 已加载WAV文件的内存表示（所有平台使用）。
@@ -64,6 +65,7 @@ class BKAudioPlayer : public brls::AudioPlayer
     /// true 表示正在 playSoundDirect 内部（已提交 audout 缓冲区但尚未 free）
     std::atomic<bool>       m_isPlaying { false };
     static std::atomic<bool> s_gameAudioActive;
+    static std::atomic<bool> s_playing;
 
   public:
     /// 返回是否有音效正在通过 audout 播放（用于外部系统等待音效完成）

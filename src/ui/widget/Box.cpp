@@ -108,6 +108,7 @@ namespace beiklive
     void Box::suspendBackgroundPlayback(bool suspend)
     {
         VideoBackgroundView::setSharedPlaybackPaused(suspend);
+        VideoBackgroundView::setSharedAudioSuspended(suspend);
     }
 
     static bool isGifPath(const std::string& path)

@@ -310,7 +310,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${APP_PLATFORM_INCLUDE})
 target_compile_options(${PROJECT_NAME} PRIVATE -ffunction-sections -fdata-sections ${APP_PLATFORM_OPTION})
 target_link_libraries(${PROJECT_NAME} PRIVATE borealis ${APP_PLATFORM_LIB})
 target_link_libraries(${PROJECT_NAME} PRIVATE giflib)
-target_link_libraries(${PROJECT_NAME} PRIVATE ffmpeg_avformat ffmpeg_avcodec ffmpeg_swscale ffmpeg_avutil)
+target_link_libraries(${PROJECT_NAME} PRIVATE ffmpeg_avformat ffmpeg_avcodec ffmpeg_swscale ffmpeg_swresample ffmpeg_avutil)
 add_dependencies(${PROJECT_NAME} ffmpeg_minimal)
 if (WIN32)
     # Required by FFmpeg's minimal MinGW configuration (random seed and the

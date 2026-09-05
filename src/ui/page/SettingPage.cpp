@@ -1774,6 +1774,19 @@ private:
                 if (m_host.applyUiTheme) m_host.applyUiTheme();
                 invalidate();
             }));
+        emulator.push_back(_selector(L("主页布局(重启后生效)"), L("选择首页的布局样式，重启应用后生效"), 0xE8A1,
+            {L("Switch 布局"), L("IISU 布局")},
+            []() {
+                const int cur = cfgGetInt("theme", (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
+                if (cur == (int)beiklive::enums::ThemeLayout::IISU_THEME) return 1;
+                return 0;
+            },
+            [](int i) {
+                cfgSetInt("theme", i == 1
+                    ? (int)beiklive::enums::ThemeLayout::IISU_THEME
+                    : (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
+            }));
+        emulator.push_back(_section(L("背景")));
         emulator.push_back(_toggle(L("动态渐变背景"), L("显示与主页一致的动态背景"), 0xE3B7,
             []() { return cfgGetBool(KEY_UI_SHOW_SHADER, false); },
             [this](bool v) { cfgSetBool(KEY_UI_SHOW_SHADER, v); if (m_host.showShader) m_host.showShader(v); }));
@@ -1787,18 +1800,6 @@ private:
                 if (!m_host.setGradientTheme) return;
                 m_host.setGradientTheme(gradientThemeFromId(themeValues[i]));
             }));
-        emulator.push_back(_selector(L("主页布局(重启后生效)"), L("选择首页的布局样式，重启应用后生效"), 0xE8A1,
-            {L("Switch 布局"), L("IISU 布局")},
-            []() {
-                const int cur = cfgGetInt("theme", (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
-                if (cur == (int)beiklive::enums::ThemeLayout::IISU_THEME) return 1;
-                return 0;
-            },
-            [](int i) {
-                cfgSetInt("theme", i == 1
-                    ? (int)beiklive::enums::ThemeLayout::IISU_THEME
-                    : (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
-            }));
         emulator.push_back(_toggle(L("启用背景图片"), L("在动态背景上显示自定义 PNG、GIF图片 或 MP4视频"), beiklive::material::IMAGE,
             []() { return cfgGetBool(KEY_UI_SHOW_BG_IMAGE, false); },
             [this](bool v) { cfgSetBool(KEY_UI_SHOW_BG_IMAGE, v); if (m_host.showBackground) m_host.showBackground(v); }));
@@ -1811,6 +1812,26 @@ private:
                     if (m_host.setBackgroundImage) m_host.setBackgroundImage(path);
                     invalidate();
                 }, current.parent_path().string(), current.filename().string());
+            }));
+        emulator.push_back(_toggle(L("播放背景视频声音"), L("仅对 MP4 背景生效；进入游戏页面时自动停止"), 0xE8D5,
+            []() { return cfgGetBool(KEY_UI_BG_VIDEO_AUDIO, false); },
+            [](bool v) { cfgSetBool(KEY_UI_BG_VIDEO_AUDIO, v); }));
+        const std::vector<int> bgVideoVolumeValues = {0, 20, 40, 60, 80, 100, 120, 140, 160, 180, 200};
+        emulator.push_back(_selector(L("背景视频音量"), L("调整 MP4 背景视频的独立音量，最高 200%"), 0xE8D5,
+            {L("0%"), L("20%"), L("40%"), L("60%"), L("80%"), L("100%"), L("120%"), L("140%"), L("160%"), L("180%"), L("200%")},
+            [bgVideoVolumeValues]() {
+                const int current = cfgGetInt(KEY_UI_BG_VIDEO_VOLUME, 60);
+                int best = 0;
+                int distance = std::abs(current - bgVideoVolumeValues[0]);
+                for (int i = 1; i < static_cast<int>(bgVideoVolumeValues.size()); ++i) {
+                    const int d = std::abs(current - bgVideoVolumeValues[i]);
+                    if (d < distance) { best = i; distance = d; }
+                }
+                return best;
+            },
+            [bgVideoVolumeValues](int index) {
+                if (index >= 0 && index < static_cast<int>(bgVideoVolumeValues.size()))
+                    cfgSetInt(KEY_UI_BG_VIDEO_VOLUME, bgVideoVolumeValues[index]);
             }));
         emulator.push_back(_selector(L("GIF播放速度"), L("影响 GIF 背景播放速度；切换后立即生效"), 0xE8D5,
             {"0.5x", "0.75x", "1.0x", "1.25x", "1.5x", "2.0x"},
@@ -1830,23 +1851,7 @@ private:
                 if (index >= 0 && index < 6)
                     SET_SETTING_KEY_FLOAT(KEY_UI_BG_GIF_SPEED, speeds[index]);
             }));
-        const std::vector<int> videoFrameRateValues = {30, 35, 40, 45, 50, 55, 60};
-        emulator.push_back(_selector(L("MP4播放帧率"), L("限制 MP4 背景纹理更新频率，通过跳帧降低 CPU/GPU 占用；不改变播放速度"), 0xE8D5,
-            {"30 FPS", "35 FPS", "40 FPS", "45 FPS", "50 FPS", "55 FPS", "60 FPS"},
-            [videoFrameRateValues]() {
-                const int current = cfgGetInt(KEY_UI_BG_VIDEO_FRAME_RATE, 30);
-                int best = 0;
-                int distance = std::abs(current - videoFrameRateValues[best]);
-                for (int i = 1; i < static_cast<int>(videoFrameRateValues.size()); ++i) {
-                    const int candidate = std::abs(current - videoFrameRateValues[i]);
-                    if (candidate < distance) { best = i; distance = candidate; }
-                }
-                return best;
-            },
-            [videoFrameRateValues](int index) {
-                if (index >= 0 && index < static_cast<int>(videoFrameRateValues.size()))
-                    cfgSetInt(KEY_UI_BG_VIDEO_FRAME_RATE, videoFrameRateValues[index]);
-            }));
+        emulator.push_back(_section(L("界面")));
         emulator.push_back(_toggle(L("文件列表滚动动画"), L("关闭后文件列表会直接跳转"), 0xE8D5,
             []() { return cfgGetBool(KEY_FILE_LIST_SCROLL_ANIM, true); },
             [](bool v) { cfgSetBool(KEY_FILE_LIST_SCROLL_ANIM, v); }));
@@ -5128,29 +5133,6 @@ brls::View *SettingPage::buildUITab()
                                        gifSpeeds[index]);
                            });
         box->addView(gifSpeedCell);
-
-        auto *videoFrameRateCell = new brls::SelectorCell();
-        static constexpr int videoFrameRates[] = {30, 35, 40, 45, 50, 55, 60};
-        const int currentVideoFrameRate = cfgGetInt(
-            beiklive::SettingKey::KEY_UI_BG_VIDEO_FRAME_RATE, 30);
-        int videoFrameRateIndex = 0;
-        int videoFrameRateDistance = std::abs(currentVideoFrameRate - videoFrameRates[0]);
-        for (int i = 1; i < 7; ++i) {
-            const int distance = std::abs(currentVideoFrameRate - videoFrameRates[i]);
-            if (distance < videoFrameRateDistance) {
-                videoFrameRateIndex = i;
-                videoFrameRateDistance = distance;
-            }
-        }
-        videoFrameRateCell->init(L("MP4播放帧率"),
-                                 {"30 FPS", "35 FPS", "40 FPS", "45 FPS", "50 FPS", "55 FPS", "60 FPS"},
-                                 videoFrameRateIndex,
-                                 [](int index) {
-                                     if (index >= 0 && index < 7)
-                                         cfgSetInt(beiklive::SettingKey::KEY_UI_BG_VIDEO_FRAME_RATE,
-                                                   videoFrameRates[index]);
-                                 });
-        box->addView(videoFrameRateCell);
 
     }
 
