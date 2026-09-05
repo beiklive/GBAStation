@@ -287,9 +287,12 @@ BKAudioPlayer::~BKAudioPlayer()
 #ifdef __SWITCH__
     if (m_switchInit)
     {
-        std::lock_guard<std::mutex> outputLock(BackgroundAudioPlayer::switchOutputMutex());
-        audoutStopAudioOut();
-        audoutExit();
+        // Borealis destroys its platform during Application::exit(), before
+        // main() gets back to this custom player's destructor. Closing the
+        // process-wide audout service here can therefore race with the
+        // platform teardown (and may be a second stop/exit). All producers
+        // have already stopped and the OS will reclaim audout with the
+        // process, so leave the service alive until process termination.
         m_switchInit = false;
     }
 #endif // __SWITCH__

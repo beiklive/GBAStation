@@ -521,6 +521,12 @@ int main(int argc, char* argv[]) {
 	while (brls::Application::mainLoop())
 		beiklive::network::WebService::Update();
 
+	// The exit event normally performs this while the NanoVG context is still
+	// alive. Keep an idempotent fallback here for shutdown paths that leave the
+	// main loop without firing the event, and ensure the decoder/audio workers
+	// are stopped before the custom AudioPlayer is destroyed below.
+	beiklive::VideoBackgroundView::shutdownSharedVideo();
+
 	// 通知线程退出并等待其完成
 	gExitFlag.store(true, std::memory_order_release);
 	if (updateThread.joinable())
