@@ -222,6 +222,11 @@ void blipper_read(blipper_t *blip, blipper_sample_t *output, unsigned samples,
       /* Rounded. With leaky integrator, this cannot overflow. */
       quant = (sum + 0x4000) >> 15;
 
+      /* The baked Switch filter bank has a DC sum of 24576 (0.75) per
+       * phase, while the upstream bank is normalised to 32768. Restore that
+       * missing 4/3 gain here so Gambatte does not sound uniformly muffled. */
+      quant = (quant * 4) / 3;
+
       /* Clamp. quant can potentially have range [-0x10000, 0xffff] here.
        * In both cases, top 16-bits will have a uniform bit pattern which can be exploited. */
       if ((blipper_sample_t)quant != quant)
@@ -237,7 +242,11 @@ void blipper_read(blipper_t *blip, blipper_sample_t *output, unsigned samples,
     * The entire buffer should be read out ideally anyways. */
    memmove(blip->output_buffer, blip->output_buffer + samples,
          (blip->output_avail + blip->taps - samples) * sizeof(*out));
-   memset(blip->output_buffer + blip->taps, 0, samples * sizeof(*out));
+   /* Clear the slots that moved past the unread filter output.  Clearing at
+    * the fixed `taps` offset overwrites live samples when more than one block
+    * is buffered, turning the Gambatte stream into broadband noise. */
+   memset(blip->output_buffer + blip->output_avail + blip->taps - samples,
+         0, samples * sizeof(*out));
    blip->output_avail -= samples;
    blip->phase -= samples << blip->phases_log2;
 

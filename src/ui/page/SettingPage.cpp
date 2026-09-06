@@ -1589,6 +1589,7 @@ private:
     int m_coreBrowserFocus = 0;
     float m_coreBrowserScroll = 0.f;
     float m_coreBrowserTargetScroll = 0.f;
+    float m_coreBrowserViewport = 480.f;
     int m_coreFocus = 0;
     float m_coreScroll = 0.f;
     float m_coreTargetScroll = 0.f;
@@ -1903,7 +1904,6 @@ private:
             {L("Arcade 按键映射"), "arcade.", L("外部街机核心按键与热键"), false, 9},
             {L("DC 按键映射"), "dc.", L("Dreamcast 外部核心按键与热键"), false, 10},
             {L("PSP 按键映射"), "psp.", L("PPSSPP 外部核心按键与热键"), false, 11},
-            {L("PS1 功能热键"), "ps1.", L("DuckStation 外部核心功能热键"), false, 12},
             {L("Saturn 按键映射"), "saturn.", L("YabaSanshiro 外部核心按键与热键"), false, 13},
             {L("GC / Wii 按键映射"), "dolphin.", L("Dolphin 外部核心按键与热键"), false, 14},
         };
@@ -2064,7 +2064,7 @@ private:
                     option.name,
                     current ? L("当前核心") : L("可用核心"),
                     0xE322,
-                    [current]() { return current ? std::string(L("当前核心  ✓")) : std::string(L("设置  >")); },
+                    [current]() { return current ? std::string(L("当前核心")) : std::string(L("设置")); },
                     [this, platform = m_coreBrowserPlatform, id = option.id]() {
                         _openCoreOption(platform, id);
                     }));
@@ -2105,8 +2105,7 @@ private:
         if (m_coreBrowserItems.empty())
             return;
 
-        int visualRow = 0;
-        float cursorY = 0.f;
+        float cursorY = m_coreBrowserMode == CoreBrowserMode::Management ? 52.f : 0.f;
         size_t index = 0;
         while (index < m_coreBrowserItems.size())
         {
@@ -2118,22 +2117,18 @@ private:
                    m_coreBrowserGroups[end] == group)
                 ++end;
 
-            // Management mode reserves a compact title band before each vendor.
+            // The management view reserves a compact title band before each vendor.
             if (m_coreBrowserMode == CoreBrowserMode::Management)
-            {
                 cursorY += 34.f;
-            }
             const size_t groupCount = end - index;
-            const int rows = static_cast<int>((groupCount + 2) / 3);
             for (size_t j = 0; j < groupCount; ++j)
             {
                 const size_t itemIndex = index + j;
-                m_coreBrowserRows[itemIndex] = visualRow + static_cast<int>(j / 3);
-                m_coreBrowserColumns[itemIndex] = static_cast<int>(j % 3);
-                m_coreBrowserCardOffsets[itemIndex] = cursorY + static_cast<float>(j / 3) * 76.f;
+                m_coreBrowserRows[itemIndex] = static_cast<int>(j);
+                m_coreBrowserColumns[itemIndex] = 0;
+                m_coreBrowserCardOffsets[itemIndex] = cursorY + static_cast<float>(j) * 84.f;
             }
-            cursorY += static_cast<float>(rows) * 76.f;
-            visualRow += rows;
+            cursorY += static_cast<float>(groupCount) * 84.f;
             index = end;
         }
         m_coreBrowserContentHeight = cursorY;
@@ -3142,11 +3137,6 @@ private:
             {"日志", "logLevel", "日志级别", "Info"},
         });
 
-        m_coreItems.push_back(_section(L("按键")));
-        m_coreItems.push_back(_action(
-            L("PS1 功能热键"), L("配置 DuckStation 外部核心功能热键"), 0xE30F,
-            []() { return std::string(L("进入配置  >")); },
-            [this]() { _openMappingPage(L("PS1 功能热键"), "ps1.", false); }));
         _finishCorePage(L("DuckStation 核心设置"));
     }
 
@@ -3741,32 +3731,6 @@ private:
             return;
         }
 
-        if (prefix == "ps1.")
-        {
-            m_mappingItems.push_back(_section(L("PS1 功能热键")));
-            static const struct
-            {
-                const char* label;
-                const char* key;
-                const char* defaultValue;
-            } hotkeys[] = {
-                {"打开菜单", "hotkey.menu.pad", "PAD_LT+PAD_RT"},
-                {"暂停/继续", "hotkey.pause.pad", "none"},
-                {"静音", "hotkey.mute.pad", "none"},
-                {"快速保存", "hotkey.quicksave.pad", "none"},
-                {"快速读取", "hotkey.quickload.pad", "none"},
-                {"截图", "hotkey.screenshot.pad", "none"},
-                {"快进", "handle.fastforward", "PAD_LSB"},
-                {"倒带", "handle.rewind", "none"},
-            };
-            for (const auto& entry : hotkeys)
-                _addBinding(L(entry.label), L("可绑定单键或双键组合"),
-                            beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
-            m_mappingFocus = _firstFocusable(m_mappingItems);
-            m_mappingScroll = m_mappingTargetScroll = 0.f;
-            return;
-        }
-
         const unsigned mask = beiklive::input_mapping::platformMaskForPrefix(prefix);
         m_mappingItems.push_back(_section(L("游戏按键")));
         for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
@@ -3926,39 +3890,16 @@ private:
         if (m_coreBrowserMode != CoreBrowserMode::None && !m_coreSettingsOverlay)
         {
             const int count = static_cast<int>(items.size());
-            if (index < 0 || index >= count ||
-                index >= static_cast<int>(m_coreBrowserRows.size()))
+            if (index < 0 || index >= count)
                 return;
-            const int row = m_coreBrowserRows[static_cast<size_t>(index)];
-            const int column = m_coreBrowserColumns[static_cast<size_t>(index)];
-            int next = -1;
-            if (direction == -1 || direction == 1)
+            const int step = direction < 0 ? -1 : 1;
+            int next = index;
+            for (int attempt = 0; attempt < count; ++attempt)
             {
-                const int wanted = column + (direction < 0 ? -1 : 1);
-                if (wanted < 0 || wanted > 2) return;
-                for (int i = 0; i < count; ++i)
-                    if (m_coreBrowserRows[static_cast<size_t>(i)] == row &&
-                        m_coreBrowserColumns[static_cast<size_t>(i)] == wanted)
-                    { next = i; break; }
+                next = (next + step + count) % count;
+                if (items[static_cast<size_t>(next)].kind != NanoSettingKind::Section)
+                    break;
             }
-            else if (direction == -2 || direction == 2)
-            {
-                const int wantedRow = row + (direction < 0 ? -1 : 1);
-                int bestDistance = 100;
-                for (int i = 0; i < count; ++i)
-                {
-                    if (m_coreBrowserRows[static_cast<size_t>(i)] != wantedRow)
-                        continue;
-                    const int distance = std::abs(m_coreBrowserColumns[static_cast<size_t>(i)] - column);
-                    if (distance < bestDistance)
-                    {
-                        bestDistance = distance;
-                        next = i;
-                    }
-                }
-            }
-            else return;
-            if (next < 0) return;
             _activeFocus() = next;
             _ensureFocusedVisible();
             brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
@@ -4187,15 +4128,16 @@ private:
     float _focusOffset() const
     {
         const auto& items = const_cast<NanoSettingsCanvas*>(this)->_activeItems();
+        constexpr float childListInset = 6.f;
         if (m_coreBrowserMode != CoreBrowserMode::None && !m_coreSettingsOverlay)
         {
             if (m_coreBrowserFocus >= 0 &&
                 m_coreBrowserFocus < static_cast<int>(m_coreBrowserCardOffsets.size()))
-                return 54.f + m_coreBrowserCardOffsets[static_cast<size_t>(m_coreBrowserFocus)];
-            return 54.f;
+                return childListInset + m_coreBrowserCardOffsets[static_cast<size_t>(m_coreBrowserFocus)];
+            return childListInset;
         }
         const int focus = m_inMapping ? m_mappingFocus : (m_inCore ? m_coreFocus : m_focus[static_cast<size_t>(m_category)]);
-        float offset = 0.f;
+        float offset = m_coreSettingsOverlay ? childListInset : 0.f;
         for (int i = 0; i < focus && i < static_cast<int>(items.size()); ++i)
             offset += _itemHeight(items[static_cast<size_t>(i)]) + 8.f;
         return offset;
@@ -4204,9 +4146,10 @@ private:
     float _contentHeight() const
     {
         const auto& items = const_cast<NanoSettingsCanvas*>(this)->_activeItems();
+        constexpr float childListInset = 6.f;
         if (m_coreBrowserMode != CoreBrowserMode::None && !m_coreSettingsOverlay)
-            return 72.f + m_coreBrowserContentHeight;
-        float height = 18.f;
+            return childListInset + m_coreBrowserContentHeight;
+        float height = m_coreSettingsOverlay ? 18.f + childListInset : 18.f;
         for (const auto& item : items)
             height += _itemHeight(item) + 8.f;
         return height;
@@ -4214,13 +4157,17 @@ private:
 
     void _ensureFocusedVisible()
     {
-        constexpr float viewport = 310.f;
+        const float viewport = std::max(1.f, m_coreBrowserViewport);
         const float top = _focusOffset();
         const auto& items = const_cast<NanoSettingsCanvas*>(this)->_activeItems();
         if (m_coreBrowserMode != CoreBrowserMode::None && !m_coreSettingsOverlay)
         {
             float& target = _activeTargetScroll();
-            if (top < target + 18.f) target = std::max(0.f, top - 18.f);
+            // Leave room for the vendor header above the first row. Using the
+            // old 18px margin left the first group title half-clipped after
+            // returning from the bottom of the list.
+            constexpr float topMargin = 34.f;
+            if (top < target + topMargin) target = std::max(0.f, top - topMargin);
             if (top + 68.f > target + viewport - 18.f) target = top + 68.f - viewport + 18.f;
             target = std::clamp(target, 0.f, std::max(0.f, _contentHeight() - viewport));
             return;
@@ -4322,77 +4269,44 @@ private:
     {
         if (m_coreBrowserMode != CoreBrowserMode::None)
         {
-            // Keep the simulator category visible as the modal backdrop.  The
-            // canvas remains the sole focus owner; only the overlay state
-            // handles input while it is open.
-            const auto& background = m_categories[0].items;
-            float bgCursor = y + 16.f - m_scroll[0];
-            nvgSave(vg);
-            nvgIntersectScissor(vg, x + 2.f, y + 2.f, w - 4.f, h - 4.f);
-            for (int i = 0; i < static_cast<int>(background.size()); ++i)
-            {
-                const auto& item = background[static_cast<size_t>(i)];
-                const float itemH = _itemHeight(item);
-                if (bgCursor + itemH >= y - 20.f && bgCursor <= y + h + 20.f)
-                {
-                    if (item.kind == NanoSettingKind::Section)
-                        _drawSection(vg, item, x + 24.f, bgCursor, w - 48.f, itemH);
-                    else
-                        _drawItem(vg, item, i, false, x + 18.f, bgCursor, w - 36.f, itemH);
-                }
-                bgCursor += itemH + 8.f;
-            }
-            nvgRestore(vg);
-
-            const float panelW = std::min(1080.f, w - 48.f);
-            const float browserHeight = 128.f + m_coreBrowserContentHeight;
-            const float panelH = m_coreSettingsOverlay
-                ? std::min(h - 86.f, 580.f)
-                : std::min(h - 86.f, browserHeight);
-            const Rect panel{x + (w - panelW) * 0.5f, y + (h - panelH) * 0.5f,
-                             panelW, panelH};
-            _drawPanel(vg, panel, 9.f, 0.08f);
-            nvgBeginPath(vg);
-            nvgRoundedRect(vg, panel.x + 1.f, panel.y + 1.f,
-                           panel.w - 2.f, panel.h - 2.f, 8.f);
-            nvgFillColor(vg, nvgRGBA(30, 30, 30, 255)); // VS Code editor background.
-            nvgFill(vg);
-            nvgBeginPath(vg);
-            nvgRoundedRect(vg, panel.x + 0.5f, panel.y + 0.5f,
-                           panel.w - 1.f, panel.h - 1.f, 8.5f);
-            nvgStrokeColor(vg, nvgRGBA(60, 60, 60, 255));
-            nvgStrokeWidth(vg, 1.f);
-            nvgStroke(vg);
+            const float panelW = w;
+            const float panelH = h;
+            const Rect panel{x, y, panelW, panelH};
             nvgFontFaceId(vg, m_defaultFont);
             nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
             nvgFontSize(vg, 22.f);
-            nvgFillColor(vg, nvgRGBA(230, 230, 230, 255));
+            nvgFillColor(vg, settingText(0.96f));
             const std::string title = m_coreSettingsOverlay ? m_coreTitle
                 : (m_coreBrowserMode == CoreBrowserMode::Management ? L("核心管理") : L("游戏平台核心"));
             nvgText(vg, panel.x + 24.f, panel.y + 31.f, title.c_str(), nullptr);
             nvgFontSize(vg, 14.f);
-            nvgFillColor(vg, nvgRGBA(175, 175, 175, 255));
-            const std::string browserHint = m_coreSettingsOverlay ? L("调整该核心设置，按 B 返回核心列表")
-                : (m_coreBrowserMode == CoreBrowserMode::Platform ? L("选择核心后进入该核心的详细设置") : L("浮层内导航不会改变背景页面焦点"));
+            nvgFillColor(vg, settingSecondary(0.78f));
+            const std::string browserHint = m_coreSettingsOverlay ? L("调整当前核心的运行选项")
+                : (m_coreBrowserMode == CoreBrowserMode::Platform ? L("选择一个核心查看其详细设置") : L("按平台浏览并配置模拟器核心"));
             nvgText(vg, panel.x + 24.f, panel.y + 55.f,
                     browserHint.c_str(), nullptr);
             nvgBeginPath(vg);
             nvgMoveTo(vg, panel.x + 24.f, panel.y + 70.f);
             nvgLineTo(vg, panel.x + panel.w - 24.f, panel.y + 70.f);
-            nvgStrokeColor(vg, nvgRGBA(60, 60, 60, 255));
+            nvgStrokeColor(vg, settingBorder(0.22f));
             nvgStrokeWidth(vg, 1.f);
             nvgStroke(vg);
 
-            const float innerX = panel.x + 26.f;
+            const float innerX = panel.x + 12.f;
             const float innerY = panel.y + 86.f;
-            const float innerW = panel.w - 52.f;
+            const float innerW = panel.w - 24.f;
             const float innerH = panel.h - 118.f;
             nvgSave(vg);
-            nvgIntersectScissor(vg, innerX - 4.f, innerY - 4.f, innerW + 8.f, innerH + 4.f);
+            // Keep cards and vendor headers inside the content viewport. The
+            // previous four-pixel expansion allowed the first row to paint
+            // over the panel header while the scroll animation was settling.
+            nvgIntersectScissor(vg, innerX, innerY, innerW, innerH);
+            m_coreBrowserViewport = std::max(1.f, innerH);
             auto& items = m_coreSettingsOverlay ? m_coreItems : m_coreBrowserItems;
+            constexpr float childListInset = 6.f;
             if (m_coreSettingsOverlay)
             {
-                float cursor = innerY - m_coreScroll;
+                float cursor = innerY + childListInset - m_coreScroll;
                 for (int i = 0; i < static_cast<int>(items.size()); ++i)
                 {
                     const auto& item = items[static_cast<size_t>(i)];
@@ -4403,7 +4317,8 @@ private:
                             _drawSection(vg, item, innerX + 8.f, cursor, innerW - 16.f, itemH);
                         else
                             _drawItem(vg, item, i, i == m_coreFocus,
-                                      innerX, cursor, innerW, itemH);
+                                      innerX + childListInset, cursor,
+                                      innerW - childListInset * 2.f, itemH);
                     }
                     cursor += itemH + 8.f;
                 }
@@ -4418,12 +4333,13 @@ private:
                 return;
             }
             if (m_coreBrowserMode == CoreBrowserMode::Management && !m_coreSettingsOverlay)
-                _drawCoreBrowserFilter(vg, panel.x + 184.f, panel.y + 10.f, panel.w - 208.f);
+                _drawCoreBrowserFilter(vg, panel.x + 250.f, panel.y + 10.f,
+                                       std::max(180.f, panel.w - 274.f));
             const float offsetY = 0.f;
-            constexpr int columns = 3;
-            const float cardW = (innerW - 16.f) / columns;
-            const float cardH = 68.f;
-            const float gap = 8.f;
+            // Keep a small horizontal breathing room so the focus glow and
+            // shadow are not clipped by the content scissor.
+            const float cardW = innerW - 12.f;
+            const float cardH = 76.f;
             int previousGroup = -1;
             for (int i = 0; i < static_cast<int>(items.size()); ++i)
             {
@@ -4436,27 +4352,30 @@ private:
                     nvgFontSize(vg, 18.f);
                     nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
                     nvgFillColor(vg, settingText(0.92f));
-                    const float titleY = innerY + m_coreBrowserCardOffsets[static_cast<size_t>(i)] - 17.f - _activeScroll();
+                    const float titleY = innerY + childListInset
+                        + m_coreBrowserCardOffsets[static_cast<size_t>(i)]
+                        - 17.f - _activeScroll();
                     nvgText(vg, innerX + 4.f,
                             titleY,
                             L(_coreVendorTitle(group)).c_str(), nullptr);
                     previousGroup = group;
                 }
-                const int column = i < static_cast<int>(m_coreBrowserColumns.size())
-                    ? m_coreBrowserColumns[static_cast<size_t>(i)] : (i % columns);
-                const float cardX = innerX + column * (cardW + gap);
-                const float cardY = innerY + offsetY + m_coreBrowserCardOffsets[static_cast<size_t>(i)] - _activeScroll();
+                const float cardX = innerX + 6.f;
+                const float cardY = innerY + childListInset + offsetY
+                    + m_coreBrowserCardOffsets[static_cast<size_t>(i)] - _activeScroll();
                 if (cardY + cardH < innerY || cardY > innerY + innerH)
                     continue;
-                _drawCoreBrowserCard(vg, items[static_cast<size_t>(i)],
-                                     i == _activeFocus(), cardX, cardY, cardW, cardH);
+                _drawItem(vg, items[static_cast<size_t>(i)], i == _activeFocus() ? i : -1,
+                          i == _activeFocus(), cardX, cardY, cardW, cardH);
             }
             nvgRestore(vg);
             nvgFontFaceId(vg, m_defaultFont);
             nvgFontSize(vg, 14.f);
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, settingSecondary(0.72f));
-            const std::string browserFooter = L("方向键选择  ·  A 确认  ·  B 关闭");
+            const std::string browserFooter = m_coreBrowserMode == CoreBrowserMode::Management
+                ? L("方向键选择  ·  A 进入平台  ·  B 返回模拟器")
+                : L("方向键选择  ·  A 查看设置  ·  B 返回核心管理");
             nvgText(vg, panel.x + panel.w - 24.f, panel.y + panel.h - 20.f,
                     browserFooter.c_str(), nullptr);
             return;
@@ -4502,7 +4421,7 @@ private:
 
     void _drawCoreBrowserFilter(NVGcontext* vg, float x, float y, float w)
     {
-        static const char* labels[] = {"全部", "任天堂", "世嘉", "索尼", "街机", "其他"};
+        static const char* labels[] = {"全部平台", "任天堂系", "世嘉系", "索尼系", "街机类", "其他平台"};
         const float itemW = w / 6.f;
         for (int i = 0; i < 6; ++i)
         {
@@ -4652,13 +4571,19 @@ private:
             _drawToggle(vg, value == L("开启"), x + w - 78.f, y + h * 0.5f, focused);
         else
         {
+            const bool isCurrentCore = item.kind == NanoSettingKind::Action
+                && value == L("当前核心");
             nvgFontFaceId(vg, m_defaultFont);
             nvgFontSize(vg, focused ? 20.f : 18.f);
             nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
             nvgFillColor(vg, focused ? nvgRGBA(0, 102, 204, 255) : settingSecondary(0.88f));
-            nvgText(vg, x + w - 39.f, y + h * 0.5f, L(value).c_str(), nullptr);
-            nvgFontSize(vg, 22.f);
-            nvgText(vg, x + w - 17.f, y + h * 0.5f, ">", nullptr);
+            nvgText(vg, x + w - (isCurrentCore ? 24.f : 39.f), y + h * 0.5f,
+                    L(value).c_str(), nullptr);
+            if (!isCurrentCore)
+            {
+                nvgFontSize(vg, 22.f);
+                nvgText(vg, x + w - 17.f, y + h * 0.5f, ">", nullptr);
+            }
         }
         nvgRestore(vg);
     }
@@ -4796,7 +4721,7 @@ private:
         float cursor = x + w - 32.f;
         const float hintY = y + h - 29.f;
         _drawHint(vg, brls::BUTTON_B,
-                  m_selectorOpen ? L("取消").c_str() : (m_inMapping ? L("返回平台").c_str() : (m_inCore ? L("返回核心").c_str() : (m_coreBrowserMode == CoreBrowserMode::Platform ? L("返回平台").c_str() : (m_coreBrowserMode != CoreBrowserMode::None ? L("返回分类").c_str() : L("返回").c_str())))),
+                  m_selectorOpen ? L("取消").c_str() : (m_inMapping ? L("返回平台").c_str() : (m_inCore ? L("返回核心").c_str() : (m_coreBrowserMode == CoreBrowserMode::Platform ? L("返回核心管理").c_str() : (m_coreBrowserMode != CoreBrowserMode::None ? L("返回模拟器").c_str() : L("返回").c_str())))),
                   cursor, hintY);
         if (m_inMapping && !m_selectorOpen && !m_mappingItems.empty()
             && m_mappingItems[static_cast<size_t>(m_mappingFocus)].kind == NanoSettingKind::Binding)

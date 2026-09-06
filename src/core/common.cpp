@@ -784,7 +784,7 @@ namespace beiklive
         SettingManager->SetDefault("cheat.dir", ConfigValue(std::string("")));
 
         // 按键绑定默认值。GBA 保持无前缀；GBC/GB 独立前缀首次默认继承旧的无前缀配置。
-        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds.", "md.", "arcade.", "dc.", "psp.", "ps1.", "saturn.", "dolphin."};
+        const std::string mappingPrefixes[] = {"", "gbc.", "gb.", "nes.", "sfc.", "nds.", "3ds.", "md.", "arcade.", "dc.", "psp.", "saturn.", "dolphin."};
         for (const auto& prefix : mappingPrefixes)
         {
             const unsigned platformMask = beiklive::input_mapping::platformMaskForPrefix(prefix);
