@@ -1019,6 +1019,39 @@ beiklive::enums::FileType platformToFileType(int platform)
             return dirItem.itemType == beiklive::enums::FileType::DOLPHIN_ROM;
         }
 
+        std::optional<beiklive::GameEntry> findGameDbEntryIgnoringExtension(
+            const std::string& path, int platform = -1)
+        {
+            if (!beiklive::GameDB)
+                return std::nullopt;
+
+            if (auto exact = beiklive::GameDB->findByPath(path))
+                return exact;
+
+            std::string stem = beiklive::tools::getFileNameWithoutExtension(
+                std::filesystem::path(path).filename().string());
+            std::transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            if (stem.empty())
+                return std::nullopt;
+
+            for (const auto& entry : beiklive::GameDB->getAll())
+            {
+                if (platform >= 0 && entry.platform != platform)
+                    continue;
+                std::string entryStem = beiklive::tools::getFileNameWithoutExtension(
+                    std::filesystem::path(entry.path).filename().string());
+                std::transform(entryStem.begin(), entryStem.end(), entryStem.begin(),
+                               [](unsigned char c) {
+                                   return static_cast<char>(std::tolower(c));
+                               });
+                if (entryStem == stem)
+                    return entry;
+            }
+            return std::nullopt;
+        }
+
         [[maybe_unused]] bool exportThreeDsCoreConfig()
         {
             if (!beiklive::SettingManager)
@@ -1106,11 +1139,11 @@ beiklive::enums::FileType platformToFileType(int platform)
             if (!beiklive::GameDB || dirItem.fullPath.empty())
                 return;
 
-            auto entryOpt = beiklive::GameDB->findByPath(dirItem.fullPath);
+            const int platform = static_cast<int>(dirItem.itemType);
+            auto entryOpt = findGameDbEntryIgnoringExtension(dirItem.fullPath, platform);
             beiklive::GameEntry entry = entryOpt.value_or(beiklive::GameEntry{});
             bool changed = !entryOpt.has_value();
 
-            const int platform = static_cast<int>(dirItem.itemType);
             const std::string stem = beiklive::tools::getFileNameWithoutExtension(dirItem.fileName);
 
             if (entry.path.empty()) {

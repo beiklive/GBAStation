@@ -37,6 +37,7 @@
 #include <fstream>
 #include <functional>
 #include <sstream>
+#include <unordered_map>
 #include <unordered_set>
 
 namespace fs = std::filesystem;
@@ -1794,6 +1795,90 @@ struct ScanPlatformConfig
     int externalPlatform;
 };
 
+static int ps1ScanExtensionPriority(const fs::path& path)
+{
+    static constexpr const char* kPriority[] = {
+        "cue", "chd", "bin", "img", "iso", "ecm", "mds", "pbp", "m3u",
+    };
+    const std::string ext = normalizeExtension(path.extension().string());
+    for (size_t i = 0; i < std::size(kPriority); ++i)
+        if (ext == kPriority[i])
+            return static_cast<int>(i);
+    return static_cast<int>(std::size(kPriority));
+}
+
+static void deduplicatePs1ScanRoms(std::vector<fs::path>& roms)
+{
+    std::unordered_map<std::string, fs::path> selected;
+    selected.reserve(roms.size());
+    for (const auto& path : roms)
+    {
+        std::string stem = path.stem().string();
+        std::transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        std::string parent = path.parent_path().lexically_normal().string();
+        std::transform(parent.begin(), parent.end(), parent.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        const std::string key = parent + '\n' + stem;
+
+        auto it = selected.find(key);
+        if (it == selected.end())
+        {
+            selected.emplace(key, path);
+            continue;
+        }
+
+        const int currentPriority = ps1ScanExtensionPriority(it->second);
+        const int candidatePriority = ps1ScanExtensionPriority(path);
+        if (candidatePriority < currentPriority ||
+            (candidatePriority == currentPriority && path.string() < it->second.string()))
+            it->second = path;
+    }
+
+    roms.clear();
+    roms.reserve(selected.size());
+    for (const auto& item : selected)
+        roms.push_back(item.second);
+    std::sort(roms.begin(), roms.end(), [](const fs::path& a, const fs::path& b) {
+        return a.string() < b.string();
+    });
+}
+
+static bool ps1ScanEntryAlreadyExists(const fs::path& romPath)
+{
+    if (!beiklive::GameDB)
+        return false;
+    if (beiklive::GameDB->findByPath(romPath.string()))
+        return true;
+
+    std::string stem = romPath.stem().string();
+    std::transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    std::string parent = romPath.parent_path().lexically_normal().string();
+    std::transform(parent.begin(), parent.end(), parent.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+
+    for (const auto& entry : beiklive::GameDB->getAll())
+    {
+        if (entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1))
+            continue;
+        fs::path entryPath(entry.path);
+        std::string entryStem = entryPath.stem().string();
+        std::transform(entryStem.begin(), entryStem.end(), entryStem.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::string entryParent = entryPath.parent_path().lexically_normal().string();
+        std::transform(entryParent.begin(), entryParent.end(), entryParent.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (entryStem == stem && entryParent == parent)
+            return true;
+    }
+    return false;
+}
+
 static bool archiveContainsPlatformRom(const fs::path& archivePath, int platform)
 {
     using E = beiklive::enums::EmuPlatform;
@@ -1826,7 +1911,7 @@ const ScanPlatformConfig kScanPlatforms[] = {
     {L("DC"),     beiklive::SettingKey::KEY_SCAN_PATH_DC,     {"cdi", "gdi", "chd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast), 10},
     {L("MD"),     beiklive::SettingKey::KEY_SCAN_PATH_GENESIS,{"md", "gen", "bin", "smd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis), -1},
     {L("PSP"),    beiklive::SettingKey::KEY_SCAN_PATH_PSP,    {"iso", "cso", "pbp"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP), 11},
-    {L("PS1"),    beiklive::SettingKey::KEY_SCAN_PATH_PS1,    {"cue", "bin", "img", "iso", "chd", "ecm", "mds", "pbp", "m3u"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1), 12},
+    {L("PS1"),    beiklive::SettingKey::KEY_SCAN_PATH_PS1,    {"cue", "chd", "bin", "img", "iso", "ecm", "mds", "pbp", "m3u"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1), 12},
     {L("Saturn"), beiklive::SettingKey::KEY_SCAN_PATH_SATURN, {"cue", "bin", "iso", "chd", "mds", "m3u", "ccd"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn), 13},
     {L("GC / Wii"), beiklive::SettingKey::KEY_SCAN_PATH_DOLPHIN, {"gcm", "bin", "iso", "tgc", "wbfs", "ciso", "gcz", "wia", "rvz", "nfs", "dol", "elf", "wad"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin), 14},
 };
@@ -2860,6 +2945,8 @@ void DataManagementPage::startScanAll()
                         roms.push_back(it->path());
                 }
             }
+            if (p.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1))
+                deduplicatePs1ScanRoms(roms);
             total += static_cast<int>(roms.size());
             p.roms = std::move(roms);
             plans.push_back(std::move(p));
@@ -2896,7 +2983,10 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
         m_progress.store(startIndex + i + 1, std::memory_order_release);
 
         // 游戏库中已存在该 ROM：跳过，绝不覆盖用户已有的独立配置。
-        if (beiklive::GameDB->findByPath(path))
+        if ((platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1) &&
+             ps1ScanEntryAlreadyExists(romPath)) ||
+            (platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1) &&
+             beiklive::GameDB->findByPath(path)))
         {
             m_importSkipped.fetch_add(1, std::memory_order_relaxed);
             continue;
