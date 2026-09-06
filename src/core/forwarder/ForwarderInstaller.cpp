@@ -223,7 +223,7 @@ InstallResult installGame(const beiklive::GameEntry& entry)
             "psp.externalNro.path", "/GBAStation/core/GBAStationPPSSPPStub.nro"));
     else if (isPs1)
         nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
-            "ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro"));
+            "core.ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro"));
     else if (isSaturn)
         nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
             "saturn.externalNro.path", "/GBAStation/core/GBAStationYabaSanshiroStub.nro"));

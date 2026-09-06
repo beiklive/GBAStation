@@ -582,8 +582,8 @@ namespace beiklive
         SettingManager->SetDefault("dc.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         SettingManager->SetDefault("psp.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationPPSSPPStub.nro")));
         SettingManager->SetDefault("psp.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
-        SettingManager->SetDefault("ps1.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationDuckStationStub.nro")));
-        SettingManager->SetDefault("ps1.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
+        SettingManager->SetDefault("core.ps1.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationDuckStationStub.nro")));
+        SettingManager->SetDefault("core.ps1.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         SettingManager->SetDefault("saturn.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationYabaSanshiroStub.nro")));
         SettingManager->SetDefault("saturn.externalNro.returnPath", ConfigValue(std::string("sdmc:/switch/GBAStation.nro")));
         SettingManager->SetDefault("dolphin.externalNro.path", ConfigValue(std::string("/GBAStation/core/GBAStationDolphinStub.nro")));
@@ -668,11 +668,33 @@ namespace beiklive
         SettingManager->SetDefault("core.flycast.display_mode", ConfigValue(std::string("Display")));
         SettingManager->SetDefault("core.flycast.display_size", ConfigValue(std::string("4:3")));
 
-        // DuckStation Stub 直接读取 ps1.*，确保启动器设置即时生效。
-        SettingManager->SetDefault("ps1.renderer", ConfigValue(std::string("deko3D")));
-        SettingManager->SetDefault("ps1.resolutionScale", ConfigValue(1));
-        SettingManager->SetDefault("ps1.aspectRatio", ConfigValue(std::string("Auto (Game Native)")));
-        SettingManager->SetDefault("ps1.fastBoot", ConfigValue(1));
+        // DuckStation Stub reads the shared core.ps1.* namespace.
+        SettingManager->SetDefault("core.ps1.renderer", ConfigValue(std::string("deko3D")));
+        SettingManager->SetDefault("core.ps1.resolutionScale", ConfigValue(1));
+        SettingManager->SetDefault("core.ps1.aspectRatio", ConfigValue(std::string("Auto (Game Native)")));
+        SettingManager->SetDefault("core.ps1.fastBoot", ConfigValue(1));
+
+        // Migrate the old flat ps1.* core namespace once. Input mappings and
+        // hotkeys intentionally stay under ps1.* and are not included here.
+        static constexpr const char* kLegacyPs1CoreKeys[] = {
+            "externalNro.path", "externalNro.returnPath", "aspectRatio", "bufferMS",
+            "createSaveStateBackups", "cropMode", "deinterlacingMode", "emulationSpeed",
+            "enable8MBRAM", "enableCheats", "executionMode", "fastBoot", "fastmemMode",
+            "logLevel", "multisamples", "outputLatencyMS", "outputMuted", "overclockEnable",
+            "pgxpEnable", "pgxpTextureCorrection", "readSpeedup", "readaheadSectors", "region",
+            "renderer", "resolutionScale", "runaheadFrameCount", "saveStateOnExit", "showFPS",
+            "syncToHostRefreshRate", "trueColor", "ttyLogging", "vsync", "widescreenHack",
+        };
+        for (const char* suffix : kLegacyPs1CoreKeys)
+        {
+            const std::string oldKey = std::string("ps1.") + suffix;
+            const std::string newKey = std::string("core.ps1.") + suffix;
+            if (!SettingManager->Contains(newKey))
+            {
+                if (const auto value = SettingManager->Get(oldKey); value.has_value())
+                    SettingManager->Set(newKey, *value);
+            }
+        }
 
         SettingManager->SetDefault("core.saturn.emulated_bios", ConfigValue(0));
         SettingManager->SetDefault("core.saturn.frame_skip", ConfigValue(0));

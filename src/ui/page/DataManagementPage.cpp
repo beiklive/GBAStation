@@ -10,6 +10,7 @@
 #include "ui/widget/GridBox.hpp"
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/rom/PspMeta.hpp"
+#include "core/rom/Ps1DiscMeta.hpp"
 #include "core/rom/ThreeDsIcon.hpp"
 #include "core/Tools.hpp"
 #include "network/WebService.h"
@@ -110,6 +111,20 @@ static std::string resolveScanTitle(const fs::path& romPath, int platform,
         embedded = beiklive::ExtractNdsHeaderTitle(romPath.string());
     else if (platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
         embedded = beiklive::ExtractThreeDsTitle(romPath.string());
+    else if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1))
+    {
+        // PS1 titles do not carry a display name in the image metadata, but
+        // the SYSTEM.CNF serial is stable and can be used by name mappings.
+        const std::string serial = beiklive::ps1_meta::ExtractSerial(romPath.string());
+        if (!serial.empty() && beiklive::NameMappingManager)
+        {
+            if (auto serialValue = beiklive::NameMappingManager->Get(serial))
+            {
+                if (auto serialName = serialValue->AsString(); serialName && !serialName->empty())
+                    return *serialName;
+            }
+        }
+    }
     if (!embedded.empty())
         return embedded;
 

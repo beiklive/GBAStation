@@ -1523,8 +1523,8 @@ beiklive::enums::FileType platformToFileType(int platform)
 #ifdef __SWITCH__
             return launchExternalCoreNro(entry.path, entry.title, "PS1",
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
-                "ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
-                "ps1.externalNro.returnPath");
+                "core.ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
+                "core.ps1.externalNro.returnPath");
 #else
             brls::Application::notify(L("PS1 独立运行时仅支持 Switch"));
             return false;
@@ -1646,8 +1646,8 @@ void StartPage::_launchDirItem(const beiklive::DirListData& dirItem, beiklive::B
 #ifdef __SWITCH__
             launchExternalCoreNro(dirItem.fullPath, dirItem.fileName, "PS1",
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
-                "ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
-                "ps1.externalNro.returnPath");
+                "core.ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
+                "core.ps1.externalNro.returnPath");
             return;
 #else
             brls::Application::notify(L("PS1 独立运行时仅支持 Switch"));

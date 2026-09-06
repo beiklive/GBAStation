@@ -1575,7 +1575,7 @@ private:
     bool m_inMapping = false;
     bool m_inCore = false;
     bool m_coreSettingsOverlay = false;
-    enum class CoreBrowserMode { None, Configured, Management, Platform };
+    enum class CoreBrowserMode { None, Management, Platform };
     CoreBrowserMode m_coreBrowserMode = CoreBrowserMode::None;
     CoreBrowserMode m_coreBrowserParent = CoreBrowserMode::None;
     int m_coreBrowserFilter = 0;
@@ -1737,9 +1737,7 @@ private:
             [](int platform) { return !beiklive::path::externalCoreInstalled(platform); });
         if (hasMissingExternalCore)
             emulator.push_back(_section(L("部分平台需要外置核心，请前往“关于 → 在线资源”下载")));
-        emulator.push_back(_action(L("已配置核心"), L("查看当前已有游戏或核心配置的平台"), 0xE8B8,
-            [this]() { return std::string(L("进入  >")); },
-            [this]() { _openCoreBrowser(CoreBrowserMode::Configured); }));
+        emulator.push_back(_section(L("核心设置")));
         emulator.push_back(_action(L("核心管理"), L("选择游戏平台并配置模拟器核心"), beiklive::material::SETTINGS,
             [this]() { return std::string(L("进入  >")); },
             [this]() { _openCoreBrowser(CoreBrowserMode::Management); }));
@@ -1900,7 +1898,7 @@ private:
             {L("Arcade 按键映射"), "arcade.", L("外部街机核心按键与热键"), false, 9},
             {L("DC 按键映射"), "dc.", L("Dreamcast 外部核心按键与热键"), false, 10},
             {L("PSP 按键映射"), "psp.", L("PPSSPP 外部核心按键与热键"), false, 11},
-            {L("PS1 按键映射"), "ps1.", L("DuckStation 外部核心按键与热键"), false, 12},
+            {L("PS1 功能热键"), "ps1.", L("DuckStation 外部核心功能热键"), false, 12},
             {L("Saturn 按键映射"), "saturn.", L("YabaSanshiro 外部核心按键与热键"), false, 13},
             {L("GC / Wii 按键映射"), "dolphin.", L("Dolphin 外部核心按键与热键"), false, 14},
         };
@@ -2052,20 +2050,11 @@ private:
             return;
         }
 
-        std::unordered_set<int> configured;
-        if (m_coreBrowserMode == CoreBrowserMode::Configured && beiklive::GameDB)
-        {
-            for (const auto& entry : beiklive::GameDB->getAll())
-                configured.insert(entry.platform);
-        }
         for (size_t i = 0; i < platformCount; ++i)
         {
             const auto& info = platforms[i];
             if (info.externalPlatform >= 0 &&
                 !beiklive::path::externalCoreInstalled(info.externalPlatform))
-                continue;
-            if (m_coreBrowserMode == CoreBrowserMode::Configured &&
-                configured.find(info.platform) == configured.end())
                 continue;
             if (m_coreBrowserFilter != 0 && info.group != m_coreBrowserFilter)
                 continue;
@@ -2639,12 +2628,10 @@ private:
                 category = option.category;
                 m_coreItems.push_back(_section(category));
             }
-            // DuckStation consumes its shared settings with the historical
-            // ps1.* namespace, while the other external cores use
-            // core.<name>.*. Keep the UI namespace identical to the runtime
-            // reader so values survive a launch unchanged.
-            const std::string configKey = prefix == "ps1" ?
-                (prefix + "." + option.key) : ("core." + prefix + "." + option.key);
+            // PS1 core options use the core.ps1.* namespace. Input mappings
+            // stay in ps1.* and are handled by the separate mapping page.
+            const std::string configKey = (prefix == "ps1" || prefix == "core.ps1") ?
+                (std::string("core.ps1.") + option.key) : ("core." + prefix + "." + option.key);
             const std::string fallback = option.defaultValue;
             if (beiklive::SettingManager)
                 beiklive::SettingManager->SetDefault(configKey, ConfigValue(fallback));
@@ -3037,21 +3024,21 @@ private:
         m_coreItems.push_back(_section(L("画面与启动")));
         m_coreItems.push_back(_textValue(
             L("内部渲染分辨率"), L("输入整数倍率，例如 1、2 或 4；倍率越高越清晰"), 0xE8FF,
-            "ps1.resolutionScale", "1", 8));
+            "core.ps1.resolutionScale", "1", 8));
         const std::vector<std::string> aspectValues = {
             "Auto (Game Native)", "4:3", "16:9", "Stretch To Fill"};
         m_coreItems.push_back(_selector(
             L("画面比例"), L("按游戏原始比例显示，或选择固定拉伸比例"), 0xE3F4,
             {L("自动（游戏原始比例）"), "4:3", "16:9", L("拉伸填满")},
-            [aspectValues]() { return findIndex(aspectValues, cfgGetStr("ps1.aspectRatio", "Auto (Game Native)")); },
+            [aspectValues]() { return findIndex(aspectValues, cfgGetStr("core.ps1.aspectRatio", "Auto (Game Native)")); },
             [aspectValues](int i) {
                 if (i >= 0 && i < static_cast<int>(aspectValues.size()))
-                    cfgSetStr("ps1.aspectRatio", aspectValues[static_cast<size_t>(i)]);
-            }, "ps1.aspectRatio"));
+                    cfgSetStr("core.ps1.aspectRatio", aspectValues[static_cast<size_t>(i)]);
+            }, "core.ps1.aspectRatio"));
         m_coreItems.push_back(_toggle(
             L("快速启动"), L("跳过 PlayStation BIOS 动画，关闭可获得更接近原机的启动过程"), 0xE8B5,
-            []() { return cfgGetBool("ps1.fastBoot", true); },
-            [](bool value) { cfgSetBool("ps1.fastBoot", value); }, "ps1.fastBoot"));
+            []() { return cfgGetBool("core.ps1.fastBoot", true); },
+            [](bool value) { cfgSetBool("core.ps1.fastBoot", value); }, "core.ps1.fastBoot"));
 
         _appendExternalOptions("ps1", {
             {"系统", "region", "主机区域", "Auto"},
@@ -3086,9 +3073,9 @@ private:
 
         m_coreItems.push_back(_section(L("按键")));
         m_coreItems.push_back(_action(
-            L("PS1 按键映射"), L("配置 DuckStation 外部核心使用的 config.cfg 映射"), 0xE30F,
+            L("PS1 功能热键"), L("配置 DuckStation 外部核心功能热键"), 0xE30F,
             []() { return std::string(L("进入配置  >")); },
-            [this]() { _openMappingPage(L("PS1 按键映射"), "ps1.", false); }));
+            [this]() { _openMappingPage(L("PS1 功能热键"), "ps1.", false); }));
         _finishCorePage(L("DuckStation 核心设置"));
     }
 
@@ -3683,6 +3670,32 @@ private:
             return;
         }
 
+        if (prefix == "ps1.")
+        {
+            m_mappingItems.push_back(_section(L("PS1 功能热键")));
+            static const struct
+            {
+                const char* label;
+                const char* key;
+                const char* defaultValue;
+            } hotkeys[] = {
+                {"打开菜单", "hotkey.menu.pad", "PAD_LT+PAD_RT"},
+                {"暂停/继续", "hotkey.pause.pad", "none"},
+                {"静音", "hotkey.mute.pad", "none"},
+                {"快速保存", "hotkey.quicksave.pad", "none"},
+                {"快速读取", "hotkey.quickload.pad", "none"},
+                {"截图", "hotkey.screenshot.pad", "none"},
+                {"快进", "handle.fastforward", "PAD_LSB"},
+                {"倒带", "handle.rewind", "none"},
+            };
+            for (const auto& entry : hotkeys)
+                _addBinding(L(entry.label), L("可绑定单键或双键组合"),
+                            beiklive::input_mapping::makeKey(prefix, entry.key), entry.defaultValue);
+            m_mappingFocus = _firstFocusable(m_mappingItems);
+            m_mappingScroll = m_mappingTargetScroll = 0.f;
+            return;
+        }
+
         const unsigned mask = beiklive::input_mapping::platformMaskForPrefix(prefix);
         m_mappingItems.push_back(_section(L("游戏按键")));
         for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
@@ -4159,7 +4172,6 @@ private:
         std::string subtitle;
         if (m_inMapping) subtitle = m_mappingTitle;
         else if (m_inCore) subtitle = m_coreTitle;
-        else if (m_coreBrowserMode == CoreBrowserMode::Configured) subtitle = L("已配置核心");
         else if (m_coreBrowserMode == CoreBrowserMode::Management) subtitle = L("核心管理");
         else if (m_coreBrowserMode == CoreBrowserMode::Platform)
             subtitle = L("游戏平台核心");
@@ -4218,7 +4230,6 @@ private:
             float bgCursor = y + 16.f - m_scroll[0];
             nvgSave(vg);
             nvgIntersectScissor(vg, x + 2.f, y + 2.f, w - 4.f, h - 4.f);
-            nvgGlobalAlpha(vg, 0.34f);
             for (int i = 0; i < static_cast<int>(background.size()); ++i)
             {
                 const auto& item = background[static_cast<size_t>(i)];
@@ -4234,15 +4245,9 @@ private:
             }
             nvgRestore(vg);
 
-            nvgBeginPath(vg);
-            nvgRect(vg, x, y, w, h);
-            nvgFillColor(vg, nvgRGBA(0, 0, 0, 122));
-            nvgFill(vg);
-
-            const float panelW = std::min(790.f, w - 120.f);
+            const float panelW = std::min(1080.f, w - 48.f);
             const float rows = std::max(1.f, std::ceil(static_cast<float>(m_coreBrowserItems.size()) / 3.f));
-            const float browserHeight = (m_coreBrowserMode == CoreBrowserMode::Management && !m_coreSettingsOverlay
-                ? 180.f : 128.f) + rows * 76.f;
+            const float browserHeight = 128.f + rows * 76.f;
             const float panelH = m_coreSettingsOverlay
                 ? std::min(h - 86.f, 580.f)
                 : std::min(h - 86.f, browserHeight);
@@ -4265,8 +4270,7 @@ private:
             nvgFontSize(vg, 22.f);
             nvgFillColor(vg, nvgRGBA(230, 230, 230, 255));
             const std::string title = m_coreSettingsOverlay ? m_coreTitle
-                : (m_coreBrowserMode == CoreBrowserMode::Configured ? L("已配置核心")
-                    : (m_coreBrowserMode == CoreBrowserMode::Management ? L("核心管理") : L("游戏平台核心")));
+                : (m_coreBrowserMode == CoreBrowserMode::Management ? L("核心管理") : L("游戏平台核心"));
             nvgText(vg, panel.x + 24.f, panel.y + 31.f, title.c_str(), nullptr);
             nvgFontSize(vg, 14.f);
             nvgFillColor(vg, nvgRGBA(175, 175, 175, 255));
@@ -4316,8 +4320,8 @@ private:
                 return;
             }
             if (m_coreBrowserMode == CoreBrowserMode::Management && !m_coreSettingsOverlay)
-                _drawCoreBrowserFilter(vg, innerX, innerY, innerW);
-            const float offsetY = (m_coreBrowserMode == CoreBrowserMode::Management && !m_coreSettingsOverlay) ? 52.f : 0.f;
+                _drawCoreBrowserFilter(vg, panel.x + 184.f, panel.y + 10.f, panel.w - 208.f);
+            const float offsetY = 0.f;
             constexpr int columns = 3;
             const float cardW = (innerW - 16.f) / columns;
             const float cardH = 68.f;
@@ -4387,20 +4391,24 @@ private:
         for (int i = 0; i < 6; ++i)
         {
             const bool selected = i == m_coreBrowserFilter;
-            const Rect r{x + i * itemW + 4.f, y, itemW - 8.f, 38.f};
+            const Rect r{x + i * itemW + 3.f, y, itemW - 6.f, 40.f};
             if (selected)
             {
+                _drawExternalShadow(vg, r, 20.f, 0.8f);
                 nvgBeginPath(vg);
-                nvgRoundedRect(vg, r.x, r.y, r.w, r.h, 7.f);
-                nvgFillColor(vg, nvgRGBA(9, 71, 113, 255));
+                nvgRoundedRect(vg, r.x, r.y, r.w, r.h, 20.f);
+                nvgFillColor(vg, settingPanelSubtle(0.14f));
                 nvgFill(vg);
-                beiklive::ui::drawGradientFocusBorder(vg, r.x, r.y, r.w, r.h, 7.f, 2.f, 1.f,
-                    beiklive::ui::gradientFocusAnimationOffset(m_time));
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, r.x + 1.f, r.y + 1.f, r.w - 2.f, r.h - 2.f, 19.f);
+                nvgStrokeColor(vg, settingBorder(0.42f));
+                nvgStrokeWidth(vg, 1.f);
+                nvgStroke(vg);
             }
             nvgFontFaceId(vg, m_defaultFont);
-            nvgFontSize(vg, selected ? 17.f : 15.f);
+            nvgFontSize(vg, selected ? 17.f : 16.f);
             nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, selected ? nvgRGBA(255, 255, 255, 255) : nvgRGBA(170, 170, 170, 255));
+            nvgFillColor(vg, selected ? settingText() : settingMuted(0.72f));
             nvgText(vg, r.x + r.w * 0.5f, r.y + r.h * 0.5f, L(labels[i]).c_str(), nullptr);
         }
     }

@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # ============================================================
 # Nintendo Switch 构建脚本（MSYS2 + macOS + Linux）
 #
@@ -124,6 +124,20 @@ if [ ! -f "${DEVKITPRO}/cmake/Switch.cmake" ]; then
     echo "请确认："
     echo "1. 已安装 devkitPro"
     echo "2. DEVKITPRO 环境变量正确"
+    echo ""
+
+    exit 1
+fi
+
+if ! command -v cmake >/dev/null 2>&1; then
+
+    echo ""
+    echo "[错误] 未找到 CMake（需要 3.10 或更高版本）"
+    if [ "$PLATFORM" = "mac" ]; then
+        echo "请安装：brew install cmake"
+    else
+        echo "请通过系统包管理器安装 cmake。"
+    fi
     echo ""
 
     exit 1

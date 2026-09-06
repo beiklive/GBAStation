@@ -323,8 +323,8 @@ bool launchDirectGameActivity(const std::string& romPath)
 	{
 		return launchExternalCore("PS1",
 			static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
-			"ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
-			"ps1.externalNro.returnPath");
+			"core.ps1.externalNro.path", "/GBAStation/core/GBAStationDuckStationStub.nro",
+			"core.ps1.externalNro.returnPath");
 	}
 	if (fileType == beiklive::enums::FileType::SATURN_ROM)
 	{

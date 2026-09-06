@@ -56,11 +56,11 @@ sdmc:/GBAStation/core/GBAStationPPSSPPStub.nro
 
 ### Nintendo Switch
 
-The devkitPro / devkitA64 environment is required:
+The devkitPro / devkitA64 environment and CMake 3.10 or later are required. On macOS, install CMake with `brew install cmake`:
 
 ```bash
 cd BeikLiveStation
-bash switchbuild.sh
+./switchbuild.sh
 ```
 
 Local builds copy external cores from neighboring project directories by default:
