@@ -67,6 +67,9 @@ public:
 private:
     static constexpr double kDefaultSampleRate = 48000.0;
     static constexpr size_t kSwitchAudioSamples = 0x400;
+    // mGBA's GB/GBC audio generator does not emit a stable number of samples
+    // per video frame. Match its libretro frontend's dedicated callback size.
+    static constexpr size_t kGbAudioSamples = 0x200;
     static constexpr unsigned kMaxVideoWidth = 256;
     static constexpr unsigned kMaxVideoHeight = 224;
     static constexpr size_t kAudioBufferCapacity = 32768;

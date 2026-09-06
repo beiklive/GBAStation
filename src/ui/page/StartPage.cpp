@@ -1225,6 +1225,7 @@ beiklive::enums::FileType platformToFileType(int platform)
             }
 
             brls::Logger::info("NDS external NRO configured for {}: {}", title, result.message);
+            VideoBackgroundView::setSharedAudioSuspended(true);
             brls::Application::notify(L("正在启动NDS独立NRO..."));
             brls::sync([]() { brls::Application::quit(); });
             return true;
@@ -1248,6 +1249,7 @@ beiklive::enums::FileType platformToFileType(int platform)
             }
 
             brls::Logger::info("3DS external NRO configured for {}: {}", title, result.message);
+            VideoBackgroundView::setSharedAudioSuspended(true);
             brls::Application::notify(L("正在启动3DS独立NRO..."));
             brls::sync([]() { brls::Application::quit(); });
             return true;
@@ -1301,6 +1303,7 @@ beiklive::enums::FileType platformToFileType(int platform)
 				brls::Logger::error("{} external session tracking could not start for {}", label, romPath);
 
             brls::Logger::info("{} external NRO configured for {}: {}", label, title, result.message);
+            VideoBackgroundView::setSharedAudioSuspended(true);
             brls::Application::notify(L("正在启动") + label + L("独立NRO..."));
             brls::sync([]() { brls::Application::quit(); });
             return true;
@@ -1816,9 +1819,11 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
             brls::Logger::info("Exit requested");
             if (switchLayout) {
                 switchLayout->playExitAnimation([]() {
+                    VideoBackgroundView::setSharedAudioSuspended(true);
                     brls::Application::quit();
                 });
             } else {
+                VideoBackgroundView::setSharedAudioSuspended(true);
                 brls::Application::quit();
             }
         };
@@ -1918,9 +1923,11 @@ void StartPage::_showPlatformPicker(const beiklive::DirListData& dirItem,
             brls::Logger::info("Exit requested");
             if (iisuLayout) {
                 iisuLayout->playExitAnimation([]() {
+                    VideoBackgroundView::setSharedAudioSuspended(true);
                     brls::Application::quit();
                 });
             } else {
+                VideoBackgroundView::setSharedAudioSuspended(true);
                 brls::Application::quit();
             }
         };

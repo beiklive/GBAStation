@@ -1425,11 +1425,11 @@ public:
         _buildSettings();
 
         auto up = [this](brls::View*) -> bool {
-            _move(m_coreBrowserMode != CoreBrowserMode::None && !m_coreSettingsOverlay ? -3 : -2);
+            _move(-2);
             return true;
         };
         auto down = [this](brls::View*) -> bool {
-            _move(m_coreBrowserMode != CoreBrowserMode::None && !m_coreSettingsOverlay ? 3 : 2);
+            _move(2);
             return true;
         };
         auto left = [this](brls::View*) -> bool {
@@ -1581,6 +1581,11 @@ private:
     int m_coreBrowserFilter = 0;
     int m_coreBrowserPlatform = -1;
     std::vector<NanoSettingItem> m_coreBrowserItems;
+    std::vector<int> m_coreBrowserGroups;
+    std::vector<int> m_coreBrowserRows;
+    std::vector<int> m_coreBrowserColumns;
+    std::vector<float> m_coreBrowserCardOffsets;
+    float m_coreBrowserContentHeight = 0.f;
     int m_coreBrowserFocus = 0;
     float m_coreBrowserScroll = 0.f;
     float m_coreBrowserTargetScroll = 0.f;
@@ -1992,10 +1997,22 @@ private:
             {(int)beiklive::enums::EmuPlatform::EmuPSP, "PSP", 3, 11},
             {(int)beiklive::enums::EmuPlatform::EmuPS1, "PS1", 3, 12},
             {(int)beiklive::enums::EmuPlatform::EmuArcade, "Arcade", 4, 9},
-            {(int)beiklive::enums::EmuPlatform::EmuDolphin, "GC / Wii", 5, 14},
+            {(int)beiklive::enums::EmuPlatform::EmuDolphin, "GC / Wii", 1, 14},
         };
         count = sizeof(values) / sizeof(values[0]);
         return values;
+    }
+
+    static const char* _coreVendorTitle(int group)
+    {
+        switch (group)
+        {
+        case 1: return "任天堂";
+        case 2: return "世嘉";
+        case 3: return "索尼";
+        case 4: return "街机";
+        default: return "其他";
+        }
     }
 
     void _openCoreBrowser(CoreBrowserMode mode)
@@ -2028,6 +2045,11 @@ private:
     void _buildCoreBrowserItems()
     {
         m_coreBrowserItems.clear();
+        m_coreBrowserGroups.clear();
+        m_coreBrowserRows.clear();
+        m_coreBrowserColumns.clear();
+        m_coreBrowserCardOffsets.clear();
+        m_coreBrowserContentHeight = 0.f;
         size_t platformCount = 0;
         const auto* platforms = _corePlatforms(platformCount);
         if (m_coreBrowserMode == CoreBrowserMode::Platform)
@@ -2046,7 +2068,10 @@ private:
                     [this, platform = m_coreBrowserPlatform, id = option.id]() {
                         _openCoreOption(platform, id);
                     }));
+                m_coreBrowserGroups.push_back(-1);
             }
+            _rebuildCoreBrowserLayout();
+            m_coreBrowserFocus = _firstFocusable(m_coreBrowserItems);
             return;
         }
 
@@ -2066,15 +2091,61 @@ private:
                 0xE322,
                 [coreName]() { return coreName + "  >"; },
                 [this, platform = info.platform]() { _openPlatformCoreBrowser(platform); }));
+            m_coreBrowserGroups.push_back(info.group);
         }
+        _rebuildCoreBrowserLayout();
         m_coreBrowserFocus = _firstFocusable(m_coreBrowserItems);
+    }
+
+    void _rebuildCoreBrowserLayout()
+    {
+        m_coreBrowserRows.assign(m_coreBrowserItems.size(), 0);
+        m_coreBrowserColumns.assign(m_coreBrowserItems.size(), 0);
+        m_coreBrowserCardOffsets.assign(m_coreBrowserItems.size(), 0.f);
+        if (m_coreBrowserItems.empty())
+            return;
+
+        int visualRow = 0;
+        float cursorY = 0.f;
+        size_t index = 0;
+        while (index < m_coreBrowserItems.size())
+        {
+            const int group = index < m_coreBrowserGroups.size()
+                ? m_coreBrowserGroups[index] : -1;
+            size_t end = index + 1;
+            while (end < m_coreBrowserItems.size() &&
+                   end < m_coreBrowserGroups.size() &&
+                   m_coreBrowserGroups[end] == group)
+                ++end;
+
+            // Management mode reserves a compact title band before each vendor.
+            if (m_coreBrowserMode == CoreBrowserMode::Management)
+            {
+                cursorY += 34.f;
+            }
+            const size_t groupCount = end - index;
+            const int rows = static_cast<int>((groupCount + 2) / 3);
+            for (size_t j = 0; j < groupCount; ++j)
+            {
+                const size_t itemIndex = index + j;
+                m_coreBrowserRows[itemIndex] = visualRow + static_cast<int>(j / 3);
+                m_coreBrowserColumns[itemIndex] = static_cast<int>(j % 3);
+                m_coreBrowserCardOffsets[itemIndex] = cursorY + static_cast<float>(j / 3) * 76.f;
+            }
+            cursorY += static_cast<float>(rows) * 76.f;
+            visualRow += rows;
+            index = end;
+        }
+        m_coreBrowserContentHeight = cursorY;
     }
 
     void _openCoreOption(int platform, const std::string& coreId)
     {
         m_coreSettingsOverlay = true;
+        m_coreBrowserMode = CoreBrowserMode::Platform;
         m_coreBrowserPlatform = platform;
-        m_coreBrowserItems.clear();
+        m_coreBrowserParent = CoreBrowserMode::Management;
+        _buildCoreBrowserItems();
         if (platform == (int)beiklive::enums::EmuPlatform::EmuGBA ||
             platform == (int)beiklive::enums::EmuPlatform::EmuGBC ||
             platform == (int)beiklive::enums::EmuPlatform::EmuGB)
@@ -3854,15 +3925,40 @@ private:
         int index = _activeFocus();
         if (m_coreBrowserMode != CoreBrowserMode::None && !m_coreSettingsOverlay)
         {
-            constexpr int columns = 3;
             const int count = static_cast<int>(items.size());
-            const int column = index % columns;
-            int next = index;
-            if (direction == -1) { if (column == 0) return; --next; }
-            else if (direction == 1) { if (column == columns - 1 || index + 1 >= count) return; ++next; }
-            else if (direction == -columns) { if (index < columns) return; next -= columns; }
-            else if (direction == columns) { if (index + columns >= count) return; next += columns; }
+            if (index < 0 || index >= count ||
+                index >= static_cast<int>(m_coreBrowserRows.size()))
+                return;
+            const int row = m_coreBrowserRows[static_cast<size_t>(index)];
+            const int column = m_coreBrowserColumns[static_cast<size_t>(index)];
+            int next = -1;
+            if (direction == -1 || direction == 1)
+            {
+                const int wanted = column + (direction < 0 ? -1 : 1);
+                if (wanted < 0 || wanted > 2) return;
+                for (int i = 0; i < count; ++i)
+                    if (m_coreBrowserRows[static_cast<size_t>(i)] == row &&
+                        m_coreBrowserColumns[static_cast<size_t>(i)] == wanted)
+                    { next = i; break; }
+            }
+            else if (direction == -2 || direction == 2)
+            {
+                const int wantedRow = row + (direction < 0 ? -1 : 1);
+                int bestDistance = 100;
+                for (int i = 0; i < count; ++i)
+                {
+                    if (m_coreBrowserRows[static_cast<size_t>(i)] != wantedRow)
+                        continue;
+                    const int distance = std::abs(m_coreBrowserColumns[static_cast<size_t>(i)] - column);
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        next = i;
+                    }
+                }
+            }
             else return;
+            if (next < 0) return;
             _activeFocus() = next;
             _ensureFocusedVisible();
             brls::Application::getAudioPlayer()->play(brls::SOUND_FOCUS_CHANGE);
@@ -4072,11 +4168,9 @@ private:
         {
             m_inCore = false;
             m_coreItems.clear();
-            if (m_coreBrowserPlatform >= 0)
-            {
-                m_coreBrowserMode = CoreBrowserMode::Platform;
-                _buildCoreBrowserItems();
-            }
+            m_coreSettingsOverlay = false;
+            m_coreBrowserMode = CoreBrowserMode::Platform;
+            _buildCoreBrowserItems();
             m_contentEntrance = 0.f;
             brls::Application::getAudioPlayer()->play(brls::SOUND_BACK);
             return;
@@ -4094,7 +4188,12 @@ private:
     {
         const auto& items = const_cast<NanoSettingsCanvas*>(this)->_activeItems();
         if (m_coreBrowserMode != CoreBrowserMode::None && !m_coreSettingsOverlay)
-            return 54.f + (m_coreBrowserFocus / 3) * 76.f;
+        {
+            if (m_coreBrowserFocus >= 0 &&
+                m_coreBrowserFocus < static_cast<int>(m_coreBrowserCardOffsets.size()))
+                return 54.f + m_coreBrowserCardOffsets[static_cast<size_t>(m_coreBrowserFocus)];
+            return 54.f;
+        }
         const int focus = m_inMapping ? m_mappingFocus : (m_inCore ? m_coreFocus : m_focus[static_cast<size_t>(m_category)]);
         float offset = 0.f;
         for (int i = 0; i < focus && i < static_cast<int>(items.size()); ++i)
@@ -4106,7 +4205,7 @@ private:
     {
         const auto& items = const_cast<NanoSettingsCanvas*>(this)->_activeItems();
         if (m_coreBrowserMode != CoreBrowserMode::None && !m_coreSettingsOverlay)
-            return 72.f + std::ceil(static_cast<float>(items.size()) / 3.f) * 76.f;
+            return 72.f + m_coreBrowserContentHeight;
         float height = 18.f;
         for (const auto& item : items)
             height += _itemHeight(item) + 8.f;
@@ -4246,8 +4345,7 @@ private:
             nvgRestore(vg);
 
             const float panelW = std::min(1080.f, w - 48.f);
-            const float rows = std::max(1.f, std::ceil(static_cast<float>(m_coreBrowserItems.size()) / 3.f));
-            const float browserHeight = 128.f + rows * 76.f;
+            const float browserHeight = 128.f + m_coreBrowserContentHeight;
             const float panelH = m_coreSettingsOverlay
                 ? std::min(h - 86.f, 580.f)
                 : std::min(h - 86.f, browserHeight);
@@ -4326,10 +4424,28 @@ private:
             const float cardW = (innerW - 16.f) / columns;
             const float cardH = 68.f;
             const float gap = 8.f;
+            int previousGroup = -1;
             for (int i = 0; i < static_cast<int>(items.size()); ++i)
             {
-                const float cardX = innerX + (i % columns) * (cardW + gap);
-                const float cardY = innerY + offsetY + (i / columns) * (cardH + gap) - _activeScroll();
+                const int group = (m_coreBrowserMode == CoreBrowserMode::Management &&
+                                   i < static_cast<int>(m_coreBrowserGroups.size()))
+                    ? m_coreBrowserGroups[static_cast<size_t>(i)] : -1;
+                if (m_coreBrowserMode == CoreBrowserMode::Management && group != previousGroup)
+                {
+                    nvgFontFaceId(vg, m_defaultFont);
+                    nvgFontSize(vg, 18.f);
+                    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+                    nvgFillColor(vg, settingText(0.92f));
+                    const float titleY = innerY + m_coreBrowserCardOffsets[static_cast<size_t>(i)] - 17.f - _activeScroll();
+                    nvgText(vg, innerX + 4.f,
+                            titleY,
+                            L(_coreVendorTitle(group)).c_str(), nullptr);
+                    previousGroup = group;
+                }
+                const int column = i < static_cast<int>(m_coreBrowserColumns.size())
+                    ? m_coreBrowserColumns[static_cast<size_t>(i)] : (i % columns);
+                const float cardX = innerX + column * (cardW + gap);
+                const float cardY = innerY + offsetY + m_coreBrowserCardOffsets[static_cast<size_t>(i)] - _activeScroll();
                 if (cardY + cardH < innerY || cardY > innerY + innerH)
                     continue;
                 _drawCoreBrowserCard(vg, items[static_cast<size_t>(i)],
@@ -5554,10 +5670,8 @@ brls::View *SettingPage::buildAudioTab()
     return container;
 }
 
-namespace
+void registerKeyBindActions(beiklive::DetailCell* cell, const std::string& cfgKey)
 {
-    void registerKeyBindActions(beiklive::DetailCell* cell, const std::string& cfgKey)
-    {
         cell->registerAction(L("确认"), brls::BUTTON_A,
             [cell, cfgKey](brls::View*) {
                 openKeyCapture([cell, cfgKey](const std::string& r) {
@@ -5726,7 +5840,6 @@ namespace
         HIDE_BRLS_BAR(frame);
         beiklive::pushActivity(frame, parent, page);
     }
-}
 
 brls::View *SettingPage::buildKeyBindTab()
 {

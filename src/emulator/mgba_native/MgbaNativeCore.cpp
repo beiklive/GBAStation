@@ -1169,12 +1169,20 @@ void MgbaNativeCore::configureAudioStream()
     if (!m_core)
         return;
 
+    const bool isGbFamily = m_gameEntry.platform == static_cast<int>(
+        beiklive::enums::EmuPlatform::EmuGB) ||
+        m_gameEntry.platform == static_cast<int>(
+        beiklive::enums::EmuPlatform::EmuGBC);
+    const size_t bufferSamples = isGbFamily ? kGbAudioSamples : kSwitchAudioSamples;
+
 #ifdef __SWITCH__
-    // Keep audout waits and hardware buffer submission off the emulation thread.
-    // RunFrame drains mGBA's samples into AudioManager, whose Switch worker is
-    // pinned to core 2.
-    m_audioStreamEnabled = false;
-    brls::Logger::info("MgbaNativeCore: Switch audio routed through AudioManager core2 worker");
+    // GBA supplies a stable number of samples per video frame, so it can be
+    // drained once from RunFrame. GB/GBC explicitly require mGBA's fixed-size
+    // postAudioBuffer callback: their generated sample count varies per frame.
+    // Both paths still feed AudioManager, which owns hardware submission.
+    m_audioStreamEnabled = isGbFamily;
+    brls::Logger::info("MgbaNativeCore: Switch {} audio routed through AudioManager core2 worker",
+                       isGbFamily ? "GB/GBC callback" : "GBA frame drain");
 #else
     m_audioStreamEnabled = true;
 #endif
@@ -1184,11 +1192,12 @@ void MgbaNativeCore::configureAudioStream()
     m_audioStream.d.postAudioBuffer = &MgbaNativeCore::postAudioBuffer;
     m_core->setAVStream(m_core, &m_audioStream.d);
 
-    m_core->setAudioBufferSize(m_core, kSwitchAudioSamples);
+    m_core->setAudioBufferSize(m_core, bufferSamples);
     m_audioOutputSpeed = 1.0f;
     applyCoreAudioRates();
-    brls::Logger::debug("MgbaNativeCore: native audio stream configured sampleRate={} bufferSamples={} fps={:.3f}",
-                        static_cast<int>(m_sampleRate), kSwitchAudioSamples, m_fps);
+    brls::Logger::debug("MgbaNativeCore: native audio stream configured sampleRate={} bufferSamples={} fps={:.3f} callback={}",
+                        static_cast<int>(m_sampleRate), bufferSamples, m_fps,
+                        m_audioStreamEnabled ? 1 : 0);
 }
 
 void MgbaNativeCore::applyCoreAudioRates()
@@ -1196,7 +1205,15 @@ void MgbaNativeCore::applyCoreAudioRates()
     if (!m_core || !m_core->getAudioChannel)
         return;
 
-    const double ratio = static_cast<double>(GBAAudioCalculateRatio(1.0f, static_cast<float>(m_fps), 1.0f));
+    const bool isGbFamily = m_gameEntry.platform == static_cast<int>(
+        beiklive::enums::EmuPlatform::EmuGB) ||
+        m_gameEntry.platform == static_cast<int>(
+        beiklive::enums::EmuPlatform::EmuGBC);
+    // The GB/GBC upstream frontend uses the requested output rate directly.
+    // GBA retains its frame-clock correction, which is already verified by
+    // the existing GBA output path.
+    const double ratio = isGbFamily ? 1.0 : static_cast<double>(
+        GBAAudioCalculateRatio(1.0f, static_cast<float>(m_fps), 1.0f));
     const double effectiveRate = (m_sampleRate * ratio) / std::max(0.1f, m_audioOutputSpeed);
     if (blip_t* left = m_core->getAudioChannel(m_core, 0))
         blip_set_rates(left, m_core->frequency(m_core), effectiveRate);
@@ -1454,7 +1471,12 @@ void MgbaNativeCore::postAudioBuffer(mAVStream* stream, blip_t* left, blip_t* ri
     }
 #endif
 
-    std::vector<int16_t> samples(kSwitchAudioSamples * 2);
+    const bool isGbFamily = owner->m_gameEntry.platform == static_cast<int>(
+        beiklive::enums::EmuPlatform::EmuGB) ||
+        owner->m_gameEntry.platform == static_cast<int>(
+        beiklive::enums::EmuPlatform::EmuGBC);
+    const size_t callbackSamples = isGbFamily ? kGbAudioSamples : kSwitchAudioSamples;
+    std::vector<int16_t> samples(callbackSamples * 2);
     if (!owner->m_audioOutputEnabled)
     {
         blip_clear(left);
@@ -1462,7 +1484,7 @@ void MgbaNativeCore::postAudioBuffer(mAVStream* stream, blip_t* left, blip_t* ri
         return;
     }
 
-    const int produced = blip_read_samples(left, samples.data(), kSwitchAudioSamples, true);
+    const int produced = blip_read_samples(left, samples.data(), callbackSamples, true);
     if (produced <= 0)
         return;
     blip_read_samples(right, samples.data() + 1, produced, true);

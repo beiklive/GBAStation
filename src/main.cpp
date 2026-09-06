@@ -276,6 +276,7 @@ bool launchDirectGameActivity(const std::string& romPath)
 			brls::Logger::error("Direct {} external session tracking could not start for {}", label, romPath);
 
 		brls::Logger::info("Direct {} NRO launch configured: {}", label, result.message);
+		beiklive::VideoBackgroundView::setSharedAudioSuspended(true);
 		brls::Application::quit();
 		return true;
 	};
@@ -295,6 +296,7 @@ bool launchDirectGameActivity(const std::string& romPath)
 			return false;
 		}
 		brls::Logger::info("Direct 3DS NRO launch configured: {}", result.message);
+		beiklive::VideoBackgroundView::setSharedAudioSuspended(true);
 		brls::Application::quit();
 		return true;
 	}

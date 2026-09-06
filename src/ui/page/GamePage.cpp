@@ -806,6 +806,9 @@ namespace beiklive
             dialog->close([this]() {
                 if (m_exitToApplication)
                 {
+                    // Direct launches terminate the host application instead
+                    // of returning to the previous page.
+                    VideoBackgroundView::setSharedAudioSuspended(true);
                     brls::Application::quit();
                     return;
                 }

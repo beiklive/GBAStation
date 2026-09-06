@@ -1,5 +1,6 @@
 #include "UpdatePage.hpp"
 #include "core/Translation.hpp"
+#include "ui/widget/VideoBackgroundView.hpp"
 
 #include "core/Tools.hpp"
 #include "ui/utils/MaterialIcons.hpp"
@@ -508,6 +509,7 @@ void UpdatePage::startInstall() {
                     this->clearButtons();
                     this->getAppletFrame()->setHeight(382.f);
                     this->addButton(L("重启模拟器"), [this]() {
+                        VideoBackgroundView::setSharedAudioSuspended(true);
                         brls::Application::quit();
                     });
                     brls::Application::giveFocus(button1);

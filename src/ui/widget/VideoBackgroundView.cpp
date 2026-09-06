@@ -107,6 +107,10 @@ namespace beiklive
         std::shared_ptr<SharedVideo> g_activeVideo;
         uint64_t g_activeVideoGeneration = 0;
         std::atomic_bool g_videoPlaybackPaused{false};
+        // Audio decoding can still be finishing an FFmpeg packet while the
+        // GamePage transition stops the output device. Keep a separate gate
+        // so that such a packet cannot start the background player again.
+        std::atomic_bool g_backgroundAudioSuspended{false};
         BackgroundAudioPlayer g_backgroundAudio;
         std::mutex g_backgroundAudioMutex;
 
@@ -119,7 +123,9 @@ namespace beiklive
         bool ensureBackgroundAudio()
         {
             std::lock_guard<std::mutex> lock(g_backgroundAudioMutex);
-            if (!GET_SETTING_KEY_INT(SettingKey::KEY_UI_BG_VIDEO_AUDIO, 0))
+            if (g_backgroundAudioSuspended.load(std::memory_order_acquire) ||
+                g_videoPlaybackPaused.load(std::memory_order_acquire) ||
+                !GET_SETTING_KEY_INT(SettingKey::KEY_UI_BG_VIDEO_AUDIO, 0))
                 return false;
             if (!g_backgroundAudio.isRunning()) {
                 if (BKAudioPlayer::isAnyPlaying())
@@ -771,6 +777,9 @@ namespace beiklive
         // main() calls this while the NanoVG context still belongs to the UI
         // thread. Unlike a background replacement, application exit may wait
         // briefly for in-flight storage I/O to finish.
+        // Set the gate before stopping the device so a decoder that is
+        // finishing an audio packet cannot recreate the output during exit.
+        g_backgroundAudioSuspended.store(true, std::memory_order_release);
         stopBackgroundAudio();
         for (auto& [path, video] : g_videoCache) {
             (void)path;
@@ -812,6 +821,7 @@ namespace beiklive
 
     void VideoBackgroundView::setSharedAudioSuspended(bool suspended)
     {
+        g_backgroundAudioSuspended.store(suspended, std::memory_order_release);
         if (suspended)
             stopBackgroundAudio();
         else if (!g_videoPlaybackPaused.load(std::memory_order_acquire) && g_activeVideo)

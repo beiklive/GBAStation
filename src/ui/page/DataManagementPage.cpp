@@ -3126,6 +3126,7 @@ void DataManagementPage::launchCiaInstaller()
     }
 
     brls::Logger::info("3DS CIA installer configured: {}", result.message);
+    VideoBackgroundView::setSharedAudioSuspended(true);
     brls::Application::notify(L("正在启动CIA安装器..."));
     brls::sync([]() { brls::Application::quit(); });
 #endif
