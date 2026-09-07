@@ -699,6 +699,173 @@ static std::vector<ChangelogVersion> parseChangelog(const std::string& content) 
     return versions;
 }
 
+// FAQ 文本规则：
+//   - 以 "# " 开头的行开启一个新分类；
+//   - 以 "Q：" 开头的行作为问题；
+//   - 以 "A：" 开头的行作为答案 / 补充说明。
+static bool faqHasPrefix(const std::string& text, const std::string& prefix) {
+    return text.size() >= prefix.size()
+        && text.compare(0, prefix.size(), prefix) == 0;
+}
+
+static bool faqIsQuestionLine(const std::string& text) {
+    return faqHasPrefix(text, "Q：") || faqHasPrefix(text, "Q:");
+}
+
+static bool faqIsAnswerLine(const std::string& text) {
+    return faqHasPrefix(text, "A：") || faqHasPrefix(text, "A:");
+}
+
+static std::string faqStripPrefix(const std::string& text) {
+    if (faqHasPrefix(text, "Q：") || faqHasPrefix(text, "A："))
+        return text.substr(std::string("Q：").size());
+    if (faqHasPrefix(text, "Q:") || faqHasPrefix(text, "A:"))
+        return text.substr(2);
+    return text;
+}
+
+static std::vector<ChangelogVersion> parseFaqText(const std::string& content) {
+    std::vector<ChangelogVersion> categories;
+    std::istringstream stream(content);
+    std::string rawLine;
+    while (std::getline(stream, rawLine)) {
+        if (!rawLine.empty() && rawLine.back() == '\r')
+            rawLine.pop_back();
+        const std::string text = trimText(rawLine);
+        if (text.empty())
+            continue;
+        if (text.size() > 1 && text.front() == '#') {
+            const std::string name = trimText(text.substr(1));
+            if (!name.empty()) {
+                categories.push_back({name, {}});
+                continue;
+            }
+        }
+        if (categories.empty())
+            categories.push_back({L("常见问题"), {}});
+
+        int spaces = 0;
+        for (const char c : rawLine) {
+            if (c == ' ')
+                ++spaces;
+            else if (c == '\t')
+                spaces += 4;
+            else
+                break;
+        }
+        ChangelogLineKind kind = ChangelogLineKind::TEXT;
+        if (faqIsQuestionLine(text))
+            kind = ChangelogLineKind::BULLET;
+        else if (faqIsAnswerLine(text))
+            kind = ChangelogLineKind::TEXT;
+        else if (isChangelogSection(text))
+            kind = ChangelogLineKind::SECTION;
+        categories.back().lines.push_back({text, kind, std::clamp(spaces / 4, 0, 2)});
+    }
+    if (categories.empty())
+        categories.push_back({L("常见问题"), {{L("暂无内容"), ChangelogLineKind::TEXT, 0}}});
+    return categories;
+}
+
+static const std::string kFaqContent = R"(# 一、安装与启动
+Q：GBAStation 怎么安装？
+A：下载最新 Release 包，解压后把 GBAStation.nro 放到 sdmc:/switch/ 目录，然后从 HOME 菜单的 GBAStation 图标进入游戏。不要在相册或其他入口打开。
+Q：外置核心（NDS / 3DS / 街机 / DC / PSP / PS1 等）怎么安装？
+A：打开「关于 → 更新与资源 → 在线资源检测」，找到对应平台的核心一键下载，核心会自动安装到 sdmc:/GBAStation/core/。
+Q：为什么提示缺少核心或启动不了？
+A：核心未安装或路径不对。检查 sdmc:/GBAStation/core/ 下是否存在对应平台的 GBAStation*Stub.nro；Switch 上运行对应平台游戏时会自动切到该核心，退出后再自动回到主程序。
+Q：程序与核心怎么更新？
+A：程序更新和核心更新相互独立：「更新与资源 → 检测程序更新」负责主程序；在线资源里的每个核心带版本号，有新版本时单独下载安装即可，不会覆盖用户配置。
+
+# 二、游戏存放与导入
+Q：游戏包放在哪里？
+A：各机种有各自的扫描目录，可在「设置 → 模拟器 → 扫描路径」查看和修改。可扫描文件与目录位于 GBAStation 目录下按机种区分的子目录中。
+Q：为什么放了游戏却找不到？
+A：依次检查：① 扫描路径是否正确；② 文件名是否含中文（Switch 不支持中文文件名，请改英文或拼音）；③ 文件格式是否在支持列表内；④ 整合包是否误用了「目录扫描」——整合包必须走「整合包导入」。
+Q：整合包怎么导入？
+A：在「数据管理 → 整合包导入」中选择平台和整合包 / LPL 列表导入。目录扫描与整合包导入是两套流程，不能混用，否则会漏导或导错。
+Q：zip / 7z 压缩包能直接玩吗？
+A：只有内置核心机种（GB / GBC、GBA、FC、SFC、MD、PICO-8）支持直接运行 zip / 7z，外置核心机种（NDS、3DS、街机、DC、PSP、PS1、Saturn、GC / Wii）不支持压缩包，需先解压为对应平台的镜像格式（如 DC 解压为 CHD / GDI / CDI / CUE）。内置核心压缩包规则：压缩包文件名不能含中文，包内文件名可以是中文；分卷游戏建议同包存放（共用存档），启动时可选包内文件。
+Q：怎么自定义封面与映射名？
+A：在游戏目录里建 logos/ 文件夹，放入与游戏同名的 png 会自动作为封面；建 name.ini 可自定义显示名（如 Metal Gear Solid.cue=合金装备）。
+
+# 三、PS1 与 PSP
+Q：PS1 核心在哪里下载？
+A：PS1 使用 DuckStation 外置核心，在「在线资源」下载；BIOS 放到 sdmc:/GBAStation/bios/ps1/。
+Q：PS1 游戏内怎么呼出模拟器菜单？
+A：按「- + +」组合键呼出。按键映射、画面剪裁等核心内设置都在这个菜单里调整，前端不提供 PS1 的按键映射。
+Q：PS1 记忆卡和即时存档在哪？
+A：记忆卡在 sdmc:/GBAStation/duckstation/memcards/；即时存档在 sdmc:/GBAStation/duckstation/savestates/。
+Q：PS1 画面不满屏有黑边怎么办？
+A：打开核心菜单，把剪裁模式改成「全部边界 All Borders」即可。
+Q：PS1 游戏没声音 / 没音乐？
+A：缺少 cue 文件。bin 是镜像本体，cue 是音轨索引，二者需要同版本同名放在一起（如 xxx.bin 与 xxx.cue）。
+Q：PSP 核心在哪里下载？
+A：PSP 使用 PPSSPP 外置核心，在「在线资源」下载。
+Q：PSP 存档在哪里？
+A：即时档在 saves/PSP/游戏名/；内存档在 saves/PSP/<游戏 title id>/（存档目录以 GBAStation 保存数据目录为根）。
+Q：PSP 金手指 / 纹理包 / DLC 放哪？
+A：金手指放 PSP/Cheats/；纹理包放 PSP/TEXTURES/；DLC 放入 /GBAStation/PSP/Game/<游戏ID>/。
+Q：428 涩谷开场报错、高分辨率立绘出现网格怎么办？
+A：这两个是 PPSSPP 的兼容 / 渲染问题，核心内有专门设置可以解决，具体对照见群置顶文档对应条目。
+
+# 四、3DS 与 NDS
+Q：3DS 支持什么格式？
+A：支持 CCI / CIA 格式。3DS 核心（Azahar）在「在线资源」下载。
+Q：3DS 中文乱码怎么办？
+A：在「在线资源」下载「3DS 中文字库」，放好后若仍乱码，再下载「3DS 中文安装包」，把里面的两个 cia 装到机器上。
+Q：3DS 的节奏天国乱码、超频建议、卡死 / 崩溃、下屏异常、火纹回声主界面异常？
+A：这些属于个别游戏的兼容问题，不同版本处理方式不同，群置顶文档有按版本整理的对应条目，请按你的核心版本对照处理。
+Q：3DS 按键支持完整吗？
+A：支持双摇杆与 ZL / ZR 映射，可在按键设置里按需调整。
+Q：v0.3.14 修复了 3DS 哪些问题？
+A：修复了闪退（测试性）、待机死机、快存 / 快读崩溃。
+Q：NDS 核心用哪个？
+A：NDS 使用独立 NDS 核心（melonDS），在「在线资源」下载。另有 NDS 2D 专用核心：不会出现图块偏移和缺失，但只能 1 倍分辨率游玩，主玩 2D 游戏推荐用它。
+Q：NDS 色块 / 图片错位、卡顿怎么办？
+A：多为高倍率渲染导致：改用 NDS 2D 专用核心或调低分辨率即可（v0.3.14 起「激烈 NDS 核心」已暂时移除）。
+Q：NDS BIOS 放哪里？
+A：bios7.bin、bios9.bin、firmware.bin 放到 sdmc:/GBAStation/bios/NDS/，文件请自行上网搜索获取。
+
+# 五、街机 / DC / 其他机种
+Q：街机（Arcade）怎么玩？
+A：街机核心为 FBNeo，在「在线资源」下载安装。启动不了时优先检查 BIOS 与 romset 是否与核心版本匹配。
+Q：DC 核心怎么用？
+A：DC 使用 Flycast 外置核心，在「在线资源」下载。DC 不支持直接运行 zip / 7z 压缩包，请先解压成 CHD / GDI / CDI / CUE 再运行；缺轨道信息的原始 ISO 也不支持。
+Q：DC 卡 Logo、过场雾化怎么办？
+A：属于 Flycast 渲染 / 配置问题，群置顶文档有针对该核心版本的选项说明，请对照调整。
+Q：GBA 画面模糊怎么办？
+A：在画面设置里调整滤镜 / 缩放档位即可；GB / GBC 画面跑到左上角的问题已在 v0.3.14 修复。
+Q：v0.3.14 修复了 mGBA 爆音？
+A：是，v0.3.14 修复了 mGBA 爆音问题。
+Q：NES 和 FC 是什么关系？
+A：NES = FC，是同一台主机日版 / 美版的叫法，游戏与核心通用。
+
+# 六、功能速查与兼容
+Q：支持哪些机种？
+A：内置核心：GB / GBC、GBA、FC、SFC、MD、PICO-8；外置核心：NDS、3DS、街机、DC、PSP、PS1、Saturn、GC / Wii。对应徽标见「项目信息」页。
+Q：PSV / PS2 / WiiU 能玩吗？
+A：暂不考虑。能稳定流畅跑完大部分游戏之前，不会考虑移植这些平台。
+Q：支持联机吗？
+A：暂不支持。
+Q：游戏能完美运行吗？
+A：请自行测试。不同游戏、ROM 与设置组合差异很大，以实际运行为准。
+Q：会和全能模拟器冲突吗？
+A：功能上无关联，互不影响，可以共存。
+Q：倒带没反应？
+A：检查倒带按键与设置是否开启；倒带需要预留内存保存历史帧，开启后即可使用。
+Q：金手指不生效？
+A：先确认格式。支持 RAW / GS 格式；AR（Action Replay）加密码需要先转换成 RAW / GS 再用；FC / SFC / MD / GBA 目前不提供金手指文件，需要自备。
+Q：常用目录速查？
+A：外置核心：/GBAStation/core/；BIOS：/GBAStation/bios/（NDS、PS1 各子目录）；PS1 记忆卡 duckstation/memcards/、即时档 duckstation/savestates/；PSP 即时档 saves/PSP/、金手指 PSP/Cheats/、纹理包 PSP/TEXTURES/、DLC PSP/Game/<ID>；遮罩 overlays/；着色器 shaders/（RA 与 slang 两套）；自定义封面 logos/。
+Q：Web 远程管理怎么用？
+A：Switch 与电脑 / 手机连接同一局域网，用浏览器打开网页上显示的 IP 即可上传 ROM、改封面、管理游戏库。远程导入的机种识别问题已修复，各机种按所选平台正确入库，不会再导错。
+Q：怎么收藏游戏？
+A：在主页或游戏库中选中游戏按 X 键即可加入收藏。
+Q：v0.3.14 有哪些主要更新？
+A：3DS 闪退（测试性）、待机死机、快存 / 快读崩溃修复；mGBA 爆音修复；NDS「激烈核心」暂时移除；游戏库列表模式支持左右键快速翻页；视频背景支持声音开关（音量 0-200%）；模拟器菜单 LR 调节器提速。
+)";
+
 static float detailClamp(float value) {
     return std::max(0.f, std::min(1.f, value));
 }
@@ -723,10 +890,16 @@ static unsigned char detailAlpha(float value) {
 class ChangelogCanvas final : public brls::View {
 public:
     ChangelogCanvas(std::string title, std::vector<ChangelogVersion> versions,
-                    std::function<void()> onBack)
+                    std::function<void()> onBack,
+                    std::string headerTitle = L("更新日志"),
+                    std::string countSuffix = L(" 个版本记录"),
+                    bool faqMode = false)
         : m_title(std::move(title))
         , m_versions(std::move(versions))
-        , m_onBack(std::move(onBack)) {
+        , m_onBack(std::move(onBack))
+        , m_headerTitle(std::move(headerTitle))
+        , m_countSuffix(std::move(countSuffix))
+        , m_faqMode(faqMode) {
         this->setFocusable(true);
         this->setGrow(1.f);
         this->setWidthPercentage(100.f);
@@ -833,6 +1006,8 @@ private:
     std::string m_title;
     std::vector<ChangelogVersion> m_versions;
     std::function<void()> m_onBack;
+    std::string m_headerTitle;
+    std::string m_countSuffix;
     int m_defaultFont = -1;
     int m_materialFont = -1;
     int m_switchFont = -1;
@@ -848,6 +1023,7 @@ private:
     float m_detailViewportHeight = 0.f;
     bool m_closing = false;
     bool m_closeQueued = false;
+    bool m_faqMode = false;
     std::chrono::steady_clock::time_point m_lastFrameTime;
 
     void _ensureFonts() {
@@ -892,10 +1068,10 @@ private:
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
         nvgFontSize(vg, 27.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
-        nvgText(vg, x + 36.f, y + 43.f, L("更新日志").c_str(), nullptr);
+        nvgText(vg, x + 36.f, y + 43.f, m_headerTitle.c_str(), nullptr);
         nvgFontSize(vg, 15.f);
         nvgFillColor(vg, nvgRGBA(210, 216, 226, 180));
-        const std::string summary = std::to_string(m_versions.size()) + L(" 个版本记录");
+        const std::string summary = std::to_string(m_versions.size()) + m_countSuffix;
         nvgText(vg, x + 36.f, y + 72.f, summary.c_str(), nullptr);
         nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
         nvgFontSize(vg, 17.f);
@@ -1003,6 +1179,70 @@ private:
                         line.text.c_str(), nullptr);
                 nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
                 cursorY += 48.f;
+                continue;
+            }
+
+            if (m_faqMode) {
+                if (faqIsQuestionLine(line.text) || faqIsAnswerLine(line.text)) {
+                    const bool isQuestion = faqIsQuestionLine(line.text);
+                    const std::string body = faqStripPrefix(line.text);
+                    const float textX = innerX + 48.f;
+                    const float textW = std::max(40.f, innerW - 48.f);
+                    cursorY += isQuestion ? 14.f : 4.f;
+                    nvgFontFaceId(vg, m_defaultFont);
+                    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+                    nvgFontSize(vg, isQuestion ? 18.f : 15.5f);
+                    nvgTextLineHeight(vg, 1.45f);
+                    float bounds[4]{};
+                    nvgTextBoxBounds(vg, textX, cursorY, textW,
+                                     body.c_str(), nullptr, bounds);
+                    const float textH = std::max(24.f, bounds[3] - bounds[1]);
+
+                    constexpr float chipW = 26.f;
+                    constexpr float chipH = 21.f;
+                    const float chipY = cursorY + 2.f;
+                    nvgBeginPath(vg);
+                    nvgRoundedRect(vg, innerX, chipY, chipW, chipH, 5.f);
+                    nvgFillColor(vg, isQuestion
+                        ? nvgRGBA(79, 193, 255, 32)
+                        : nvgRGBA(255, 255, 255, 9));
+                    nvgFill(vg);
+                    nvgBeginPath(vg);
+                    nvgRoundedRect(vg, innerX + 1.f, chipY + 1.f,
+                                   chipW - 2.f, chipH - 2.f, 4.f);
+                    nvgStrokeColor(vg, isQuestion
+                        ? nvgRGBA(79, 193, 255, 150)
+                        : nvgRGBA(255, 255, 255, 55));
+                    nvgStrokeWidth(vg, 1.f);
+                    nvgStroke(vg);
+                    nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+                    nvgFontSize(vg, 12.f);
+                    nvgFillColor(vg, isQuestion
+                        ? nvgRGBA(150, 222, 255, 250)
+                        : nvgRGBA(175, 184, 198, 235));
+                    nvgText(vg, innerX + chipW * 0.5f, chipY + chipH * 0.5f + 1.f,
+                            isQuestion ? L("问").c_str() : L("答").c_str(), nullptr);
+
+                    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+                    nvgFontSize(vg, isQuestion ? 18.f : 15.5f);
+                    nvgFillColor(vg, isQuestion
+                        ? nvgRGBA(250, 252, 255, 255)
+                        : nvgRGBA(203, 210, 221, 220));
+                    nvgTextBox(vg, textX, cursorY, textW,
+                               body.c_str(), nullptr);
+                    cursorY += textH + (isQuestion ? 12.f : 8.f);
+                    continue;
+                }
+                nvgFontSize(vg, 15.f);
+                nvgTextLineHeight(vg, 1.4f);
+                float bounds[4]{};
+                nvgTextBoxBounds(vg, lineX, cursorY, lineW,
+                                 line.text.c_str(), nullptr, bounds);
+                const float textH = std::max(24.f, bounds[3] - bounds[1]);
+                nvgFillColor(vg, nvgRGBA(215, 221, 231, 205));
+                nvgTextBox(vg, lineX, cursorY, lineW,
+                           line.text.c_str(), nullptr);
+                cursorY += textH + 10.f;
                 continue;
             }
 
@@ -1124,6 +1364,24 @@ static void openChangelogApplet(const std::string& title, const std::string& con
         title, parseChangelog(content), []() {
             brls::Application::popActivity(brls::TransitionAnimation::NONE);
         });
+    page->getContentBox()->addView(canvas);
+    auto* frame = new brls::AppletFrame(page);
+    HIDE_BRLS_BAR(frame);
+    brls::Application::pushActivity(
+        new brls::Activity(frame), brls::TransitionAnimation::NONE);
+    brls::Application::giveFocus(canvas);
+}
+
+static void openFaqApplet() {
+    auto* page = new beiklive::Box(brls::Axis::COLUMN);
+    page->showHeader(false);
+    page->showFooter(false);
+    page->setGrow(1.f);
+    auto* canvas = new ChangelogCanvas(
+        L("常见问题速查"), parseFaqText(kFaqContent), []() {
+            brls::Application::popActivity(brls::TransitionAnimation::NONE);
+        },
+        L("常见问题速查"), L(" 个分类"), true);
     page->getContentBox()->addView(canvas);
     auto* frame = new brls::AppletFrame(page);
     HIDE_BRLS_BAR(frame);
@@ -2427,12 +2685,14 @@ public:
                     std::function<void()> onCheckUpdate,
                     std::function<void()> onChangelog,
                     std::function<void()> onResourceCheck,
+                    std::function<void()> onFaq,
                     std::function<void()> onBack)
         : m_version(std::move(version))
         , m_updateSource(std::move(updateSource))
         , m_onCheckUpdate(std::move(onCheckUpdate))
         , m_onChangelog(std::move(onChangelog))
         , m_onResourceCheck(std::move(onResourceCheck))
+        , m_onFaq(std::move(onFaq))
         , m_onBack(std::move(onBack)) {
         this->setFocusable(true);
         this->setGrow(1.f);
@@ -2592,6 +2852,7 @@ private:
     std::function<void()> m_onCheckUpdate;
     std::function<void()> m_onChangelog;
     std::function<void()> m_onResourceCheck;
+    std::function<void()> m_onFaq;
     std::function<void()> m_onBack;
     int m_defaultFont = -1;
     int m_materialFont = -1;
@@ -2657,7 +2918,7 @@ private:
         if (m_tab != 1 || m_clicking || m_closing
             || m_pageEntrance < 0.72f)
             return;
-        const int next = std::clamp(m_updateFocus + direction, 0, 2);
+        const int next = std::clamp(m_updateFocus + direction, 0, 3);
         if (next == m_updateFocus)
             return;
         m_updateFocus = next;
@@ -2679,7 +2940,9 @@ private:
             m_onCheckUpdate();
         else if (m_updateFocus == 1 && m_onChangelog)
             m_onChangelog();
-        else if (m_updateFocus == 2 && m_onResourceCheck)
+        else if (m_updateFocus == 2 && m_onFaq)
+            m_onFaq();
+        else if (m_updateFocus == 3 && m_onResourceCheck)
             m_onResourceCheck();
     }
 
@@ -2911,71 +3174,81 @@ private:
                 "BEIKLIVE", nullptr);
 
         const float px = project.x + 30.f;
+        const float innerW = project.w - 60.f;
         nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
         nvgFontSize(vg, 25.f);
         nvgFillColor(vg, GET_THEME_COLOR("brls/text"));
         nvgText(vg, px, project.y + 27.f, L("关于本项目").c_str(), nullptr);
         nvgFontSize(vg, 17.f);
         nvgFillColor(vg, nvgRGBA(220, 225, 234, 210));
-        nvgTextBox(vg, px, project.y + 68.f, project.w - 60.f,
-            "GBAStation 是面向 Switch 平台的模拟器前端，统一管理游戏、核心、存档、封面与输入配置；MD 由 Genesis Plus GX 运行，Arcade/DC 通过独立外置 NRO 核心运行。", nullptr);
+        nvgTextBox(vg, px, project.y + 68.f, innerW,
+            "GBAStation 是面向 Switch 的多核心模拟器前端，统一管理游戏、核心、存档、封面与输入配置。内置核心在界面内即点即玩，大型机种由独立 NRO 核心运行，退出后自动返回主程序。", nullptr);
 
-        float badgeX = px;
-        const float badgeY = project.y + 126.f;
-        const std::array<std::pair<const char*, NVGcolor>, 10> badges{{
+        const std::array<std::pair<const char*, NVGcolor>, 6> builtinBadges{{
             {"GB / GBC", nvgRGB(79, 193, 255)},
             {"GBA", nvgRGB(0, 188, 212)},
             {"FC", nvgRGB(255, 119, 168)},
             {"SFC", nvgRGB(150, 130, 255)},
+            {"MD", nvgRGB(247, 103, 7)},
+            {"PICO-8", nvgRGB(255, 190, 80)},
+        }};
+        const std::array<std::pair<const char*, NVGcolor>, 8> externalBadges{{
             {"NDS", nvgRGB(100, 220, 150)},
             {"3DS", nvgRGB(230, 79, 91)},
-            {"PICO-8", nvgRGB(255, 190, 80)},
-            {"MD", nvgRGB(247, 103, 7)},
             {"Arcade", nvgRGB(236, 134, 44)},
             {"DC", nvgRGB(0, 142, 180)},
+            {"PSP", nvgRGB(76, 130, 235)},
+            {"PS1", nvgRGB(188, 196, 208)},
+            {"Saturn", nvgRGB(145, 152, 164)},
+            {"GC / Wii", nvgRGB(116, 98, 214)},
         }};
-        for (const auto& badge : badges) {
-            _drawBadge(vg, badgeX, badgeY, badge.first, badge.second);
+
+        const auto drawBadgeRow = [&](float rowY, const auto& badges) {
+            float badgeX = px;
+            for (const auto& badge : badges) {
+                _drawBadge(vg, badgeX, rowY, badge.first, badge.second);
+                nvgFontFaceId(vg, m_defaultFont);
+                nvgFontSize(vg, 15.f);
+                float bounds[4]{};
+                nvgTextBounds(vg, 0.f, 0.f, badge.first, nullptr, bounds);
+                badgeX += bounds[2] - bounds[0] + 36.f;
+            }
+        };
+        const auto drawCaption = [&](float captionY, const char* label) {
             nvgFontFaceId(vg, m_defaultFont);
             nvgFontSize(vg, 15.f);
-            float bounds[4]{};
-            nvgTextBounds(vg, 0.f, 0.f, badge.first, nullptr, bounds);
-            badgeX += bounds[2] - bounds[0] + 36.f;
-        }
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+            nvgFillColor(vg, nvgRGBA(79, 193, 255, 235));
+            nvgText(vg, px, captionY, label, nullptr);
+        };
+
+        drawCaption(project.y + 126.f, L("内置核心").c_str());
+        drawBadgeRow(project.y + 150.f, builtinBadges);
+        drawCaption(project.y + 194.f, L("外置核心").c_str());
+        drawBadgeRow(project.y + 218.f, externalBadges);
 
         nvgBeginPath(vg);
-        nvgMoveTo(vg, px, project.y + 178.f);
-        nvgLineTo(vg, project.x + project.w - 30.f, project.y + 178.f);
+        nvgMoveTo(vg, px, project.y + 280.f);
+        nvgLineTo(vg, project.x + project.w - 30.f, project.y + 280.f);
         nvgStrokeColor(vg, nvgRGBA(255, 255, 255, 34));
         nvgStrokeWidth(vg, 1.f);
         nvgStroke(vg);
 
-        static const std::string features[] = {
-            L("游戏库、封面与游玩记录"),
-            L("目录扫描与 RetroArch 导入"),
-            L("即时、自动存档与倒带"),
-            L("按机型独立输入映射"),
-            L("金手指与多核心切换"),
-            L("着色器、遮罩与画面模式"),
-            L("远程管理与资源检测"),
-            L("原生 NDS、3DS、PICO-8、MD 与外置 Arcade/DC 运行时"),
-        };
-        for (int index = 0; index < 8; ++index) {
-            const int column = index % 2;
-            const int row = index / 2;
-            const float fx = px + column * (project.w - 60.f) * 0.5f;
-            const float fy = project.y + 215.f + row * 58.f;
-            const std::string icon = encodeMaterialIcon(material::CHECK_BOX);
-            nvgFontFaceId(vg, m_materialFont);
-            nvgFontSize(vg, 24.f);
-            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-            nvgFillColor(vg, nvgRGBA(79, 193, 255, 225));
-            nvgText(vg, fx, fy, icon.c_str(), nullptr);
+        const auto drawStatement = [&](float titleY, const char* title,
+                                        const char* body) {
             nvgFontFaceId(vg, m_defaultFont);
-            nvgFontSize(vg, 16.f);
-            nvgFillColor(vg, nvgRGBA(235, 238, 244, 225));
-            nvgText(vg, fx + 34.f, fy, features[index].c_str(), nullptr);
-        }
+            nvgFontSize(vg, 19.f);
+            nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+            nvgFillColor(vg, nvgRGBA(245, 248, 252, 240));
+            nvgText(vg, px, titleY, title, nullptr);
+            nvgFontSize(vg, 15.f);
+            nvgFillColor(vg, nvgRGBA(215, 221, 231, 205));
+            nvgTextBox(vg, px, titleY + 32.f, innerW, body, nullptr);
+        };
+        drawStatement(project.y + 302.f, L("免责声明").c_str(),
+            L("本程序为个人开源项目，仅供学习交流与测试使用，不附带任何游戏 ROM、BIOS 或受版权保护资源；游戏资源请自行准备并遵守当地法律法规。不同游戏、ROM 与设置组合下运行效果差异较大，请自行测试；因使用本程序产生的任何问题，本项目不承担法律责任。").c_str());
+        drawStatement(project.y + 434.f, L("免费声明").c_str(),
+            L("本程序完全免费，无内购与付费功能。任何以“收费安装 / 代装 / 会员 / 破解”名义售卖本程序、核心或资源的均与本项目无关；请认准官方渠道，谨防上当受骗。").c_str());
     }
 
     void _drawUpdate(NVGcontext* vg, float x, float y, float w, float h) {
@@ -3017,19 +3290,22 @@ private:
         const float actionsX = x + leftW + gap;
         const float actionsW = w - leftW - gap;
         const float itemGap = 18.f;
-        const float itemH = (h - itemGap * 2.f) / 3.f;
+        const float itemH = (h - itemGap * 3.f) / 4.f;
         constexpr char32_t icons[] = {
-            material::UPDATE, material::DESCRIPTION, material::SEARCH
+            material::UPDATE, material::DESCRIPTION,
+            material::HELP_OUTLINE, material::SEARCH
         };
         static const std::string titles[] = {
-            L("检测程序更新"), L("查看更新日志"), L("在线资源检测")
+            L("检测程序更新"), L("查看更新日志"),
+            L("常见问题速查"), L("在线资源检测")
         };
         static const std::string descriptions[] = {
             L("检查新版本并进入下载安装流程"),
             L("浏览当前版本包含的功能与修复"),
+            L("浏览常见问题、机种目录与注意事项"),
             L("检测 BIOS、数据库和扩展资源")
         };
-        for (int index = 0; index < 3; ++index) {
+        for (int index = 0; index < 4; ++index) {
             const Rect item{actionsX,
                 y + index * (itemH + itemGap), actionsW, itemH};
             const bool focused = index == m_updateFocus;
@@ -3157,6 +3433,7 @@ AboutPage::AboutPage() {
                     changelogText.empty() ? L("暂无更新日志") : changelogText);
             },
             [this]() { checkOnlineResources(this); },
+            []() { openFaqApplet(); },
             [this]() { beiklive::popActivity(this); });
         this->getContentBox()->addView(m_aboutCanvas);
         brls::Application::giveFocus(m_aboutCanvas);

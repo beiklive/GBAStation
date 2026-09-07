@@ -36,4 +36,5 @@ namespace beiklive::material
     constexpr char32_t PHONE_ANDROID      = 0xE324;
     constexpr char32_t ARCHIVE            = 0xE149;
     constexpr char32_t FILE_GAME          = 0xE338;
+    constexpr char32_t HELP_OUTLINE       = 0xE8FD;
 }

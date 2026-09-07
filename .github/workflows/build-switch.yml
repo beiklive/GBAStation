@@ -16,9 +16,6 @@ jobs:
     container:
       image: devkitpro/devkita64:latest
     env:
-      # Configure CORE_RELEASE_TOKEN when the core repositories are private.
-      # For public repositories github.token is sufficient.
-      GH_TOKEN: ${{ secrets.CORE_RELEASE_TOKEN || github.token }}
       RELEASE_REPO_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
 
     steps:
@@ -31,67 +28,11 @@ jobs:
         shell: bash
         run: dkp-pacman -S --noconfirm --needed switch-dev switch-curl
 
-      - name: Download latest external core Releases
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p external-cores core-release-info
-
-          download_latest() {
-            local repository=$1
-            local asset_name=$2
-            local release_json="core-release-info/${asset_name}.json"
-            local metadata
-            local tag_name
-            local asset_url
-
-            curl --fail --location --retry 3 --retry-all-errors \
-              --header "Authorization: Bearer ${GH_TOKEN}" \
-              --header 'Accept: application/vnd.github+json' \
-              --output "$release_json" \
-              "https://api.github.com/repos/${repository}/releases/latest"
-
-            metadata=$(python3 - "$release_json" "$asset_name" <<'PY'
-          import json
-          import sys
-
-          release_path, asset_name = sys.argv[1:]
-          with open(release_path, encoding='utf-8') as stream:
-              release = json.load(stream)
-          tag = release.get('tag_name')
-          assets = [asset for asset in release.get('assets', [])
-                    if asset.get('name') == asset_name]
-          if not isinstance(tag, str) or not tag or len(assets) != 1:
-              raise SystemExit('latest Release does not contain exactly one required asset: ' + asset_name)
-          url = assets[0].get('browser_download_url')
-          if not isinstance(url, str) or not url:
-              raise SystemExit('invalid asset URL for: ' + asset_name)
-          print(tag + '\t' + url)
-          PY
-          )
-            IFS=$'\t' read -r tag_name asset_url <<< "$metadata"
-            curl --fail --location --retry 3 --retry-all-errors \
-              --header "Authorization: Bearer ${GH_TOKEN}" \
-              --output "external-cores/${asset_name}" "$asset_url"
-            test -s "external-cores/${asset_name}"
-            printf '%s\t%s\t%s\n' "$repository" "$tag_name" "$asset_url" \
-              >> core-release-info/CORE-RELEASES.txt
-          }
-
-          download_latest beiklive/GBAStation_3DS GBAStation3DSStub.nro
-          download_latest beiklive/GBAStation_FBNeo GBAStationFBNeoStub.nro
-          download_latest beiklive/GBAStation_flycast GBAStationFlycastStub.nro
-          download_latest beiklive/GBAStation_ppsspp GBAStationPPSSPPStub.nro
-          download_latest beiklive/GBAStation_duckstation GBAStationDuckStationStub.nro
-          download_latest beiklive/GBAStation_yabasanshiro GBAStationYabaSanshiroStub.nro
-          download_latest beiklive/GBAStation_dolphin GBAStationDolphinStub.nro
-          sha256sum external-cores/*.nro | tee core-release-info/CORE-NRO-SHA256SUMS.txt
-
-      - name: Build frontend and stage external cores
+      - name: Build frontend
         shell: bash
         run: |
           chmod +x switchbuild.sh
-          ./switchbuild.sh --core-dir "$GITHUB_WORKSPACE/external-cores" -j "$(nproc)"
+          ./switchbuild.sh -j "$(nproc)"
 
       - name: Create release package
         id: prep
@@ -104,37 +45,23 @@ jobs:
           ZIP_FILE=GBAStation.zip
           CHANGELOG_FILE="${VERSION_NAME}.txt"
           SUMS_FILE=SHA256SUMS.txt
-          CORE_INFO_FILE=CORE-RELEASES.txt
 
           rm -rf "$PACKAGE_DIR"
-          mkdir -p "$PACKAGE_DIR/switch" "$PACKAGE_DIR/GBAStation/core"
+          mkdir -p "$PACKAGE_DIR/switch"
           cp build_switch/GBAStation.nro "$PACKAGE_DIR/switch/GBAStation.nro"
-          for core in \
-            GBAStation3DSStub.nro \
-            GBAStationFBNeoStub.nro \
-            GBAStationFlycastStub.nro \
-            GBAStationPPSSPPStub.nro \
-            GBAStationDuckStationStub.nro \
-            GBAStationYabaSanshiroStub.nro \
-            GBAStationDolphinStub.nro; do
-            test -s "build_switch/GBAStation/core/$core"
-            cp "build_switch/GBAStation/core/$core" "$PACKAGE_DIR/GBAStation/core/$core"
-          done
 
-          cmake -E chdir "$PACKAGE_DIR" cmake -E tar cf "../$ZIP_FILE" --format=zip switch GBAStation
+          cmake -E chdir "$PACKAGE_DIR" cmake -E tar cf "../$ZIP_FILE" --format=zip switch
           (
             cd "$PACKAGE_DIR"
-            sha256sum switch/GBAStation.nro GBAStation/core/*.nro > "../$SUMS_FILE"
+            sha256sum switch/GBAStation.nro > "../$SUMS_FILE"
           )
           sha256sum "$ZIP_FILE" >> "$SUMS_FILE"
-          cp core-release-info/CORE-RELEASES.txt "$CORE_INFO_FILE"
           printf '%s\n' "$(git tag -l --format='%(contents)' "$TAG_NAME")" > "$CHANGELOG_FILE"
 
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
           echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
           echo "changelog_file=$CHANGELOG_FILE" >> "$GITHUB_OUTPUT"
           echo "sums_file=$SUMS_FILE" >> "$GITHUB_OUTPUT"
-          echo "core_info_file=$CORE_INFO_FILE" >> "$GITHUB_OUTPUT"
 
       - name: Upload Nintendo Switch package
         uses: actions/upload-artifact@v4
@@ -143,7 +70,6 @@ jobs:
           path: |
             ${{ steps.prep.outputs.zip_file }}
             ${{ steps.prep.outputs.sums_file }}
-            ${{ steps.prep.outputs.core_info_file }}
             ${{ steps.prep.outputs.changelog_file }}
           if-no-files-found: error
           retention-days: 30
@@ -158,7 +84,6 @@ jobs:
           files: |
             ${{ steps.prep.outputs.zip_file }}
             ${{ steps.prep.outputs.sums_file }}
-            ${{ steps.prep.outputs.core_info_file }}
 
       # Keep the historical release repository integration optional. It is not
       # part of the build dependency chain and must not fail the GitHub Release.
