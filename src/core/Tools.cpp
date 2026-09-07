@@ -160,7 +160,7 @@ int detectGamePlatform(const fs::path& path)
 
 // 返回某扩展名可能支持的平台列表（顺序 = 推荐优先级）。
 // 空列表 = 单机种或无歧义，由 getFileType 的现有判定决定。
-// 压缩包（zip/7z）内容不定，列出全部可用机种供用户选择。
+// 压缩包（zip/7z）内容不定，列出能直接消费压缩包的所有机种供用户选择。
 std::vector<int> candidatePlatformsForExtension(const std::string& ext)
 {
     std::string lower = ext;
@@ -168,6 +168,7 @@ std::vector<int> candidatePlatformsForExtension(const std::string& ext)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     if (lower == "iso")
         return {static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuPS1),
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuDreamcast),
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin),
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn)};
@@ -199,7 +200,8 @@ std::vector<int> candidatePlatformsForExtension(const std::string& ext)
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuGB),
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuNES),
                 static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES),
-                static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)};
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis),
+                static_cast<int>(beiklive::enums::EmuPlatform::EmuArcade)};
     }
     return {};
 }

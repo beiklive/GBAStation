@@ -1167,16 +1167,19 @@ beiklive::enums::FileType platformToFileType(int platform)
                 entry.savePath = beiklive::tools::defaultGameSavePath(entry.platform, entry.path);
                 changed = true;
             }
-            if ((beiklive::tools::getFileExtension(entry.path) == "zip" ||
-                 beiklive::tools::getFileExtension(entry.path) == "7z") &&
-                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA) &&
-                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuGBC) &&
-                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuGB) &&
-                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNES) &&
-                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES) &&
-                entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuGenesis)) {
-                brls::Application::notify(L("该压缩包平台暂不支持内置运行"));
-                return;
+            if (beiklive::tools::getFileExtension(entry.path) == "zip" ||
+                beiklive::tools::getFileExtension(entry.path) == "7z")
+            {
+                // 压缩包只能写入能直接运行它的机种（内置解压平台 + Arcade/FBNeo）。
+                // 候选列表来自 candidatePlatformsForExtension，保持单一事实来源。
+                const std::vector<int> archivePlatforms =
+                    beiklive::tools::candidatePlatformsForExtension("zip");
+                if (std::find(archivePlatforms.begin(), archivePlatforms.end(),
+                              entry.platform) == archivePlatforms.end())
+                {
+                    brls::Application::notify(L("该压缩包平台暂不支持内置运行"));
+                    return;
+                }
             }
             if (entry.logoPath.empty()) {
                 entry.logoPath = beiklive::tools::getDefaultLogoPath(

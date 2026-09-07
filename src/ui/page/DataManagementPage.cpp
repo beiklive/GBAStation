@@ -1911,6 +1911,19 @@ static bool archiveContainsPlatformRom(const fs::path& archivePath, int platform
     return false;
 }
 
+// 压缩包内容校验只适用于“内置核心解压运行”的六个平台；
+// Arcade 等外置平台直接消费 zip/7z（FBNeo romset 成员为内部 zip/bin），不做内容校验。
+static bool needsArchiveContentValidation(int platform)
+{
+    using E = beiklive::enums::EmuPlatform;
+    return platform == static_cast<int>(E::EmuGBA) ||
+           platform == static_cast<int>(E::EmuGBC) ||
+           platform == static_cast<int>(E::EmuGB) ||
+           platform == static_cast<int>(E::EmuNES) ||
+           platform == static_cast<int>(E::EmuSNES) ||
+           platform == static_cast<int>(E::EmuGenesis);
+}
+
 const ScanPlatformConfig kScanPlatforms[] = {
     {L("FC/NES"), beiklive::SettingKey::KEY_SCAN_PATH_NES,    {"nes", "fds", "zip", "7z"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuNES), -1},
     {L("SFC"),    beiklive::SettingKey::KEY_SCAN_PATH_SNES,   {"sfc", "smc", "zip", "7z"}, material::MEMORY, static_cast<int>(beiklive::enums::EmuPlatform::EmuSNES), -1},
@@ -2617,6 +2630,7 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
 
             const std::string archiveExt = beiklive::tools::getFileExtension(romPath);
             if ((archiveExt == "zip" || archiveExt == "7z") &&
+                needsArchiveContentValidation(config.platform) &&
                 !archiveContainsPlatformRom(fs::path(romPath), config.platform))
             {
                 m_importSkipped.fetch_add(1, std::memory_order_relaxed);
@@ -2989,6 +3003,7 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
         std::string path = romPath.string();
         if ((beiklive::tools::getFileExtension(romPath) == "zip" ||
              beiklive::tools::getFileExtension(romPath) == "7z") &&
+            needsArchiveContentValidation(platform) &&
             !archiveContainsPlatformRom(romPath, platform))
             continue;
         std::string romStem = romPath.stem().string();
