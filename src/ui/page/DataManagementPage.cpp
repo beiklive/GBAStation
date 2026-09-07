@@ -82,10 +82,22 @@ static std::string readNameIniMapping(const fs::path& romPath)
     const std::string fileName = romPath.filename().string();
     const std::string stem = romPath.stem().string();
     std::string line;
+    bool firstLine = true;
     while (std::getline(input, line))
     {
+        // UTF-8 编辑器常会在 name.ini 开头写入 BOM；去掉它，避免第一条
+        // 映射的键名变成 "\xEF\xBB\xBF游戏名" 而无法命中。
+        if (firstLine)
+        {
+            firstLine = false;
+            if (line.size() >= 3 &&
+                static_cast<unsigned char>(line[0]) == 0xEF &&
+                static_cast<unsigned char>(line[1]) == 0xBB &&
+                static_cast<unsigned char>(line[2]) == 0xBF)
+                line.erase(0, 3);
+        }
         line = trimNameIniText(line);
-        if (line.empty() || line[0] == '#' || line[0] == ';')
+        if (line.empty() || line[0] == '#' || line[0] == ';' || line[0] == '[')
             continue;
         const size_t equal = line.find('=');
         if (equal == std::string::npos)
@@ -3002,7 +3014,7 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
         if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
             entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(path);
 
-        // 封面：ROM 同目录同名 png/jpg/jpeg → 扫描根目录 logos/ 同名 png/jpg/jpeg → 默认图。
+        // 封面：ROM 同目录同名 png/jpg/jpeg → ROM 同目录 logos/ 同名 png/jpg/jpeg → 默认图。
         std::string logoPath = beiklive::tools::getDefaultLogoPath(
             static_cast<beiklive::enums::EmuPlatform>(platform), path);
         std::error_code coverEc;
@@ -3024,7 +3036,7 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
             for (const char* ext : coverExts)
             {
                 coverEc.clear();
-                coverFile = fs::path(dirPath) / "logos" / (romStem + ext);
+                coverFile = romPath.parent_path() / "logos" / (romStem + ext);
                 if (fs::exists(coverFile, coverEc) && !coverEc)
                 {
                     logoPath = coverFile.string();
