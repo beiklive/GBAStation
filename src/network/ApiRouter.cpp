@@ -2,6 +2,7 @@
 
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
+#include "core/GameEntryDefaults.hpp"
 #include "core/rom/PspMeta.hpp"
 #include "core/common.h"
 #include "core/game_database.hpp"
@@ -77,6 +78,143 @@ int platformFromExt(const std::string& ext)
         ext == "nfs" || ext == "dol" || ext == "elf")
         return static_cast<int>(beiklive::enums::EmuPlatform::EmuDolphin);
     return 0;
+}
+
+// 机种允许导入的扩展名表：与 DataManagementPage::kScanPlatforms 保持一致。
+// 客户端选定机种后按此表校验，歧义后缀（cue/bin/iso/pbp…）不再靠扩展名反推机种。
+bool platformAllowsExtension(int platform, const std::string& ext)
+{
+    using E = beiklive::enums::EmuPlatform;
+    switch (static_cast<E>(platform))
+    {
+    case E::EmuGBA:  return ext == "gba" || ext == "zip" || ext == "7z";
+    case E::EmuGBC:  return ext == "gbc" || ext == "zip" || ext == "7z";
+    case E::EmuGB:   return ext == "gb" || ext == "zip" || ext == "7z";
+    case E::EmuNES:  return ext == "nes" || ext == "fds" || ext == "zip" || ext == "7z";
+    case E::EmuSNES: return ext == "sfc" || ext == "smc" || ext == "zip" || ext == "7z";
+    case E::EmuNDS:  return ext == "nds";
+    case E::Emu3DS:  return ext == "cci" || ext == "3ds";
+    case E::EmuGenesis: return ext == "md" || ext == "gen" || ext == "bin" || ext == "smd";
+    case E::EmuArcade:  return ext == "zip" || ext == "7z";
+    case E::EmuDreamcast: return ext == "cdi" || ext == "gdi" || ext == "chd";
+    case E::EmuPSP:  return ext == "iso" || ext == "cso" || ext == "pbp";
+    case E::EmuPS1:  return ext == "cue" || ext == "chd" || ext == "bin" || ext == "img" ||
+                            ext == "iso" || ext == "ecm" || ext == "mds" || ext == "pbp" ||
+                            ext == "m3u";
+    case E::EmuSaturn: return ext == "cue" || ext == "bin" || ext == "iso" || ext == "chd" ||
+                             ext == "mds" || ext == "m3u" || ext == "ccd";
+    case E::EmuDolphin: return ext == "gcm" || ext == "bin" || ext == "iso" || ext == "tgc" ||
+                              ext == "wbfs" || ext == "ciso" || ext == "gcz" || ext == "wia" ||
+                              ext == "rvz" || ext == "nfs" || ext == "dol" || ext == "elf" ||
+                              ext == "wad";
+    default: return false;
+    }
+}
+
+// 光盘类机种：同名组只入库一个代表，其余仅保存。
+bool isDiscImportPlatform(int platform)
+{
+    using E = beiklive::enums::EmuPlatform;
+    return platform == static_cast<int>(E::EmuPS1) ||
+           platform == static_cast<int>(E::EmuSaturn);
+}
+
+// 组代表优先级（数字越小越优先）。
+// PS1 表抄扫描导入 ps1ScanExtensionPriority；Saturn 为同构规则（描述符/整盘镜像优先）。
+int discExtPriority(int platform, const std::string& ext)
+{
+    using E = beiklive::enums::EmuPlatform;
+    static constexpr const char* kPs1[] = {
+        "cue", "chd", "bin", "img", "iso", "ecm", "mds", "pbp", "m3u",
+    };
+    static constexpr const char* kSaturn[] = {
+        "cue", "ccd", "chd", "iso", "mds", "m3u", "bin",
+    };
+    const auto* table = platform == static_cast<int>(E::EmuPS1)
+        ? kPs1
+        : (platform == static_cast<int>(E::EmuSaturn) ? kSaturn : nullptr);
+    if (!table)
+        return 0;
+    const std::size_t count = platform == static_cast<int>(E::EmuPS1)
+        ? std::size(kPs1) : std::size(kSaturn);
+    for (std::size_t i = 0; i < count; ++i)
+        if (ext == table[i])
+            return static_cast<int>(i);
+    return static_cast<int>(count);
+}
+
+// 把 cue/m3u 里对批内成员的引用改写为最终落盘名（仅对含中文被重命名的组有意义）。
+void rewriteDiscReferenceFiles(const std::string& path,
+                               const std::unordered_map<std::string, std::string>& nameMap)
+{
+    if (nameMap.empty())
+        return;
+    std::string lower = toLower(fs::path(path).extension().string());
+    if (lower != ".cue" && lower != ".m3u")
+        return;
+
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+        return;
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    input.close();
+    std::string content = buffer.str();
+
+    bool changed = false;
+    std::istringstream lines(content);
+    std::ostringstream out;
+    std::string line;
+    while (std::getline(lines, line))
+    {
+        if (line.find("FILE") != std::string::npos && line.find('"') != std::string::npos)
+        {
+            const std::size_t first = line.find('"');
+            const std::size_t last = line.rfind('"');
+            if (last > first)
+            {
+                std::string quoted = line.substr(first + 1, last - first - 1);
+                std::string base = fs::path(quoted).filename().string();
+                auto it = nameMap.find(base);
+                if (it != nameMap.end() && it->second != base)
+                {
+                    line.replace(first + 1, last - first - 1, it->second);
+                    changed = true;
+                }
+            }
+        }
+        else
+        {
+            std::string trimmed = line;
+            const auto trimFn = [](unsigned char c) { return std::isspace(c) != 0; };
+            trimmed.erase(trimmed.begin(),
+                          std::find_if(trimmed.begin(), trimmed.end(),
+                                       [&](char c) { return !trimFn(static_cast<unsigned char>(c)); }));
+            trimmed.erase(std::find_if(trimmed.rbegin(), trimmed.rend(),
+                                       [&](char c) { return !trimFn(static_cast<unsigned char>(c)); })
+                              .base(),
+                          trimmed.end());
+            if (!trimmed.empty() && trimmed[0] != '#')
+            {
+                std::string base = fs::path(trimmed).filename().string();
+                auto it = nameMap.find(base);
+                if (it != nameMap.end() && it->second != base)
+                {
+                    std::string dirPart = trimmed.substr(0, trimmed.size() - base.size());
+                    line = dirPart + it->second;
+                    changed = true;
+                }
+            }
+        }
+        out << line << '\n';
+    }
+
+    if (changed)
+    {
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        if (output)
+            output << out.str();
+    }
 }
 
 std::string platformDir(int platform)
@@ -1000,10 +1138,84 @@ std::string ApiRouter::makeToken()
     return std::to_string(nextToken_++);
 }
 
+std::string ApiRouter::planBatchMemberLocked(const std::string& batchId,
+                                             int platform,
+                                             const std::string& originalName,
+                                             const std::string& policyStem,
+                                             const std::string& targetDir,
+                                             const std::vector<std::string>& batchFiles,
+                                             bool& importToDb,
+                                             std::string& groupKey)
+{
+    auto& state = batches_[batchId];
+    state.id = batchId;
+    if (state.names.empty())
+        state.names = batchFiles;
+    ++state.remaining;
+
+    const std::string stemKey = toLower(policyStem);
+    const std::string key = targetDir + '\n' + stemKey;
+    auto& group = state.groups[key];
+    group.key = key;
+
+    if (!group.decided)
+    {
+        // 组内候选：批清单里“落盘 stem 小写一致”的成员（扫描导入按同目录+同名去重的语义）。
+        // 仅光盘类机种竞争“代表”（只入一条库），其余机种取最小者占位不影响行为。
+        const bool pickWinner = isDiscImportPlatform(platform);
+        std::string winner;
+        int best = 1 << 29;
+        for (const auto& name : batchFiles)
+        {
+            const fs::path p(name);
+            const std::string s = p.stem().string();
+            const std::string ps = containsChineseChar(s) ? safeRomStemFromTitle(s) : s;
+            if (toLower(ps) != stemKey)
+                continue;
+            if (!pickWinner)
+            {
+                if (winner.empty() || name < winner)
+                    winner = name;
+                continue;
+            }
+            const int prio = discExtPriority(platform, trimExtDot(p.extension().string()));
+            if (prio < best || (prio == best && (winner.empty() || name < winner)))
+            {
+                best = prio;
+                winner = name;
+            }
+        }
+        group.winnerName = winner.empty() ? originalName : winner;
+        group.decided = true;
+    }
+
+    importToDb = group.winnerName == originalName;
+    groupKey = key;
+
+    // 落盘 stem：不含中文原名原样返回；含中文返回整组一致的拼音 stem。
+    if (!containsChineseChar(originalName))
+        return policyStem;
+    if (group.finalStem.empty())
+        group.finalStem = safeRomStemFromTitle(fs::path(originalName).stem().string());
+    return group.finalStem;
+}
+
+void ApiRouter::releaseBatchMemberLocked(const std::string& batchId)
+{
+    if (batchId.empty())
+        return;
+    auto it = batches_.find(batchId);
+    if (it == batches_.end())
+        return;
+    if (--it->second.remaining <= 0)
+        batches_.erase(it);
+}
+
 void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
 {
     std::string kind = jsonString(hm, "$.kind", "rom");
     std::string originalName = jsonString(hm, "$.name");
+    std::string batchId = jsonString(hm, "$.batchId", "");
     bool importNameMapping = jsonBool(hm, "$.importNameMapping", false);
     std::uint64_t totalSize = static_cast<std::uint64_t>(std::max<long>(0, jsonLong(hm, "$.size")));
 
@@ -1014,19 +1226,43 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
 
     fs::path original(originalName);
     std::string ext = trimExtDot(original.extension().string());
-    int platform = platformFromExt(ext);
+
+    // 机种：优先使用客户端在“机种选择”里显式指定的平台；未指定时沿用旧的
+    // 扩展名推断路径（兼容旧客户端）。歧义后缀据此不再误判机种。
+    int platform = 0;
+    bool platformExplicit = false;
+    const long explicitPlatform = jsonLong(hm, "$.platform", 0);
+    if (kind == "rom" && explicitPlatform > 0)
+    {
+        if (!platformAllowsExtension(static_cast<int>(explicitPlatform), ext))
+            return replyError(c, 400, "extension not supported for the selected platform");
+        platform = static_cast<int>(explicitPlatform);
+        platformExplicit = true;
+    }
+    else
+    {
+        platform = platformFromExt(ext);
+    }
     if (kind == "rom" && platform == 0)
         return replyError(c, 400, "unsupported rom extension");
     if (kind == "cover" && !(ext == "png" || ext == "jpg" || ext == "jpeg" || ext == "webp"))
         return replyError(c, 400, "unsupported image extension");
 
     std::string stem = original.stem().string();
-    std::string safeStem = safeStemFromTitle(stem);
-    std::string storageStem = kind == "rom" ? safeRomStemFromTitle(stem) : safeStem;
-    bool stemHasChinese = containsChineseChar(stem);
+    const bool stemHasChinese = containsChineseChar(stem);
+    // 重命名策略：文件名含中文才转拼音（safeRomStemFromTitle 含 40 字截断 + hash）；
+    // 不含中文一律保持原名原样（含大小写/空格/括号），保证 cue 等引用天然有效。
+    const std::string policyStem = kind == "rom"
+        ? (stemHasChinese ? safeRomStemFromTitle(stem) : stem)
+        : safeStemFromTitle(stem);
+    std::string storageStem = policyStem;
+    bool renamed = kind == "rom" && stemHasChinese && policyStem != stem;
+
     std::string target;
     std::string finalPath;
-    bool renamed = containsNonAscii(originalName);
+    std::string groupKey;
+    bool importToDb = true;
+
     if (kind == "file")
     {
         std::string targetDirRaw = jsonString(hm, "$.path");
@@ -1053,6 +1289,27 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
     {
         std::string targetDir = uploadDirForKind(kind, platform);
         ensureDir(targetDir);
+
+        // 批量上传（拖放/选目录）按批内同名组规划代表与一致命名。
+        if (kind == "rom" && !batchId.empty())
+        {
+            std::vector<std::string> batchFiles;
+            nlohmann::json body = parseJsonBody(hm);
+            if (body.is_object() && body.contains("batchFiles") && body["batchFiles"].is_array())
+            {
+                for (const auto& file : body["batchFiles"])
+                    if (file.is_string())
+                        batchFiles.push_back(file.get<std::string>());
+            }
+            if (!batchFiles.empty())
+            {
+                std::lock_guard<std::mutex> lock(uploadMutex_);
+                storageStem = planBatchMemberLocked(
+                    batchId, platform, originalName, policyStem, targetDir,
+                    batchFiles, importToDb, groupKey);
+            }
+        }
+
         target = uniquePath(targetDir, storageStem, ext);
         finalPath = target;
     }
@@ -1062,13 +1319,19 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
     session.kind = kind;
     session.originalName = originalName;
     session.originalStem = stem;
-    session.title = containsNonAscii(stem) ? stem : safeStem;
+    // 标题一律保留原始文件名（中文名优先），重命名映射另行写入 name_mapping。
+    session.title = stem;
     session.targetPath = target;
     session.finalPath = finalPath;
     session.platform = platform;
+    session.platformExplicit = platformExplicit;
     session.totalSize = totalSize;
     session.importNameMapping = importNameMapping;
-    session.renamedFromChinese = kind == "rom" && stemHasChinese && fs::path(target).stem().string() != stem;
+    session.importToDb = importToDb;
+    session.batchId = batchId;
+    session.batchGroupKey = groupKey;
+    session.renamedFromChinese = kind == "rom" && stemHasChinese &&
+                                fs::path(target).stem().string() != stem;
 
     {
         std::lock_guard<std::mutex> lock(uploadMutex_);
@@ -1083,6 +1346,7 @@ void ApiRouter::handleUploadStart(mg_connection* c, mg_http_message* hm)
         {"renamed", renamed},
         {"title", session.title},
         {"platform", platform},
+        {"imported", importToDb},
     });
 }
 
@@ -1152,6 +1416,7 @@ void ApiRouter::handleUploadCancel(mg_connection* c, mg_http_message* hm)
         {
             session = it->second;
             uploads_.erase(it);
+            releaseBatchMemberLocked(session.batchId);
             found = true;
         }
     }
@@ -1176,56 +1441,123 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
             return replyError(c, 404, "upload not found");
         session = it->second;
         uploads_.erase(it);
+        releaseBatchMemberLocked(session.batchId);
     }
 
     if (session.kind == "rom")
     {
-        int detectedPlatform = beiklive::tools::detectGamePlatform(session.targetPath);
-        int platform = detectedPlatform >= 0 ? detectedPlatform : session.platform;
-        if (platform != session.platform)
+        int platform = session.platform;
+        if (session.platformExplicit)
         {
-            fs::path targetDir = uploadDirForKind("rom", platform);
-            ensureDir(targetDir.string());
-            fs::path movedPath = uniqueFileTarget(targetDir / fs::path(session.targetPath).filename());
-            std::error_code ec;
-            fs::rename(session.targetPath, movedPath, ec);
-            if (!ec)
-                session.targetPath = movedPath.string();
+            // 客户端在机种选择弹窗里显式指定：直接按该机种入库，不做二次推断。
+        }
+        else
+        {
+            int detectedPlatform = beiklive::tools::detectGamePlatform(session.targetPath);
+            platform = detectedPlatform >= 0 ? detectedPlatform : session.platform;
+            if (platform != session.platform)
+            {
+                fs::path targetDir = uploadDirForKind("rom", platform);
+                ensureDir(targetDir.string());
+                fs::path movedPath = uniqueFileTarget(targetDir / fs::path(session.targetPath).filename());
+                std::error_code ec;
+                fs::rename(session.targetPath, movedPath, ec);
+                if (!ec)
+                    session.targetPath = movedPath.string();
+            }
+        }
+
+        // 批量上传的 cue/m3u：把对批内中文重命名成员的引用改写为最终落盘名。
+        if (!session.batchId.empty())
+        {
+            std::unordered_map<std::string, std::string> discRefMap;
+            {
+                std::lock_guard<std::mutex> lock(uploadMutex_);
+                auto batchIt = batches_.find(session.batchId);
+                if (batchIt != batches_.end())
+                {
+                    for (const auto& name : batchIt->second.names)
+                    {
+                        const fs::path p(name);
+                        const std::string s = p.stem().string();
+                        if (!containsChineseChar(s))
+                            continue;
+                        const std::string e = trimExtDot(p.extension().string());
+                        const std::string finalName = safeRomStemFromTitle(s) + "." + e;
+                        if (finalName != name)
+                            discRefMap[name] = finalName;
+                    }
+                }
+            }
+            rewriteDiscReferenceFiles(session.targetPath, discRefMap);
+        }
+
+        // 组内非代表成员：文件已落盘，仅保存不入游戏库。
+        if (!session.importToDb)
+        {
+            return replyJson(c, 200, {
+                {"ok", true},
+                {"saved", true},
+                {"imported", false},
+                {"platform", platform},
+            });
+        }
+
+        // 光盘机种查重：同目录同名（忽略扩展名）已有 PS1/Saturn 记录时不再入库
+        // （与扫描导入 ps1ScanEntryAlreadyExists 语义一致）。
+        bool groupAlreadyImported = false;
+        if (isDiscImportPlatform(platform) && beiklive::GameDB)
+        {
+            const fs::path stored(session.targetPath);
+            std::string stem = stored.stem().string();
+            std::transform(stem.begin(), stem.end(), stem.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+            std::string parent = stored.parent_path().lexically_normal().string();
+            std::transform(parent.begin(), parent.end(), parent.begin(), [](unsigned char ch) {
+                return static_cast<char>(std::tolower(ch));
+            });
+            for (const auto& entry : beiklive::GameDB->getAll())
+            {
+                if (entry.platform != platform)
+                    continue;
+                fs::path entryPath(entry.path);
+                std::string entryStem = entryPath.stem().string();
+                std::transform(entryStem.begin(), entryStem.end(), entryStem.begin(),
+                               [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+                std::string entryParent = entryPath.parent_path().lexically_normal().string();
+                std::transform(entryParent.begin(), entryParent.end(), entryParent.begin(),
+                               [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+                if (entryStem == stem && entryParent == parent)
+                {
+                    groupAlreadyImported = true;
+                    break;
+                }
+            }
+        }
+        if (groupAlreadyImported)
+        {
+            return replyJson(c, 200, {
+                {"ok", true},
+                {"saved", true},
+                {"imported", false},
+                {"platform", platform},
+            });
         }
 
         beiklive::GameEntry entry;
         entry.path = session.targetPath;
         entry.title = session.title;
         entry.platform = platform;
-        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
-            entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(session.targetPath);
-        entry.logoPath = beiklive::tools::getDefaultLogoPath(
-            static_cast<beiklive::enums::EmuPlatform>(platform),
-            session.targetPath);
-        entry.savePath = beiklive::tools::defaultGameSavePath(platform, session.targetPath);
-        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)) {
-            // PSP ROM 入库时提取真实游戏标题与 ICON0 封面（保存到该 ROM 的存档目录）。
-            const std::string realTitle = beiklive::psp_meta::ExtractTitle(session.targetPath);
-            if (!realTitle.empty())
-                entry.title = realTitle;
-            if (entry.logoPath.empty() ||
-                entry.logoPath == beiklive::tools::getDefaultLogoPath(
-                    static_cast<beiklive::enums::EmuPlatform>(platform), session.targetPath))
-            {
-                const std::string icon = beiklive::psp_meta::ExtractIcon0(
-                    session.targetPath, entry.savePath);
-                if (!icon.empty())
-                    entry.logoPath = icon;
-            }
-        }
-        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-            entry.ndsScreenLayout = "priority_top";
-            entry.ndsScreenOrientation = "0";
-            entry.ndsIntegerScale = true;
-            entry.ndsScreenGap = 0;
-            entry.ndsBottomOpacity = 1.0f;
-        }
-        ensureDir(entry.savePath);
+
+        // 统一入库装配：与本地扫描/LPL 导入共用一套每机种默认（封面/存档目录/
+        // PSP·NDS·3DS·PS1 元数据/遮罩着色器/显示默认/NDS 屏默认）。
+        beiklive::ImportDefaultsConfig importConfig =
+            beiklive::buildImportDefaultsConfig(platform);
+        importConfig.useNameMapping = true;        // 上传映射开关优先于内嵌标题
+        importConfig.resolvePs1SerialTitle = true; // PS1 标题仍为文件名时按 serial 查映射
+        beiklive::applyImportEntryDefaults(entry, importConfig);
+
         bool saved = saveGame(entry);
         if (saved && session.importNameMapping && session.renamedFromChinese &&
             !session.originalStem.empty() && beiklive::NameMappingManager)
@@ -1237,7 +1569,13 @@ void ApiRouter::handleUploadFinish(mg_connection* c, mg_http_message* hm)
                 beiklive::NameMappingManager->Save();
             }
         }
-        return replyJson(c, 200, {{"ok", saved}, {"saved", saved}, {"gameId", gameIdFromEntry(entry)}, {"platform", platform}});
+        return replyJson(c, 200, {
+            {"ok", saved},
+            {"saved", saved},
+            {"imported", saved},
+            {"gameId", saved ? gameIdFromEntry(entry) : ""},
+            {"platform", platform},
+        });
     }
 
     if (session.kind == "save")

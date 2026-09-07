@@ -52,8 +52,6 @@ const state = {
   cropBlurCache: null,
 };
 
-const romExtensions = new Set(['gba', 'gb', 'gbc', 'nes', 'fds', 'sfc', 'smc', 'nds', 'cia', 'cci', '3ds', 'md', 'gen', 'bin', 'smd', 'zip', '7z', 'cdi', 'gdi', 'chd', 'cue', 'iso', 'cso']);
-
 const platforms = [
   ['GBA', 'GBA'],
   ['GBC', 'GBC'],
@@ -66,7 +64,52 @@ const platforms = [
   ['Arcade', 'Arcade'],
   ['DC', 'DC'],
   ['PSP', 'PSP'],
+  ['PS1', 'PS1'],
+  ['Saturn', 'Saturn'],
+  ['GC / Wii', 'GC / Wii'],
 ];
+
+// 机种选择弹窗用：id = EmuPlatform 数值；css = 平台色类名。
+const importPlatforms = [
+  { id: 1, label: 'GBA', css: 'platform-gba' },
+  { id: 2, label: 'GBC', css: 'platform-gbc' },
+  { id: 3, label: 'GB', css: 'platform-gb' },
+  { id: 4, label: 'FC / NES', css: 'platform-fc' },
+  { id: 5, label: 'SFC / SNES', css: 'platform-sfc' },
+  { id: 6, label: 'NDS', css: 'platform-nds' },
+  { id: 7, label: '3DS', css: 'platform-3ds' },
+  { id: 8, label: 'MD / Genesis', css: 'platform-md' },
+  { id: 9, label: 'Arcade', css: 'platform-arcade' },
+  { id: 10, label: 'DC', css: 'platform-dc' },
+  { id: 11, label: 'PSP', css: 'platform-psp' },
+  { id: 12, label: 'PS1', css: 'platform-ps1' },
+  { id: 13, label: 'Saturn', css: 'platform-saturn' },
+  { id: 14, label: 'GC / Wii', css: 'platform-gcwii' },
+];
+const platformNameById = Object.fromEntries(importPlatforms.map((p) => [p.id, p.label]));
+
+// 机种允许的后缀（与后端 platformAllowsExtension / Switch 端 kScanPlatforms 保持一致）。
+const extByPlatform = {
+  1: ['gba', 'zip', '7z'],
+  2: ['gbc', 'zip', '7z'],
+  3: ['gb', 'zip', '7z'],
+  4: ['nes', 'fds', 'zip', '7z'],
+  5: ['sfc', 'smc', 'zip', '7z'],
+  6: ['nds'],
+  7: ['cci', '3ds'],
+  8: ['md', 'gen', 'bin', 'smd'],
+  9: ['zip', '7z'],
+  10: ['cdi', 'gdi', 'chd'],
+  11: ['iso', 'cso', 'pbp'],
+  12: ['cue', 'chd', 'bin', 'img', 'iso', 'ecm', 'mds', 'pbp', 'm3u'],
+  13: ['cue', 'bin', 'iso', 'chd', 'mds', 'm3u', 'ccd'],
+  14: ['gcm', 'bin', 'iso', 'tgc', 'wbfs', 'ciso', 'gcz', 'wia', 'rvz', 'nfs', 'dol', 'elf', 'wad'],
+};
+
+const romExtensions = new Set([...new Set(Object.values(extByPlatform).flat())]);
+
+let romUploadPlatform = 0; // 当前“机种选择”确定的导入机种
+let platformPickResolve = null;
 
 const coreOptionsByPlatform = {
   GBA: [['mgba', 'mGBA']],
@@ -208,7 +251,7 @@ async function api(path, options = {}) {
 }
 
 function platformOf(game) {
-  return game.platformName || ({ 1: 'GBA', 2: 'GBC', 3: 'GB', 4: 'FC', 5: 'SFC', 6: 'NDS', 7: '3DS', 8: 'MD', 9: 'Arcade', 10: 'DC', 11: 'PSP' }[game.platform] || 'OTHER');
+  return game.platformName || ({ 1: 'GBA', 2: 'GBC', 3: 'GB', 4: 'FC', 5: 'SFC', 6: 'NDS', 7: '3DS', 8: 'MD', 9: 'Arcade', 10: 'DC', 11: 'PSP', 12: 'PS1', 13: 'Saturn', 14: 'GC / Wii' }[game.platform] || 'OTHER');
 }
 
 function coreOptionsForGame(game) {
@@ -1099,13 +1142,36 @@ async function uploadFile(file, startUrl, finishKind = 'rom', extraStartData = {
   }
 }
 
-async function uploadRoms(files) {
-  const roms = romFilesFromList(files);
-  if (!roms.length) {
-    toast('没有找到支持的 ROM 文件');
+async function uploadRoms(files, platform) {
+  if (!platform) {
+    toast('请先选择机种');
     return;
   }
-  const tasks = roms.map((file) => ({
+  const allowed = extByPlatform[platform] || [];
+  const allowedSet = new Set(allowed);
+  const all = [...(files || [])];
+  const accepted = [];
+  const skipped = [];
+  for (const file of all) {
+    const ext = fileExt(file);
+    if (!ext || !allowedSet.has(ext)) {
+      skipped.push(file.name);
+      continue;
+    }
+    accepted.push(file);
+  }
+  if (!accepted.length) {
+    const name = platformNameById[platform] || String(platform);
+    toast(`没有找到 ${name} 支持的文件（${allowed.join(' / ')}）`);
+    return;
+  }
+  if (skipped.length) {
+    toast(`已跳过 ${skipped.length} 个不属于该机种的文件（如 ${skipped.slice(0, 3).join('、')}）`);
+  }
+
+  const batchId = `rom-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const batchNames = accepted.map((file) => file.name);
+  const tasks = accepted.map((file) => ({
     id: state.uploadNextId++,
     file,
     name: file.name,
@@ -1115,8 +1181,14 @@ async function uploadRoms(files) {
     speed: 0,
     status: 'pending',
     kind: 'rom',
+    imported: true,
     startUrl: '/api/upload/start',
-    extraStartData: { importNameMapping: state.importNameMapping },
+    extraStartData: {
+      importNameMapping: state.importNameMapping,
+      platform,
+      batchId,
+      batchFiles: batchNames,
+    },
     error: '',
     token: '',
     controller: null,
@@ -1129,6 +1201,11 @@ async function uploadRoms(files) {
   renderUploadDialog();
   $('uploadDialog').showModal();
   runUploadQueue().catch((err) => toast(err.message));
+}
+
+function fileExt(file) {
+  const name = file?.name || '';
+  return name.includes('.') ? name.split('.').pop().toLowerCase() : '';
 }
 
 async function uploadBrowserFiles(files) {
@@ -1194,8 +1271,14 @@ async function runUploadQueue() {
     const cancelled = state.uploadTasks.filter((task) => task.status === 'cancelled').length;
     const done = state.uploadTasks.filter((task) => task.status === 'done').length;
     const action = hasFile && !hasRom ? '上传' : '导入';
-    if (done && !failed && !cancelled) toast(hasFile && !hasRom ? '上传完成' : '导入完成，GameDB 已保存');
-    else if (done) toast(`已${action} ${done} 个，${failed + cancelled} 个未完成`);
+    const storedOnly = hasRom
+      ? state.uploadTasks.filter((t) => t.status === 'done' && t.imported === false).length
+      : 0;
+    if (done && !failed && !cancelled) {
+      if (hasFile && !hasRom) toast('上传完成');
+      else if (storedOnly) toast(`导入完成（${storedOnly} 个同名组文件仅保存为数据文件）`);
+      else toast('导入完成，GameDB 已保存');
+    } else if (done) toast(`已${action} ${done} 个，${failed + cancelled} 个未完成`);
   }
 }
 
@@ -1207,7 +1290,7 @@ async function uploadQueueTask(task) {
   task.lastBytes = 0;
   renderUploadDialog();
   try {
-    await uploadFile(task.file, task.startUrl || '/api/upload/start', task.kind || 'rom', task.extraStartData || {}, {
+    const resp = await uploadFile(task.file, task.startUrl || '/api/upload/start', task.kind || 'rom', task.extraStartData || {}, {
       signal: task.controller.signal,
       isCancelled: () => task.status === 'cancelled' || state.uploadCancelAll,
       onStart: (session) => {
@@ -1224,6 +1307,7 @@ async function uploadQueueTask(task) {
         renderUploadDialog();
       },
     });
+    if (resp && Object.prototype.hasOwnProperty.call(resp, 'imported')) task.imported = resp.imported !== false;
     task.uploaded = task.size;
     task.speed = 0;
     task.status = 'done';
@@ -1311,6 +1395,7 @@ function renderUploadDialog() {
         <div class="upload-row-title">
           <span class="upload-status ${task.status}">${uploadStatusText(task.status)}</span>
           <strong title="${escapeHtml(task.relativePath)}">${escapeHtml(task.name)}</strong>
+          ${(task.kind || 'rom') === 'rom' && task.imported === false ? '<span class="badge platform-other">仅保存</span>' : ''}
         </div>
         <div class="progress-track"><span style="width:${Math.max(0, Math.min(1, ratio)) * 100}%"></span></div>
         <div class="upload-row-meta">
@@ -1831,19 +1916,133 @@ async function uploadCroppedCover() {
   }, 'image/png');
 }
 
+// ---- ROM 导入：先选机种，再拖放/点选文件 ----
+function chooseImportPlatform() {
+  return new Promise((resolve) => {
+    platformPickResolve = resolve;
+    const grid = $('platformChoiceGrid');
+    grid.innerHTML = '';
+    for (const p of importPlatforms) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = `platform-chip ${p.css}`;
+      chip.innerHTML = `<i class="ti ti-device-gamepad-2"></i><span>${escapeHtml(p.label)}</span>`;
+      chip.onclick = () => {
+        if ($('platformChoiceDialog').open) $('platformChoiceDialog').close();
+        const cb = platformPickResolve;
+        platformPickResolve = null;
+        if (cb) cb(p.id);
+      };
+      grid.appendChild(chip);
+    }
+    $('platformChoiceDialog').showModal();
+  });
+}
+
+function platformCss(id) {
+  return (importPlatforms.find((p) => p.id === id) || {}).css || 'platform-other';
+}
+
+function cancelPlatformChoice() {
+  if ($('platformChoiceDialog').open) $('platformChoiceDialog').close();
+  const cb = platformPickResolve;
+  platformPickResolve = null;
+  if (cb) cb(null);
+}
+
+function openRomDropDialog(platform) {
+  romUploadPlatform = platform;
+  const name = platformNameById[platform] || String(platform);
+  $('romDropPlatformName').textContent = name;
+  $('romDropPlatformName').className = `badge ${platformCss(platform)}`;
+  $('romDropHint').textContent = `目标机种：${name}。仅接受该机种支持的格式。`;
+  $('romDropDialog').showModal();
+}
+
+function closeRomDropDialog() {
+  if ($('romDropDialog').open) $('romDropDialog').close();
+}
+
+function commitRomFiles(files) {
+  const list = [...(files || [])];
+  if (!list.length) {
+    toast('未选择文件');
+    return;
+  }
+  const platform = romUploadPlatform;
+  closeRomDropDialog();
+  uploadRoms(list, platform);
+}
+
+async function startRomImportDialog() {
+  const platform = await chooseImportPlatform();
+  if (!platform) return;
+  openRomDropDialog(platform);
+}
+
+async function startRomFilePicker(kind) {
+  const platform = await chooseImportPlatform();
+  if (!platform) return;
+  const exts = extByPlatform[platform] || [];
+  const accept = exts.map((e) => `.${e}`).join(',');
+  if (kind === 'folder') {
+    $('romFolderInput').accept = accept;
+    $('romFolderInput').click();
+  } else {
+    $('romInput').accept = accept;
+    $('romInput').click();
+  }
+}
+
 function bindEvents() {
-  $('uploadZone').onclick = () => $('romInput').click();
-  $('chooseRomFilesBtn').onclick = () => $('romInput').click();
-  $('chooseRomFolderBtn').onclick = () => $('romFolderInput').click();
+  $('uploadZone').onclick = () => startRomImportDialog();
+  $('chooseRomFilesBtn').onclick = () => startRomFilePicker('file');
+  $('chooseRomFolderBtn').onclick = () => startRomFilePicker('folder');
   $('importNameMappingSwitch').onchange = (e) => {
     state.importNameMapping = e.target.checked;
   };
+
+  $('platformChoiceCloseBtn').onclick = () => cancelPlatformChoice();
+  $('platformChoiceCancelBtn').onclick = () => cancelPlatformChoice();
+
+  $('romDropCloseBtn').onclick = () => closeRomDropDialog();
+  $('romDropCancelBtn').onclick = () => closeRomDropDialog();
+  $('romDropFilesBtn').onclick = () => {
+    const exts = extByPlatform[romUploadPlatform] || [];
+    $('romInput').accept = exts.map((e) => `.${e}`).join(',');
+    $('romInput').click();
+  };
+  $('romDropFolderBtn').onclick = () => {
+    const exts = extByPlatform[romUploadPlatform] || [];
+    $('romFolderInput').accept = exts.map((e) => `.${e}`).join(',');
+    $('romFolderInput').click();
+  };
+  $('romDropSwitchBtn').onclick = () => {
+    closeRomDropDialog();
+    startRomImportDialog();
+  };
+  $('romDropArea').onclick = () => {
+    const exts = extByPlatform[romUploadPlatform] || [];
+    $('romInput').accept = exts.map((e) => `.${e}`).join(',');
+    $('romInput').click();
+  };
+  $('romDropArea').ondragover = (e) => {
+    e.preventDefault();
+    $('romDropArea').classList.add('drag');
+  };
+  $('romDropArea').ondragleave = () => $('romDropArea').classList.remove('drag');
+  $('romDropArea').ondrop = async (e) => {
+    e.preventDefault();
+    $('romDropArea').classList.remove('drag');
+    commitRomFiles(await filesFromDropEvent(e));
+  };
+
   $('romInput').onchange = (e) => {
-    uploadRoms([...e.target.files]);
+    commitRomFiles([...e.target.files]);
     e.target.value = '';
   };
   $('romFolderInput').onchange = (e) => {
-    uploadRoms([...e.target.files]);
+    commitRomFiles([...e.target.files]);
     e.target.value = '';
   };
   $('uploadZone').ondragover = (e) => { e.preventDefault(); $('uploadZone').classList.add('active'); };
@@ -1851,7 +2050,12 @@ function bindEvents() {
   $('uploadZone').ondrop = async (e) => {
     e.preventDefault();
     $('uploadZone').classList.remove('active');
-    uploadRoms(await filesFromDropEvent(e));
+    const files = await filesFromDropEvent(e);
+    if (!files.length) return;
+    const platform = await chooseImportPlatform();
+    if (!platform) return;
+    romUploadPlatform = platform;
+    commitRomFiles(files);
   };
   $('libraryModeBtn').onclick = () => setMode('library');
   $('filesModeBtn').onclick = () => setMode('files');

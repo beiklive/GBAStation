@@ -57,7 +57,7 @@
 
       <span class="sidebar-label platform-label">平台</span>
       <nav class="platform-tabs" id="platformTabs"></nav>
-      <input id="romInput" type="file" multiple accept=".gba,.gb,.gbc,.nes,.fds,.sfc,.smc,.nds,.cia,.cci,.3ds,.md,.gen,.bin,.smd,.zip,.7z,.cdi,.gdi,.chd,.cue,.iso,.cso" hidden>
+      <input id="romInput" type="file" multiple hidden>
       <input id="romFolderInput" type="file" multiple webkitdirectory directory hidden>
       <input id="fileBrowserInput" type="file" multiple hidden>
       <input id="folderBrowserInput" type="file" multiple webkitdirectory directory hidden>
@@ -416,6 +416,41 @@
       <button id="cancelAllUploadsBtn" class="danger"><i class="ti ti-ban"></i><span>全部取消</span></button>
     </div>
     <div id="uploadQueueList" class="upload-queue-list"></div>
+  </dialog>
+
+  <dialog id="platformChoiceDialog" class="choice-dialog platform-choice-dialog">
+    <div class="dialog-head">
+      <div>
+        <h3>选择导入机种</h3>
+        <p>先选定机种，再上传文件，避免同后缀误判（如 iso/cue/bin/pbp）</p>
+      </div>
+      <button class="icon-btn" id="platformChoiceCloseBtn" title="关闭"><i class="ti ti-x"></i></button>
+    </div>
+    <div id="platformChoiceGrid" class="platform-choice-grid"></div>
+    <div class="dialog-actions">
+      <button class="btn btn-outline-secondary" id="platformChoiceCancelBtn">取消</button>
+    </div>
+  </dialog>
+
+  <dialog id="romDropDialog" class="choice-dialog rom-drop-dialog">
+    <div class="dialog-head">
+      <div>
+        <h3>上传到 <span id="romDropPlatformName" class="badge">-</span></h3>
+        <p id="romDropHint">拖放文件到此，或点击下方按钮选择文件</p>
+      </div>
+      <button class="icon-btn" id="romDropCloseBtn" title="关闭"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="rom-drop-area" id="romDropArea">
+      <i class="ti ti-cloud-upload"></i>
+      <strong>拖放文件到此处</strong>
+      <span>仅接受该机种支持的格式，其余文件会跳过</span>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-primary" id="romDropFilesBtn"><i class="ti ti-file-upload"></i><span>选择文件</span></button>
+      <button class="btn btn-outline-secondary" id="romDropFolderBtn"><i class="ti ti-folder-open"></i><span>选择目录</span></button>
+      <button class="btn btn-outline-secondary" id="romDropSwitchBtn"><i class="ti ti-repeat"></i><span>更换机种</span></button>
+      <button class="btn btn-outline-secondary" id="romDropCancelBtn">取消</button>
+    </div>
   </dialog>
 
   <div class="toast" id="toast"></div>

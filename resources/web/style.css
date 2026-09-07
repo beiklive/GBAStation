@@ -2223,3 +2223,60 @@ dialog::backdrop {
     grid-template-columns: repeat(5, 38px);
   }
 }
+
+/* ---- ROM 上传：机种选择 + 拖放上传对话框 ---- */
+.platform-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  padding: 4px 0;
+}
+.platform-choice-grid .platform-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--platform-color, var(--tblr-border-color));
+  color: var(--platform-color, var(--tblr-primary));
+  background: var(--platform-bg, transparent);
+  font-size: 13px;
+}
+.platform-choice-grid .platform-chip i {
+  font-size: 20px;
+}
+.platform-ps1 { --platform-color: #17a2b8; --platform-bg: rgba(23, 162, 184, .12); }
+.platform-saturn { --platform-color: #9333ea; --platform-bg: rgba(147, 51, 234, .12); }
+.platform-gcwii { --platform-color: #f4263c; --platform-bg: rgba(244, 38, 60, .12); }
+
+.rom-drop-dialog {
+  min-width: min(92vw, 560px);
+}
+.rom-drop-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 150px;
+  margin: 10px 0;
+  border: 2px dashed var(--platform-color, var(--tblr-border-color));
+  border-radius: 10px;
+  color: var(--platform-color, var(--tblr-primary));
+  background: var(--platform-bg, transparent);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.rom-drop-area.drag {
+  background: var(--platform-bg, rgba(0, 0, 0, .06));
+  border-color: var(--platform-color, var(--tblr-primary));
+}
+.rom-drop-area i {
+  font-size: 34px;
+  line-height: 1;
+}
+.rom-drop-area span {
+  font-size: 12px;
+  color: var(--tblr-secondary-color, #667382);
+}

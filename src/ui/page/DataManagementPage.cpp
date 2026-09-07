@@ -1,5 +1,6 @@
 #include "DataManagementPage.hpp"
 #include "core/Archive.hpp"
+#include "core/GameEntryDefaults.hpp"
 #include "core/Translation.hpp"
 
 #include "ui/page/FileListPage.hpp"
@@ -50,15 +51,6 @@ struct ImportItem
     std::string romPath;
     std::string label;
     std::string dbName;
-};
-
-struct ImportSharedConfig
-{
-    int platform = -1;
-    std::string overlayPath;
-    std::string shaderPath;
-    bool overlayEnabled = false;
-    bool shaderEnabled = false;
 };
 
 static std::string trimNameIniText(std::string value)
@@ -452,71 +444,6 @@ std::string normalizeExtension(std::string ext)
     return ext;
 }
 
-std::string overlayKeyForPlatform(int platform)
-{
-    namespace sk = beiklive::SettingKey;
-    switch (static_cast<beiklive::enums::EmuPlatform>(platform))
-    {
-    case beiklive::enums::EmuPlatform::EmuGBA: return sk::KEY_DISPLAY_OVERLAY_GBA_PATH;
-    case beiklive::enums::EmuPlatform::EmuGBC: return sk::KEY_DISPLAY_OVERLAY_GBC_PATH;
-    case beiklive::enums::EmuPlatform::EmuGB: return sk::KEY_DISPLAY_OVERLAY_GB_PATH;
-    case beiklive::enums::EmuPlatform::EmuNES: return sk::KEY_DISPLAY_OVERLAY_NES_PATH;
-    case beiklive::enums::EmuPlatform::EmuSNES: return sk::KEY_DISPLAY_OVERLAY_SNES_PATH;
-    case beiklive::enums::EmuPlatform::EmuNDS: return sk::KEY_DISPLAY_OVERLAY_NDS_PATH;
-    case beiklive::enums::EmuPlatform::EmuGenesis: return sk::KEY_DISPLAY_OVERLAY_GENESIS_PATH;
-    case beiklive::enums::EmuPlatform::EmuArcade: return sk::KEY_DISPLAY_OVERLAY_ARCADE_PATH;
-    case beiklive::enums::EmuPlatform::EmuDreamcast: return sk::KEY_DISPLAY_OVERLAY_DC_PATH;
-    case beiklive::enums::EmuPlatform::EmuPSP: return sk::KEY_DISPLAY_OVERLAY_PSP_PATH;
-    case beiklive::enums::EmuPlatform::EmuPS1: return "";
-    default: return "";
-    }
-}
-
-std::string shaderKeyForPlatform(int platform)
-{
-    namespace sk = beiklive::SettingKey;
-    switch (static_cast<beiklive::enums::EmuPlatform>(platform))
-    {
-    case beiklive::enums::EmuPlatform::EmuGBA: return sk::KEY_DISPLAY_SHADER_GBA_PATH;
-    case beiklive::enums::EmuPlatform::EmuGBC: return sk::KEY_DISPLAY_SHADER_GBC_PATH;
-    case beiklive::enums::EmuPlatform::EmuGB: return sk::KEY_DISPLAY_SHADER_GB_PATH;
-    case beiklive::enums::EmuPlatform::EmuNES: return sk::KEY_DISPLAY_SHADER_NES_PATH;
-    case beiklive::enums::EmuPlatform::EmuSNES: return sk::KEY_DISPLAY_SHADER_SNES_PATH;
-    case beiklive::enums::EmuPlatform::EmuNDS: return sk::KEY_DISPLAY_SHADER_NDS_PATH;
-    case beiklive::enums::EmuPlatform::EmuGenesis: return sk::KEY_DISPLAY_SHADER_GENESIS_PATH;
-    case beiklive::enums::EmuPlatform::EmuArcade: return sk::KEY_DISPLAY_SHADER_ARCADE_PATH;
-    case beiklive::enums::EmuPlatform::EmuDreamcast: return sk::KEY_DISPLAY_SHADER_DC_PATH;
-    case beiklive::enums::EmuPlatform::EmuPSP: return sk::KEY_DISPLAY_SHADER_PSP_PATH;
-    case beiklive::enums::EmuPlatform::EmuPS1: return "";
-    default: return "";
-    }
-}
-
-ImportSharedConfig buildSharedConfig(int platform)
-{
-    namespace sk = beiklive::SettingKey;
-
-    ImportSharedConfig config;
-    config.platform = platform;
-    if (platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS) ||
-        platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
-        return config;
-    config.overlayEnabled = beiklive::tools::shouldAutoEnableOverlayForPlatform(platform);
-    config.shaderEnabled = beiklive::tools::shouldAutoEnableShaderForPlatform(platform);
-
-    std::string overlayKey = overlayKeyForPlatform(platform);
-    if (!overlayKey.empty())
-        config.overlayPath = GET_SETTING_KEY_STR(overlayKey.c_str(), "");
-
-    std::string shaderKey = shaderKeyForPlatform(platform);
-    if (!shaderKey.empty())
-        config.shaderPath = GET_SETTING_KEY_STR(shaderKey.c_str(), "");
-    if (config.shaderPath.empty())
-        config.shaderPath = GET_SETTING_KEY_STR(sk::KEY_DISPLAY_SHADER_PATH, "");
-
-    return config;
-}
-
 void preserveThreeDsMenuSettings(json& root, const std::filesystem::path& file)
 {
     std::ifstream in(file);
@@ -628,24 +555,6 @@ bool exportThreeDsCoreConfigForDataPage()
 
     out << root.dump(2) << "\n";
     return true;
-}
-
-void applyDisplayDefaults(beiklive::GameEntry& entry)
-{
-    std::string mode = GET_SETTING_KEY_STR("display.mode", "original");
-    if (mode == "fill")
-        entry.displayMode = 1;
-    else if (mode == "integer")
-        entry.displayMode = 2;
-    else if (mode == "custom")
-        entry.displayMode = 3;
-    else if (mode == "four_three" || mode == "4:3")
-        entry.displayMode = 4;
-    else
-        entry.displayMode = 0;
-
-    entry.integerAspectRatio =
-        static_cast<float>(GET_SETTING_KEY_INT("display.integer_scale_mult", 0));
 }
 
 bool clearDirectoryContents(const fs::path& dir)
@@ -2609,7 +2518,9 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
 
     m_total.store(static_cast<int>(importItems.size()), std::memory_order_release);
 
-    ImportSharedConfig config = buildSharedConfig(platform);
+    beiklive::ImportDefaultsConfig config = beiklive::buildImportDefaultsConfig(platform);
+    config.useNameMapping = m_useNameMapping;
+    config.resolvePs1SerialTitle = false;
     m_importing.store(true, std::memory_order_release);
 
     m_importThread = std::thread([this, importItems = std::move(importItems), config, lplPath]() {
@@ -2677,73 +2588,11 @@ void DataManagementPage::startImport(const std::string& lplPath, int platform)
             entry.path = romPath;
             entry.title = item.label.empty() ? romStem : item.label;
             entry.platform = config.platform;
-            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
-                entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(romPath);
             entry.logoPath = logoPath;
-            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP)) {
-                // PSP LPL 导入沿用现有名称优先级；无 RetroArch 缩略图时
-                // 提取 ICON0 作为封面（保存在该 ROM 的专属存档目录下）。
-                std::string mappedName;
-                if (m_useNameMapping) {
-                    auto nameVal = beiklive::NameMappingManager->Get(romStem);
-                    if (nameVal) {
-                        auto nameStr = nameVal->AsString();
-                        if (nameStr && !nameStr->empty())
-                            mappedName = *nameStr;
-                    }
-                }
-                if (!mappedName.empty()) {
-                    entry.title = mappedName;
-                } else {
-                    const std::string realTitle = beiklive::psp_meta::ExtractTitle(romPath);
-                    if (!realTitle.empty())
-                        entry.title = realTitle;
-                }
-                if (logoPath == beiklive::tools::getDefaultLogoPath(
-                                     static_cast<beiklive::enums::EmuPlatform>(config.platform),
-                                     romPath))
-                {
-                    const std::string icon = beiklive::psp_meta::ExtractIcon0(romPath, savePath);
-                    if (!icon.empty())
-                        entry.logoPath = icon;
-                }
-            }
-            else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
-            {
-                // NDS 内置图标：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
-                const std::string ndsIcon = beiklive::GetOrCreateNdsIconPath(romPath);
-                if (!ndsIcon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
-                    static_cast<beiklive::enums::EmuPlatform>(config.platform), romPath))
-                    entry.logoPath = ndsIcon;
-                // NDS 名称：ROM header 游戏名（仅当标题仍是默认文件名时，映射名优先保留）。
-                const std::string ndsTitle = beiklive::ExtractNdsHeaderTitle(romPath);
-                if (!ndsTitle.empty() && entry.title == romStem)
-                    entry.title = ndsTitle;
-            }
-            else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
-            {
-                // 3DS 内置图标（SMDH）：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
-                const std::string icon = beiklive::GetOrCreateThreeDsIconPath(romPath);
-                if (!icon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
-                    static_cast<beiklive::enums::EmuPlatform>(config.platform), romPath))
-                    entry.logoPath = icon;
-                const std::string title = beiklive::ExtractThreeDsTitle(romPath);
-                if (!title.empty() && entry.title == romStem)
-                    entry.title = title;
-            }
             entry.savePath = savePath;
-            entry.overlayPath = config.overlayPath;
-            entry.shaderPath = config.shaderPath;
-            entry.overlayEnabled = config.overlayEnabled;
-            entry.shaderEnabled = config.shaderEnabled;
-            applyDisplayDefaults(entry);
-            if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS)) {
-                entry.ndsScreenLayout = "priority_top";
-                entry.ndsScreenOrientation = "0";
-                entry.ndsIntegerScale = true;
-                entry.ndsScreenGap = 0;
-                entry.ndsBottomOpacity = 1.0f;
-            }
+
+            // 统一入库装配（PSP/NDS/3DS 元数据/遮罩着色器/显示默认/NDS 屏默认）。
+            beiklive::applyImportEntryDefaults(entry, config);
 
             beiklive::GameDB->upsertByPath(entry);
             m_progress.store(i + 1, std::memory_order_release);
@@ -2995,7 +2844,9 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
                                         int platform,
                                         int startIndex)
 {
-    ImportSharedConfig config = buildSharedConfig(platform);
+    beiklive::ImportDefaultsConfig config = beiklive::buildImportDefaultsConfig(platform);
+    config.useNameMapping = m_useNameMapping;
+    config.resolvePs1SerialTitle = false;
 
     for (int i = 0; i < static_cast<int>(roms.size()); ++i)
     {
@@ -3026,105 +2877,9 @@ int DataManagementPage::scanOnePlatform(const std::vector<fs::path>& roms,
         entry.path = path;
         entry.title = displayName;
         entry.platform = platform;
-        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
-            entry.threeDsTitleId = beiklive::three_ds::readNcsdTitleId(path);
 
-        // 封面：ROM 同目录同名 png/jpg/jpeg → ROM 同目录 logos/ 同名 png/jpg/jpeg → 默认图。
-        std::string logoPath = beiklive::tools::getDefaultLogoPath(
-            static_cast<beiklive::enums::EmuPlatform>(platform), path);
-        std::error_code coverEc;
-        const char* coverExts[] = {".png", ".jpg", ".jpeg"};
-        fs::path coverFile;
-        for (const char* ext : coverExts)
-        {
-            coverEc.clear();
-            coverFile = romPath.parent_path() / (romStem + ext);
-            if (fs::exists(coverFile, coverEc) && !coverEc)
-            {
-                logoPath = coverFile.string();
-                break;
-            }
-        }
-        if (logoPath == beiklive::tools::getDefaultLogoPath(
-            static_cast<beiklive::enums::EmuPlatform>(platform), path))
-        {
-            for (const char* ext : coverExts)
-            {
-                coverEc.clear();
-                coverFile = romPath.parent_path() / "logos" / (romStem + ext);
-                if (fs::exists(coverFile, coverEc) && !coverEc)
-                {
-                    logoPath = coverFile.string();
-                    break;
-                }
-            }
-        }
-        entry.logoPath = logoPath;
-
-        std::string savePath = beiklive::tools::defaultGameSavePath(platform, path);
-        try
-        {
-            fs::create_directories(savePath);
-        }
-        catch (...)
-        {
-        }
-        entry.savePath = savePath;
-
-        // NDS / 3DS / PSP：始终提取内置元数据（图标与名称）。
-        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuPSP))
-        {
-            // 标题已由 name.ini → 内置 TITLE → name_mapping.cfg → 文件名解析。
-            if (!(m_useNameMapping && displayName != romStem))
-            {
-                const std::string realTitle = beiklive::psp_meta::ExtractTitle(path);
-                if (!realTitle.empty())
-                    entry.title = realTitle;
-            }
-            // ICON0：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
-            const std::string icon = beiklive::psp_meta::ExtractIcon0(path, savePath);
-            if (!icon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
-                static_cast<beiklive::enums::EmuPlatform>(platform), path))
-                entry.logoPath = icon;
-        }
-        else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
-        {
-            // NDS 内置图标：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
-            const std::string ndsIcon = beiklive::GetOrCreateNdsIconPath(path);
-            if (!ndsIcon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
-                static_cast<beiklive::enums::EmuPlatform>(platform), path))
-                entry.logoPath = ndsIcon;
-                // NDS 名称：ROM header 游戏名（仅当标题仍是默认文件名时，映射名优先保留）。
-                const std::string ndsTitle = beiklive::ExtractNdsHeaderTitle(path);
-                if (!ndsTitle.empty() && entry.title == romStem)
-                    entry.title = ndsTitle;
-        }
-        else if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::Emu3DS))
-        {
-            // 3DS 内置图标（SMDH）：提取始终执行（缓存）；仅当封面仍是默认图时作为封面。
-            const std::string icon = beiklive::GetOrCreateThreeDsIconPath(path);
-            if (!icon.empty() && entry.logoPath == beiklive::tools::getDefaultLogoPath(
-                static_cast<beiklive::enums::EmuPlatform>(platform), path))
-                entry.logoPath = icon;
-                const std::string title = beiklive::ExtractThreeDsTitle(path);
-                if (!title.empty() && entry.title == romStem)
-                    entry.title = title;
-        }
-
-        entry.overlayEnabled = config.overlayEnabled;
-        entry.shaderEnabled = config.shaderEnabled;
-        entry.overlayPath = config.overlayPath;
-        entry.shaderPath = config.shaderPath;
-
-        applyDisplayDefaults(entry);
-        if (entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
-        {
-            entry.ndsScreenLayout = "priority_top";
-            entry.ndsScreenOrientation = "0";
-            entry.ndsIntegerScale = true;
-            entry.ndsScreenGap = 0;
-            entry.ndsBottomOpacity = 1.0f;
-        }
+        // 统一入库装配（封面/存档目录/PSP·NDS·3DS·PS1 元数据/遮罩着色器/显示默认/NDS 屏默认）。
+        beiklive::applyImportEntryDefaults(entry, config);
 
         beiklive::GameDB->upsertByPath(entry);
     }
