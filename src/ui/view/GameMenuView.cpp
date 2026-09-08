@@ -1718,6 +1718,24 @@ namespace beiklive
         box->setPadding(10.f, 20.f, 20.f, 20.f);
 
         {
+            std::vector<std::string> ffModeLabels = {L("按住"), L("切换")};
+            int curModeIdx = GET_SETTING_KEY_STR("fastforward.mode", "hold") == "toggle" ? 1 : 0;
+            auto *ffModeCell = new beiklive::SelectorButton();
+            ffModeCell->setText(L("快进触发模式"));
+            ffModeCell->setOptions(ffModeLabels, curModeIdx);
+            ffModeCell->setOnSelect(
+                [this](int i) {
+                    if (beiklive::SettingManager) {
+                        beiklive::SettingManager->Set("fastforward.mode",
+                                                      beiklive::ConfigValue(i == 1 ? "toggle" : "hold"));
+                        requestConfigSave();
+                    }
+                });
+            box->addView(ffModeCell);
+            box->addView(makeHint(L("按住：长按快进键触发  |  切换：按一次保持快进，再按一次解除")));
+        }
+
+        {
             // ── 快进速度快速调整 ──
             auto *ffHdr = new brls::Header();
             ffHdr->setTitle(L("快进速度"));

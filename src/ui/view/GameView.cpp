@@ -1272,32 +1272,31 @@ namespace beiklive
             }
         }
 
-        // 快进（支持按住/切换两种模式）
+        // 快进（按住/切换模式在按键触发时实时读取配置，菜单修改即时生效）
         {
             std::string val = readMapping("handle.fastforward", "PAD_LSB");
-            std::string mode = GET_SETTING_KEY_STR("fastforward.mode", "hold");
             auto combos = beiklive::tools::parseMultiCombo(val);
-            if (mode == "hold") {
-                for (const auto& combo : combos) {
-                    GameInputManager::instance().registerEmuFunctionKey(
-                        EmuFunctionKey::EMU_FAST_FORWARD, {combo},
-                        []() { GameSignal::instance().requestFastForward(true); },
-                        TriggerType::HOLD);
-                    GameInputManager::instance().registerEmuFunctionKey(
-                        EmuFunctionKey::EMU_FAST_FORWARD, {combo},
-                        []() { GameSignal::instance().requestFastForward(false); },
-                        TriggerType::RELEASE);
-                }
-            } else {
-                for (const auto& combo : combos) {
-                    GameInputManager::instance().registerEmuFunctionKey(
-                        EmuFunctionKey::EMU_FAST_FORWARD, {combo},
-                        []() {
+            for (const auto& combo : combos) {
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_FAST_FORWARD, {combo},
+                    []() {
+                        std::string mode = GET_SETTING_KEY_STR("fastforward.mode", "hold");
+                        if (mode == "toggle") {
                             bool cur = GameSignal::instance().isFastForward();
                             GameSignal::instance().requestFastForward(!cur);
                             brls::Logger::debug("快进切换：{}", !cur);
-                        });
-                }
+                        } else {
+                            GameSignal::instance().requestFastForward(true);
+                        }
+                    },
+                    TriggerType::PRESS);
+                GameInputManager::instance().registerEmuFunctionKey(
+                    EmuFunctionKey::EMU_FAST_FORWARD, {combo},
+                    []() {
+                        if (GET_SETTING_KEY_STR("fastforward.mode", "hold") != "toggle")
+                            GameSignal::instance().requestFastForward(false);
+                    },
+                    TriggerType::RELEASE);
             }
         }
 
