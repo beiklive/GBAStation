@@ -577,7 +577,7 @@ bool isRemoteEditableGameField(const std::string& key)
     static const std::set<std::string> editable = {
         "title", "playCount", "playTime", "lastPlayed", "favourite",
         "savePath", "screenShotPath", "logoPath", "cheatPath", "overlayPath", "shaderPath",
-        "overlayEnabled", "shaderEnabled",
+        "overlayEnabled", "shaderEnabled", "noSync",
         "displayMode", "integerAspectRatio", "customScale", "customOffsetX", "customOffsetY",
         "ndsTopScale", "ndsTopOffsetX", "ndsTopOffsetY",
         "ndsBottomScale", "ndsBottomOffsetX", "ndsBottomOffsetY", "ndsBottomOpacity",

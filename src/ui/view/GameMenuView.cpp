@@ -2246,6 +2246,19 @@ namespace beiklive
             this->addView(m_CustomSidePanel);
         }
 
+        {
+            auto *noSyncCell = new brls::BooleanCell();
+            noSyncCell->init(L("锁定本游戏配置"), m_gameEntry.noSync != 0,
+                             [this](bool v) {
+                                 m_gameEntry.noSync = v ? 1 : 0;
+                                 if (beiklive::GameDB)
+                                     beiklive::GameDB->set(m_gameEntry.path, "noSync",
+                                                           nlohmann::json(v ? 1 : 0));
+                             });
+            box->addView(noSyncCell);
+            box->addView(makeHint(L("开启后锁定本游戏配置，同平台游戏的同步画面/遮罩/着色器操作将跳过本游戏")));
+        }
+
         // ── 同步设置到其他游戏 ──
         {
             auto *syncHdr = new brls::Header();
@@ -2480,6 +2493,7 @@ namespace beiklive
         for (auto& game : games) {
             if (game.platform != platform) continue;
             if (game.path == m_gameEntry.path) continue;
+            if (game.noSync != 0) continue;
             game.displayMode      = m_gameEntry.displayMode;
             game.integerAspectRatio = m_gameEntry.integerAspectRatio;
             game.customScale      = m_gameEntry.customScale;
@@ -2503,6 +2517,7 @@ namespace beiklive
         for (auto& game : games) {
             if (game.platform != platform) continue;
             if (game.path == m_gameEntry.path) continue;
+            if (game.noSync != 0) continue;
             game.overlayPath    = m_gameEntry.overlayPath;
             game.overlayEnabled = m_gameEntry.overlayEnabled;
             beiklive::GameDB->upsertByPath(game);
@@ -2527,6 +2542,7 @@ namespace beiklive
         for (auto& game : games) {
             if (game.platform != platform) continue;
             if (game.path == m_gameEntry.path) continue;
+            if (game.noSync != 0) continue;
             game.shaderEnabled   = m_gameEntry.shaderEnabled;
             game.shaderPath      = m_gameEntry.shaderPath;
             game.shaderParaPath   = m_gameEntry.shaderParaPath;

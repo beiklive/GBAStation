@@ -289,6 +289,7 @@ namespace beiklive
             {"lastPlayed", sanitizeUtf8(entry.lastPlayed)},
             {"crc32", entry.crc32},
             {"favourite", entry.favourite},
+            {"noSync", entry.noSync},
             {"savePath", sanitizeUtf8(entry.savePath)},
             {"screenShotPath", sanitizeUtf8(entry.screenShotPath)},
             {"cheatPath", sanitizeUtf8(entry.cheatPath)},
@@ -333,6 +334,7 @@ namespace beiklive
         entry.lastPlayed = j.value("lastPlayed", "");
         entry.crc32 = j.value("crc32", 0);
         entry.favourite = j.value("favourite", false);
+        entry.noSync = j.value("noSync", 0);
         entry.savePath = j.value("savePath", "");
         entry.screenShotPath = j.value("screenShotPath", "");
         entry.cheatPath = j.value("cheatPath", "");
