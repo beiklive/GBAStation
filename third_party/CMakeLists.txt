@@ -99,9 +99,10 @@ function(add_ffmpeg_static_library TARGET_NAME LIBRARY_PATH)
     add_library(${TARGET_NAME} STATIC IMPORTED GLOBAL)
     set_target_properties(${TARGET_NAME} PROPERTIES
         IMPORTED_LOCATION ${LIBRARY_PATH}
-        # Public FFmpeg headers are source files.  Generated configuration
-        # headers are consumed only while building the isolated static libs.
-        INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_SOURCE_DIR}"
+        # Public FFmpeg headers are source files. Generated configuration
+        # headers (avconfig.h 等) live in the per-build configured copy
+        # (FFMPEG_BUILD_DIR), so include both for host code that uses FFmpeg.
+        INTERFACE_INCLUDE_DIRECTORIES "${FFMPEG_SOURCE_DIR};${FFMPEG_BUILD_DIR}"
     )
     add_dependencies(${TARGET_NAME} ffmpeg_minimal)
 endfunction()
@@ -240,34 +241,32 @@ function(add_isolated_libretro_core TARGET OBJECT_TARGET PREFIX)
     set(_raw_target "${TARGET}_raw")
     set(_tmp_obj "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_combined.tmp.o")
     set(_out_obj "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_combined.o")
-    set(_keep_args)
+    set(_keep)
     foreach(_sym IN LISTS LIBRETRO_API_SYMBOLS)
-        list(APPEND _keep_args "--keep-global-symbol=${PREFIX}_${_sym}")
+        list(APPEND _keep "${PREFIX}_${_sym}")
     endforeach()
     if (PREFIX STREQUAL "nestopia")
-        list(APPEND _keep_args
-            "--wildcard"
-            "--keep-global-symbol=_ZN3Nes*"
-            "--keep-global-symbol=_ZNK3Nes*"
-            "--keep-global-symbol=_ZTVN3Nes*"
-            "--keep-global-symbol=_ZTIN3Nes*"
-            "--keep-global-symbol=_ZTSN3Nes*"
-            "--keep-global-symbol=_ZNSt*"
-            "--keep-global-symbol=_ZNKSt*"
-            "--keep-global-symbol=_ZSt*"
+        list(APPEND _keep
+            "_ZN3Nes*"
+            "_ZNK3Nes*"
+            "_ZTVN3Nes*"
+            "_ZTIN3Nes*"
+            "_ZTSN3Nes*"
+            "_ZNSt*"
+            "_ZNKSt*"
+            "_ZSt*"
         )
     elseif(PREFIX STREQUAL "gambatte")
-        list(APPEND _keep_args
-            "--wildcard"
-            "--keep-global-symbol=_ZN8gambatte*"
-            "--keep-global-symbol=_ZNK8gambatte*"
-            "--keep-global-symbol=_ZTVN8gambatte*"
-            "--keep-global-symbol=_ZTIN8gambatte*"
-            "--keep-global-symbol=_ZTSN8gambatte*"
-            "--keep-global-symbol=_ZNSt*"
-            "--keep-global-symbol=_ZNKSt*"
-            "--keep-global-symbol=_ZSt*"
-            "--keep-global-symbol=blip*"
+        list(APPEND _keep
+            "_ZN8gambatte*"
+            "_ZNK8gambatte*"
+            "_ZTVN8gambatte*"
+            "_ZTIN8gambatte*"
+            "_ZTSN8gambatte*"
+            "_ZNSt*"
+            "_ZNKSt*"
+            "_ZSt*"
+            "blip*"
         )
     endif()
 
@@ -275,16 +274,71 @@ function(add_isolated_libretro_core TARGET OBJECT_TARGET PREFIX)
     add_dependencies(${_raw_target} ${OBJECT_TARGET})
     set_target_properties(${_raw_target} PROPERTIES LINKER_LANGUAGE C)
 
-    add_custom_command(
-        OUTPUT "${_out_obj}"
-        COMMAND ${CMAKE_COMMAND} -E rm -f "${_tmp_obj}" "${_out_obj}"
-        COMMAND ${CMAKE_CXX_COMPILER} -r -o "${_tmp_obj}"
-                -Wl,--whole-archive "$<TARGET_FILE:${_raw_target}>" -Wl,--no-whole-archive
-        COMMAND ${CMAKE_OBJCOPY} ${_keep_args} "${_tmp_obj}" "${_out_obj}"
-        DEPENDS ${_raw_target}
-        COMMAND_EXPAND_LISTS
-        VERBATIM
-    )
+    # 通配/精确 keep 模式写入临时文件，避免在自定义命令参数里传递带分号的列表。
+    set(_keep_file "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}.keep_patterns.txt")
+    file(WRITE "${_keep_file}" "")
+    foreach(_pat IN LISTS _keep)
+        file(APPEND "${_keep_file}" "${_pat}\n")
+    endforeach()
+
+    if(APPLE)
+        # Apple 工具链没有 GNU ld/objcopy。合并用 ld64 的 -all_load，
+        # 符号隔离用 ld -r -exported_symbols_list（通配符由辅助脚本经 nm 展开）。
+        set(_mac_deploy "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+        if(NOT _mac_deploy)
+            set(_mac_deploy "10.15")
+        endif()
+        set(_mac_arch "${CMAKE_OSX_ARCHITECTURES}")
+        if(NOT _mac_arch)
+            execute_process(COMMAND uname -m OUTPUT_VARIABLE _mac_machine OUTPUT_STRIP_TRAILING_WHITESPACE)
+            if(_mac_machine STREQUAL "x86_64")
+                set(_mac_arch "x86_64")
+            else()
+                set(_mac_arch "arm64")
+            endif()
+        endif()
+        # Apple Silicon 的 arm64 目标最低只支持 11.0，clang 会自动抬高部署版本；
+        # ld -r 的 -platform_version 必须 >= 成员对象版本，否则不会产出合并对象。
+        if(_mac_arch STREQUAL "arm64")
+            set(_mac_minos "11.0")
+        else()
+            set(_mac_minos "${_mac_deploy}")
+        endif()
+        add_custom_command(
+            OUTPUT "${_out_obj}"
+            COMMAND ${CMAKE_COMMAND}
+                    -DRAWA="$<TARGET_FILE:${_raw_target}>"
+                    -DOUT="${_out_obj}"
+                    -DKEEPFILE="${_keep_file}"
+                    -DARCH="${_mac_arch}"
+                    -DMINOS="${_mac_minos}"
+                    -P "${CMAKE_SOURCE_DIR}/tools/macos_isolate_libretro.cmake"
+            DEPENDS ${_raw_target}
+            VERBATIM
+        )
+    else()
+        set(_keep_args)
+        set(_need_wildcard)
+        foreach(_pat IN LISTS _keep)
+            list(APPEND _keep_args "--keep-global-symbol=${_pat}")
+            if(_pat MATCHES "\\*")
+                set(_need_wildcard TRUE)
+            endif()
+        endforeach()
+        if(_need_wildcard)
+            list(INSERT _keep_args 0 "--wildcard")
+        endif()
+        add_custom_command(
+            OUTPUT "${_out_obj}"
+            COMMAND ${CMAKE_COMMAND} -E rm -f "${_tmp_obj}" "${_out_obj}"
+            COMMAND ${CMAKE_CXX_COMPILER} -r -o "${_tmp_obj}"
+                    -Wl,--whole-archive "$<TARGET_FILE:${_raw_target}>" -Wl,--no-whole-archive
+            COMMAND ${CMAKE_OBJCOPY} ${_keep_args} "${_tmp_obj}" "${_out_obj}"
+            DEPENDS ${_raw_target}
+            COMMAND_EXPAND_LISTS
+            VERBATIM
+        )
+    endif()
     set_source_files_properties("${_out_obj}" PROPERTIES
         GENERATED TRUE
         EXTERNAL_OBJECT TRUE
@@ -572,6 +626,10 @@ target_compile_definitions(nestopia_core_obj PRIVATE __LIBRETRO__)
 apply_retro_symbol_rename(nestopia_core_obj nestopia)
 apply_data_symbol_rename(nestopia_core_obj nestopia)
 set_target_properties(nestopia_core_obj PROPERTIES CXX_STANDARD 11 C_STANDARD 11)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # libretro 老代码在 C++11 下 list-init 窄化是硬错误，降级为警告即可通过编译
+    target_compile_options(nestopia_core_obj PRIVATE -Wno-c++11-narrowing)
+endif()
 add_isolated_libretro_core(nestopia_core nestopia_core_obj nestopia)
 
 # =========================================================
