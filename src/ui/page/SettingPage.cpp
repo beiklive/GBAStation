@@ -1,5 +1,6 @@
 #include "ui/page/SettingPage.hpp"
 #include "ui/page/FileListPage.hpp"
+#include "ui/widget/Header.hpp"
 #include "ui/utils/FilePickerHelper.hpp"
 #include "ui/utils/UiHelper.hpp"
 #include "ui/utils/AnimationHelper.hpp"
@@ -1794,6 +1795,10 @@ private:
                     ? (int)beiklive::enums::ThemeLayout::IISU_THEME
                     : (int)beiklive::enums::ThemeLayout::SWITCH_THEME);
             }));
+        emulator.push_back(_selector(L("IISU 卡片行数"), L("设置 IISU 首页卡片行数，行数越多卡片越小"), 0xE8A1,
+            {L("三行"), L("四行")},
+            []() { return std::clamp(cfgGetInt("iisu.rows", 3) - 3, 0, 1); },
+            [](int i) { cfgSetInt("iisu.rows", i + 3); }));
         emulator.push_back(_section(L("背景")));
         emulator.push_back(_toggle(L("动态渐变背景"), L("显示与主页一致的动态背景"), 0xE3B7,
             []() { return cfgGetBool(KEY_UI_SHOW_SHADER, false); },
@@ -2320,13 +2325,98 @@ private:
             [](bool v) { cfgSetBool(KEY_DEBUG_LOG_OVERLAY, v); brls::Application::enableDebuggingView(v); }));
     }
 
-    void _pickFile(const std::string& key, const std::vector<std::string>& extensions)
+    void _pickFile(const std::string& key, const std::vector<std::string>& extensions,
+                   const std::string& startPath = "")
     {
         const std::filesystem::path current(cfgGetStr(key, ""));
+        const std::string startDir =
+            current.parent_path().empty() ? startPath : current.parent_path().string();
         beiklive::openFilePicker(extensions, [this, key](const std::string& path) {
             cfgSetStr(key, path);
             invalidate();
-        }, current.parent_path().string(), current.filename().string());
+        }, startDir, current.filename().string());
+    }
+
+    void _pickDirectory(const std::string& key, const std::string& startPath)
+    {
+        auto* flPage = new beiklive::FileListPage();
+        flPage->setDirSelectionMode(true);
+        flPage->registerAction(L("选择目录"), brls::BUTTON_Y,
+            [this, flPage, key](brls::View*) -> bool {
+                const std::string dirPath = flPage->getHeader()->getPath();
+                if (dirPath.empty())
+                    return true;
+                cfgSetStr(key, dirPath);
+                brls::Application::popActivity(brls::TransitionAnimation::FADE);
+                invalidate();
+                return true;
+            });
+
+        auto* container = new brls::Box(brls::Axis::COLUMN);
+        container->setGrow(1.0f);
+        container->addView(flPage);
+        container->registerAction(L("关闭"), brls::BUTTON_START,
+            [](brls::View*) { brls::Application::popActivity(); return true; });
+
+        auto* frame = new brls::AppletFrame(container);
+        frame->setHeaderVisibility(brls::Visibility::GONE);
+        frame->setFooterVisibility(brls::Visibility::GONE);
+        frame->setBackground(brls::ViewBackground::NONE);
+        brls::Application::pushActivity(new brls::Activity(frame));
+
+        std::error_code ec;
+        const std::string current = cfgGetStr(key, "");
+        const std::string start = !current.empty() ? current : startPath;
+        if (!start.empty() && std::filesystem::is_directory(start, ec))
+            flPage->setPath(start);
+        else
+            flPage->showDriveList();
+    }
+
+    NanoSettingItem _filePickerItem(const std::string& title, const std::string& hint, char32_t icon,
+                                    const std::string& key, const std::vector<std::string>& extensions,
+                                    const std::string& emptyLabel, const std::string& startPath)
+    {
+        NanoSettingItem item;
+        item.kind = NanoSettingKind::Action;
+        item.title = title;
+        item.hint = hint;
+        item.icon = icon;
+        item.configKey = key;
+        item.value = [key, emptyLabel]() {
+            const std::string path = cfgGetStr(key, "");
+            return path.empty() ? emptyLabel : std::filesystem::path(path).filename().string();
+        };
+        item.activate = [this, key, extensions, startPath]() { _pickFile(key, extensions, startPath); };
+        item.reset = [key]() {
+            return beiklive::SettingManager
+                && beiklive::SettingManager->ResetToDefault(key)
+                && beiklive::SettingManager->Save();
+        };
+        return item;
+    }
+
+    NanoSettingItem _directoryItem(const std::string& title, const std::string& hint, char32_t icon,
+                                   const std::string& key, const std::string& emptyLabel,
+                                   const std::string& startPath)
+    {
+        NanoSettingItem item;
+        item.kind = NanoSettingKind::Action;
+        item.title = title;
+        item.hint = hint;
+        item.icon = icon;
+        item.configKey = key;
+        item.value = [key, emptyLabel]() {
+            const std::string path = cfgGetStr(key, "");
+            return path.empty() ? emptyLabel : std::filesystem::path(path).filename().string();
+        };
+        item.activate = [this, key, startPath]() { _pickDirectory(key, startPath); };
+        item.reset = [key]() {
+            return beiklive::SettingManager
+                && beiklive::SettingManager->ResetToDefault(key)
+                && beiklive::SettingManager->Save();
+        };
+        return item;
     }
 
     static std::string _coreCategoryTitle(const std::string& category)
@@ -2612,15 +2702,43 @@ private:
         if (key == "executionMode") return {"Interpreter", "CachedInterpreter", "Recompiler"};
         if (key == "fastmemMode") return {"Disabled", "LUT", "MMap"};
         if (key == "renderer") return {"deko3D", "Software"};
-        if (key == "textureFilter") return {"Nearest", "Bilinear", "Jinc2"};
+        if (key == "textureFilter") return {"Nearest", "Bilinear", "JINC2"};
+        if (key == "lineDetectMode") return {"Disabled", "Quads", "BasicTriangles", "AggressiveTriangles"};
         if (key == "deinterlacingMode") return {"Disabled", "Weave", "Blend", "Adaptive"};
-        if (key == "cropMode") return {"None", "Only Overscan", "Borders", "All"};
+        if (key == "cropMode") return {"None", "Overscan", "Borders"};
         if (key == "aspectRatio") return {"Auto (Game Native)", "4:3", "16:9", "Stretch To Fill"};
-        if (key == "scaling") return {"Nearest", "Bilinear", "Bicubic"};
-        if (key == "backend") return {"Null", "Cubeb", "SDL"};
+        if (key == "alignment") return {"LeftOrTop", "Center", "RightOrBottom"};
+        if (key == "scaling") return {"Nearest", "BilinearSmooth", "NearestInteger", "BilinearSharp"};
+        if (key == "downsampleMode") return {"Disabled", "Box", "Adaptive"};
+        if (key == "wireframeMode") return {"Disabled", "OverlayWireframe", "OnlyWireframe"};
+        if (key == "screenshotMode") return {"ScreenResolution", "InternalResolution", "UncorrectedInternalResolution"};
+        if (key == "screenshotFormat") return {"PNG", "JPEG", "WebP"};
+        if (key == "backend") return {"Null", "Switch"};
+        if (key == "stretchMode") return {"None", "Resample", "TimeStretch"};
         if (key == "multitapMode") return {"Disabled", "Port 1", "Port 2", "Both"};
         if (key == "card1Type" || key == "card2Type") return {"None", "Shared", "PerGame", "PerGameTitle", "PerGameFileTitle", "NonPersistent"};
         if (key == "logLevel") return {"None", "Error", "Warning", "Perf", "Info", "Verbose", "Dev", "Profile", "Debug", "Trace"};
+        // PS1 numeric settings are presented as discrete lists, not keyboard input.
+        if (key == "emulationSpeed" || key == "fastForwardSpeed" || key == "turboSpeed")
+            return {"0.0", "0.5", "1.0", "1.5", "2.0", "2.5", "3.0", "4.0", "5.0", "10.0"};
+        if (key == "runaheadFrameCount") return {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+        if (key == "rewindFrequency") return {"1", "2", "5", "10", "20", "30", "60"};
+        if (key == "rewindSaveSlots") return {"1", "5", "10", "20", "50", "100", "200"};
+        if (key == "overclockPercent") return {"50", "75", "100", "125", "150", "200", "300", "400", "500", "750", "1000"};
+        if (key == "multisamples") return {"1", "2", "4", "8", "16"};
+        if (key == "readaheadSectors") return {"0", "1", "2", "4", "8", "16", "32"};
+        if (key == "readSpeedup") return {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+        if (key == "seekSpeedup") return {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+        if (key == "outputLatencyMS") return {"0", "10", "20", "30", "40", "60", "80", "100", "150", "200", "300", "500"};
+        if (key == "bufferMS") return {"10", "20", "30", "50", "75", "100", "150", "200", "300", "500"};
+        if (key == "screenshotQuality") return {"50", "60", "70", "80", "85", "90", "95", "100"};
+        if (key == "maxFPS") return {"0", "15", "20", "30", "40", "50", "60", "75", "90", "120", "144", "165", "240", "500"};
+        if (key == "preFrameSleepBuffer") return {"0", "1", "2", "3", "5", "8", "10", "15", "20"};
+        if (key == "pgxpTolerance") return {"-1", "0", "0.5", "1", "2", "3", "5", "10"};
+        if (key == "pgxpDepthClearThreshold") return {"0", "100", "300", "500", "1000", "2000", "3000", "4096"};
+        if (key == "downsampleScale") return {"1", "2", "3", "4"};
+        if (key == "outputVolume" || key == "fastForwardVolume")
+            return {"0", "10", "20", "30", "40", "50", "60", "70", "80", "90", "100"};
         if (key == "dolphin_language") return {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
         if (key == "dolphin_vi_skip") return {"off", "auto", "on"};
         if (key == "dolphin_shader_compilation_mode") return {"0", "1", "2", "3"};
@@ -2673,9 +2791,7 @@ private:
 
     static bool _externalOptionIsNumeric(const std::string& key)
     {
-        static const std::array<const char*, 27> numericKeys = {{
-            "resolutionScale", "emulationSpeed", "runaheadFrameCount", "multisamples",
-            "readaheadSectors", "readSpeedup", "outputLatencyMS", "bufferMS",
+        static const std::array<const char*, 19> numericKeys = {{
             "dolphin_cpu_clock_rate", "dolphin_emulation_speed", "dolphin_efb_scale",
             "dolphin_anti_aliasing", "dolphin_texture_cache_accuracy", "dolphin_audio_latency",
             "dolphin_audio_volume", "dolphin_log_level", "dolphin_pointer_yaw",
@@ -2975,9 +3091,9 @@ private:
 
         m_coreItems.push_back(_section(L("帧生成（Lossless）")));
         tog("启用帧生成", "需要 sdmc:/GBAStation/drastic/lsfg/Lossless.dll", 0xE8FF, "core.drastic.lsfg_enabled", false);
-        tog("性能模式", "帧生成性能优先", 0xE8EF, "core.drastic.lsfg_performance", true);
-        selStr("帧生成强度", "生成帧的插值强度", 0xE8FF, "core.drastic.lsfg_flow_scale",
-               {"0.25", "0.5", "0.75", "1.0"}, {"0.25", "0.5", "0.75", "1.0"}, "0.25");
+        tog("性能模式", "帧生成性能优先（关闭以获得更好画质）", 0xE8EF, "core.drastic.lsfg_performance", false);
+        selStr("帧生成强度", "生成帧的运动估计分辨率；越高画质越好", 0xE8FF, "core.drastic.lsfg_flow_scale",
+               {"0.25", "0.5", "0.75", "1.0"}, {"0.25", "0.5", "0.75", "1.0"}, "1.0");
 
         _finishCorePage(L("DraStic 核心设置"));
     }
@@ -3232,54 +3348,115 @@ private:
     void _openDuckStationCore()
     {
         m_coreItems.clear();
-        m_coreItems.push_back(_section(L("画面与启动")));
-        m_coreItems.push_back(_textValue(
-            L("内部渲染分辨率"), L("输入整数倍率，例如 1、2 或 4；倍率越高越清晰"), 0xE8FF,
-            "core.ps1.resolutionScale", "1", 8));
-        const std::vector<std::string> aspectValues = {
-            "Auto (Game Native)", "4:3", "16:9", "Stretch To Fill"};
-        m_coreItems.push_back(_selector(
-            L("画面比例"), L("按游戏原始比例显示，或选择固定拉伸比例"), 0xE3F4,
-            {L("自动（游戏原始比例）"), "4:3", "16:9", L("拉伸填满")},
-            [aspectValues]() { return findIndex(aspectValues, cfgGetStr("core.ps1.aspectRatio", "Auto (Game Native)")); },
-            [aspectValues](int i) {
-                if (i >= 0 && i < static_cast<int>(aspectValues.size()))
-                    cfgSetStr("core.ps1.aspectRatio", aspectValues[static_cast<size_t>(i)]);
-            }, "core.ps1.aspectRatio"));
-        m_coreItems.push_back(_toggle(
-            L("快速启动"), L("跳过 PlayStation BIOS 动画，关闭可获得更接近原机的启动过程"), 0xE8B5,
-            []() { return cfgGetBool("core.ps1.fastBoot", true); },
-            [](bool value) { cfgSetBool("core.ps1.fastBoot", value); }, "core.ps1.fastBoot"));
+        const auto setDefault = [](const char* key, const ConfigValue& value) {
+            if (beiklive::SettingManager)
+                beiklive::SettingManager->SetDefault(key, value);
+        };
 
         _appendExternalOptions("ps1", {
             {"系统", "region", "主机区域", "Auto"},
             {"系统", "enable8MBRAM", "8MB 扩展内存", "disabled"},
             {"系统", "enableCheats", "启用金手指", "disabled"},
+            {"系统", "disableAllEnhancements", "禁用所有增强", "disabled"},
             {"性能", "emulationSpeed", "模拟速度", "1.0"},
+            {"性能", "fastForwardSpeed", "快进速度", "0.0"},
+            {"性能", "turboSpeed", "涡轮速度", "2.0"},
             {"性能", "syncToHostRefreshRate", "同步主机刷新率", "enabled"},
             {"性能", "runaheadFrameCount", "预执行帧数", "0"},
-            {"CPU", "executionMode", "CPU 执行模式", "Recompiler"},
-            {"CPU", "overclockEnable", "CPU 超频", "disabled"},
-            {"CPU", "fastmemMode", "快速内存模式", "MMap"},
-            {"图形", "renderer", "图形后端", "deko3D"},
-            {"图形", "multisamples", "多重采样", "1"},
-            {"图形", "trueColor", "真彩色", "enabled"},
-            {"图形", "widescreenHack", "宽屏修正", "disabled"},
-            {"图形", "pgxpEnable", "PGXP 几何精度", "disabled"},
-            {"图形", "pgxpTextureCorrection", "PGXP 纹理修正", "disabled"},
-            {"显示", "deinterlacingMode", "去隔行模式", "Adaptive"},
-            {"显示", "cropMode", "裁切模式", "Auto"},
-            {"显示", "vsync", "垂直同步", "enabled"},
-            {"显示", "showFPS", "显示 FPS", "disabled"},
-            {"CDROM", "readaheadSectors", "光盘预读扇区", "8"},
-            {"CDROM", "readSpeedup", "光盘读取加速", "1"},
+            {"性能", "rewindEnable", "启用倒带", "disabled"},
+            {"性能", "rewindFrequency", "倒带保存频率(秒)", "10"},
+            {"性能", "rewindSaveSlots", "倒带保存槽位", "10"},
+            {"音频", "outputVolume", "输出音量", "100"},
+            {"音频", "fastForwardVolume", "快进音量", "100"},
+            {"音频", "outputMuted", "静音", "disabled"},
+            {"音频", "backend", "音频后端", "Switch"},
+            {"音频", "stretchMode", "拉伸模式", "TimeStretch"},
             {"音频", "outputLatencyMS", "音频延迟(ms)", "60"},
             {"音频", "bufferMS", "音频缓冲(ms)", "100"},
-            {"音频", "outputMuted", "静音", "disabled"},
             {"存档", "saveStateOnExit", "退出时自动存档", "enabled"},
             {"存档", "createSaveStateBackups", "保留存档备份", "enabled"},
-            {"BIOS", "ttyLogging", "BIOS TTY 日志", "disabled"},
+            {"存档", "loadDevicesFromSaveStates", "从存档加载设备", "disabled"},
+        });
+
+        // 记忆卡
+        m_coreItems.push_back(_section(L("记忆卡")));
+        setDefault("core.ps1.memoryCardDirectory", ConfigValue(""));
+        m_coreItems.push_back(_directoryItem(
+            L("记忆卡目录"), L("记忆卡镜像的存放目录；留空使用默认目录"), 0xE5A5,
+            "core.ps1.memoryCardDirectory", L("默认目录"), "sdmc:/GBAStation/duckstation/memcards"));
+        setDefault("core.ps1.usePlaylistTitle", ConfigValue("enabled"));
+        m_coreItems.push_back(_toggle(
+            L("多碟共用一个卡"), L("多碟游戏使用同一张记忆卡"), 0xE5A5,
+            []() { return cfgGetStr("core.ps1.usePlaylistTitle", "enabled") == "enabled"; },
+            [](bool value) { cfgSetStr("core.ps1.usePlaylistTitle", value ? "enabled" : "disabled"); },
+            "core.ps1.usePlaylistTitle"));
+        const std::vector<std::string> cardTypeValues = {
+            "None", "Shared", "PerGame", "PerGameTitle", "PerGameFileTitle", "NonPersistent"};
+        const std::vector<std::string> cardTypeLabels = {
+            L("无记忆卡"), L("所有游戏共享"), L("每游戏（序列号）"), L("每游戏（标题）"), L("每游戏（文件名）"),
+            L("临时卡（不保存）")};
+        setDefault("core.ps1.card1Type", ConfigValue("PerGameTitle"));
+        m_coreItems.push_back(_selector(
+            L("记忆卡 1 类型"), L("选择插槽 1 使用的记忆卡类型"), 0xE5A5, cardTypeLabels,
+            [cardTypeValues]() { return findIndex(cardTypeValues, cfgGetStr("core.ps1.card1Type", "PerGameTitle")); },
+            [cardTypeValues](int i) {
+                if (i >= 0 && i < static_cast<int>(cardTypeValues.size()))
+                    cfgSetStr("core.ps1.card1Type", cardTypeValues[static_cast<size_t>(i)]);
+            }, "core.ps1.card1Type"));
+        setDefault("core.ps1.card2Type", ConfigValue("None"));
+        m_coreItems.push_back(_selector(
+            L("记忆卡 2 类型"), L("选择插槽 2 使用的记忆卡类型"), 0xE5A5, cardTypeLabels,
+            [cardTypeValues]() { return findIndex(cardTypeValues, cfgGetStr("core.ps1.card2Type", "None")); },
+            [cardTypeValues](int i) {
+                if (i >= 0 && i < static_cast<int>(cardTypeValues.size()))
+                    cfgSetStr("core.ps1.card2Type", cardTypeValues[static_cast<size_t>(i)]);
+            }, "core.ps1.card2Type"));
+        setDefault("core.ps1.card1Path", ConfigValue(""));
+        m_coreItems.push_back(_filePickerItem(
+            L("共享卡 1 文件"), L("共享类型下插槽 1 使用的记忆卡镜像；留空自动命名"), 0xE5A5,
+            "core.ps1.card1Path", {"mcd"}, L("自动"), "sdmc:/GBAStation/duckstation/memcards"));
+        setDefault("core.ps1.card2Path", ConfigValue(""));
+        m_coreItems.push_back(_filePickerItem(
+            L("共享卡 2 文件"), L("共享类型下插槽 2 使用的记忆卡镜像；留空自动命名"), 0xE5A5,
+            "core.ps1.card2Path", {"mcd"}, L("自动"), "sdmc:/GBAStation/duckstation/memcards"));
+
+        // BIOS
+        m_coreItems.push_back(_section(L("BIOS")));
+        setDefault("core.ps1.biosPathNTSCJ", ConfigValue(""));
+        m_coreItems.push_back(_filePickerItem(
+            L("BIOS (NTSC-J)"), L("日版主机使用的 BIOS 文件；留空自动检测"), 0xE8B5,
+            "core.ps1.biosPathNTSCJ", {"bin"}, L("自动检测"), "sdmc:/GBAStation/bios/ps1"));
+        setDefault("core.ps1.biosPathNTSCU", ConfigValue(""));
+        m_coreItems.push_back(_filePickerItem(
+            L("BIOS (NTSC-U)"), L("美版主机使用的 BIOS 文件；留空自动检测"), 0xE8B5,
+            "core.ps1.biosPathNTSCU", {"bin"}, L("自动检测"), "sdmc:/GBAStation/bios/ps1"));
+        setDefault("core.ps1.biosPathPAL", ConfigValue(""));
+        m_coreItems.push_back(_filePickerItem(
+            L("BIOS (PAL)"), L("欧版主机使用的 BIOS 文件；留空自动检测"), 0xE8B5,
+            "core.ps1.biosPathPAL", {"bin"}, L("自动检测"), "sdmc:/GBAStation/bios/ps1"));
+        setDefault("core.ps1.fastBoot", ConfigValue(1));
+        m_coreItems.push_back(_toggle(
+            L("快速启动"), L("跳过 PlayStation BIOS 动画"), 0xE8B5,
+            []() { return cfgGetBool("core.ps1.fastBoot", true); },
+            [](bool value) { cfgSetBool("core.ps1.fastBoot", value); }, "core.ps1.fastBoot"));
+        setDefault("core.ps1.ttyLogging", ConfigValue("disabled"));
+        m_coreItems.push_back(_toggle(
+            L("BIOS TTY 日志"), L("记录 BIOS 的 printf 调用，仅用于调试"), 0xE8B5,
+            []() { return cfgGetStr("core.ps1.ttyLogging", "disabled") == "enabled"; },
+            [](bool value) { cfgSetStr("core.ps1.ttyLogging", value ? "enabled" : "disabled"); },
+            "core.ps1.ttyLogging"));
+
+        _appendExternalOptions("ps1", {
+            // 纹理替换
+            {"纹理替换", "enableVRAMWriteReplacements", "启用 VRAM 写入纹理替换", "disabled"},
+            {"纹理替换", "preloadTextures", "预载替换纹理", "disabled"},
+            {"纹理替换", "dumpVRAMWrites", "导出可替换 VRAM 写入", "disabled"},
+            {"纹理替换", "dumpVRAMWriteForceAlphaChannel", "导出写入强制 Alpha", "enabled"},
+            // 日志
             {"日志", "logLevel", "日志级别", "Info"},
+            {"日志", "logToConsole", "日志到系统控制台", "disabled"},
+            {"日志", "logToDebug", "日志到调试控制台", "disabled"},
+            {"日志", "logToFile", "日志到文件", "disabled"},
         });
 
         _finishCorePage(L("DuckStation 核心设置"));
@@ -3288,19 +3465,126 @@ private:
     void _openYabaSanshiroCore()
     {
         m_coreItems.clear();
+
+        auto intSelector = [this](const std::string& title, const std::string& hint, char32_t icon,
+                                  const std::string& configKey, int fallback,
+                                  const std::vector<int>& values,
+                                  const std::vector<std::string>& labels) {
+            m_coreItems.push_back(_selector(
+                title, hint, icon, labels,
+                [configKey, fallback, values]() {
+                    const int current = cfgGetInt(configKey, fallback);
+                    for (int i = 0; i < static_cast<int>(values.size()); ++i)
+                        if (values[static_cast<size_t>(i)] == current)
+                            return i;
+                    return 0;
+                },
+                [configKey, values](int index) {
+                    if (index >= 0 && index < static_cast<int>(values.size()))
+                        cfgSetInt(configKey, values[static_cast<size_t>(index)]);
+                }, configKey));
+        };
+
         m_coreItems.push_back(_section(L("系统")));
         m_coreItems.push_back(_toggle(
             L("使用 HLE BIOS"), L("没有 Saturn BIOS 文件时使用内置高层模拟，兼容性较低"), 0xE8B5,
             []() { return cfgGetBool("core.saturn.emulated_bios", false); },
             [](bool value) { cfgSetBool("core.saturn.emulated_bios", value); }, "core.saturn.emulated_bios"));
+        intSelector(
+            L("卡带"), L("部分游戏需要扩展内存或 ROM 卡带"), 0xE8FF,
+            "core.saturn.cartridge", 0,
+            {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+            {L("无"), L("Pro Action Replay"), L("4M 备份内存"), L("8M 备份内存"),
+             L("16M 备份内存"), L("32M 备份内存"), L("8M 扩展内存"), L("32M 扩展内存"),
+             L("NetLink"), L("ROM 卡带"), L("日本调制解调器"), L("USB 设备")});
+        intSelector(
+            L("主机区域"), L("自动检测失败时可手动指定主机区域"), 0xE8FF,
+            "core.saturn.region", 0,
+            {0, 1, 2, 4, 5, 6, 10, 12, 13},
+            {L("自动检测"), L("日本"), L("亚洲 NTSC"), L("北美"), L("中南美 NTSC"),
+             L("韩国"), L("亚洲 PAL"), L("欧洲"), L("中南美 PAL")});
         m_coreItems.push_back(_selector(
+            L("视频制式"), L("需与游戏区域匹配"), 0xE8FF,
+            {L("NTSC"), L("PAL")},
+            []() { return std::clamp(cfgGetInt("core.saturn.video_format", 0), 0, 1); },
+            [](int value) { cfgSetInt("core.saturn.video_format", std::clamp(value, 0, 1)); },
+            "core.saturn.video_format"));
+
+        m_coreItems.push_back(_section(L("图形")));
+        intSelector(
             L("渲染分辨率"), L("原生分辨率最稳定；更高倍率会增加 GPU 负担"), 0xE8FF,
-            {L("原生"), "4x", "2x", L("原始输出")},
-            []() { return std::clamp(cfgGetInt("core.saturn.resolution_mode", 0), 0, 3); },
-            [](int value) { cfgSetInt("core.saturn.resolution_mode", std::clamp(value, 0, 3)); }, "core.saturn.resolution_mode"));
+            "core.saturn.resolution_mode", 0,
+            {0, 5, 4, 1, 2, 3},
+            {L("原生"), L("1080p"), L("720p"), "4x", "2x", L("原始输出")});
+        intSelector(
+            L("RBG 分辨率"), L("调整 RBG 图层的内部分辨率"), 0xE8FF,
+            "core.saturn.rbg_resolution", 0,
+            {0, 1, 2, 3, 4},
+            {L("原始输出"), "2x", L("720p"), L("1080p"), L("原生")});
+        m_coreItems.push_back(_selector(
+            L("视频滤镜"), L("FXAA / 扫描线 / 双线性过滤"), 0xE8FF,
+            {L("无"), "FXAA", L("扫描线"), L("双线性")},
+            []() { return std::clamp(cfgGetInt("core.saturn.video_filter", 0), 0, 3); },
+            [](int value) { cfgSetInt("core.saturn.video_filter", std::clamp(value, 0, 3)); },
+            "core.saturn.video_filter"));
+        m_coreItems.push_back(_selector(
+            L("多边形生成"), L("三角形透视校正或 GPU 细分，兼容性可能不同"), 0xE8FF,
+            {L("透视校正"), L("GPU 细分")},
+            []() { return cfgGetInt("core.saturn.polygon_generation", 0) == 2 ? 1 : 0; },
+            [](int value) { cfgSetInt("core.saturn.polygon_generation", value == 1 ? 2 : 0); },
+            "core.saturn.polygon_generation"));
+        m_coreItems.push_back(_selector(
+            L("宽高比"), L("调整画面缩放比例"), 0xE8FF,
+            {L("原始"), "4:3", "16:9", L("全屏")},
+            []() { return std::clamp(cfgGetInt("core.saturn.aspect_ratio", 0), 0, 3); },
+            [](int value) { cfgSetInt("core.saturn.aspect_ratio", std::clamp(value, 0, 3)); },
+            "core.saturn.aspect_ratio"));
+        m_coreItems.push_back(_toggle(
+            L("旋转屏幕"), L("适用于纵版射击游戏"), 0xE8FF,
+            []() { return cfgGetBool("core.saturn.rotate_screen", false); },
+            [](bool value) { cfgSetBool("core.saturn.rotate_screen", value); },
+            "core.saturn.rotate_screen"));
+        m_coreItems.push_back(_toggle(
+            L("RBG 计算着色器"), L("使用计算着色器处理 RBG 图层，部分设备可能不支持"), 0xE8FF,
+            []() { return cfgGetBool("core.saturn.rbg_compute_shader", false); },
+            [](bool value) { cfgSetBool("core.saturn.rbg_compute_shader", value); },
+            "core.saturn.rbg_compute_shader"));
         m_coreItems.push_back(_textValue(
             L("跳帧"), L("输入 0 表示不跳帧，也可输入更高等级"), 0xE8E5,
             "core.saturn.frame_skip", "0", 8));
+        intSelector(
+            L("帧率限制"), L("正常 / 2 倍 / 无限制"), 0xE8E5,
+            "core.saturn.frame_limit", 0,
+            {0, 2, 1},
+            {L("正常"), "2x", L("无限制")});
+
+        m_coreItems.push_back(_section(L("音频")));
+        intSelector(
+            L("音频引擎"), L("新版音质更好，旧版兼容性更高"), 0xE8D5,
+            "core.saturn.sound_engine", 1,
+            {1, 0},
+            {L("新版"), L("旧版")});
+        intSelector(
+            L("SCSP 同步模式"), L("CPU 时间更精确，实时模式更不容易爆音"), 0xE8D5,
+            "core.saturn.scsp_sync_time_mode", 1,
+            {0, 1},
+            {L("CPU 时间"), L("实时")});
+        m_coreItems.push_back(_textValue(
+            L("SCSP 每帧同步次数"), L("1-255，数值越大音频越平滑但越耗性能"), 0xE8D5,
+            "core.saturn.scsp_sync_per_frame", "1", 3));
+
+        m_coreItems.push_back(_section(L("性能与兼容")));
+        intSelector(
+            L("CPU 同步"), L("速度优先或精确度优先"), 0xE8E5,
+            "core.saturn.cpu_sync_per_line", 1,
+            {1, 2},
+            {L("速度"), L("精确")});
+        m_coreItems.push_back(_toggle(
+            L("扩展内部内存"), L("启用 4MB 扩展内存，部分游戏需要"), 0xE8E5,
+            []() { return cfgGetBool("core.saturn.extend_internal_memory", false); },
+            [](bool value) { cfgSetBool("core.saturn.extend_internal_memory", value); },
+            "core.saturn.extend_internal_memory"));
+
         m_coreItems.push_back(_section(L("按键")));
         m_coreItems.push_back(_action(
             L("Saturn 按键映射"), L("Switch A/B/X/Y/L/R/ZL/ZR 对应 Saturn 六键手柄"), 0xE30F,
@@ -3760,10 +4044,6 @@ private:
                 }
                 invalidate();
             });
-        emulator.push_back(_selector(L("IISU 卡片行数"), L("设置 IISU 首页卡片行数，行数越多卡片越小"), 0xE8A1,
-            {L("三行"), L("四行")},
-            []() { return std::clamp(cfgGetInt("iisu.rows", 3) - 3, 0, 1); },
-            [](int i) { cfgSetInt("iisu.rows", i + 3); }));
         });
     }
 
