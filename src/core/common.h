@@ -261,7 +261,7 @@ namespace beiklive // 全局功能函数
         case (int)beiklive::enums::EmuPlatform::EmuSNES:
             return "snes9x2005";
         case (int)beiklive::enums::EmuPlatform::EmuNDS:
-            return "melonds";
+            return "drastic-external";
         case (int)beiklive::enums::EmuPlatform::Emu3DS:
             return "azahar";
         case (int)beiklive::enums::EmuPlatform::EmuGenesis:

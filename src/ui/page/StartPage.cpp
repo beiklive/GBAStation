@@ -932,12 +932,10 @@ beiklive::enums::FileType platformToFileType(int platform)
         bool shouldUseNdsExternalNro(const beiklive::GameEntry& entry)
         {
 #ifdef __SWITCH__
-            if (entry.platform != static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS))
-                return false;
-            // DraStic runs as the external NRO; melonDS is linked in-process.
-            // Unknown/empty core ids normalize to the first option (DraStic),
-            // preserving the previous behaviour for existing libraries.
-            return beiklive::NormalizeCoreId(entry.platform, entry.core) == "drastic-external";
+            // Every NDS core is shipped as the same external NRO filename
+            // (GBAStationNDSStub.nro); the selected core only decides which
+            // settings page is shown.  Never branch on the core id here.
+            return entry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNDS);
 #else
             (void)entry;
             return false;

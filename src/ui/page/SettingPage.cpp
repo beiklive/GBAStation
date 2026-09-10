@@ -2145,6 +2145,7 @@ private:
 
     void _openCoreOption(int platform, const std::string& coreId)
     {
+        brls::Logger::debug("openCoreOption platform={} core={}", platform, coreId);
         m_coreSettingsOverlay = true;
         m_coreBrowserMode = CoreBrowserMode::Platform;
         m_coreBrowserPlatform = platform;

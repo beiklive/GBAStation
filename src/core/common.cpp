@@ -699,6 +699,21 @@ namespace beiklive
         SettingManager->SetDefault("core.saturn.emulated_bios", ConfigValue(0));
         SettingManager->SetDefault("core.saturn.frame_skip", ConfigValue(0));
         SettingManager->SetDefault("core.saturn.resolution_mode", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.frame_limit", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.video_filter", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.polygon_generation", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.aspect_ratio", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.rotate_screen", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.rbg_resolution", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.rbg_compute_shader", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.extend_internal_memory", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.sound_engine", ConfigValue(1));
+        SettingManager->SetDefault("core.saturn.scsp_sync_per_frame", ConfigValue(1));
+        SettingManager->SetDefault("core.saturn.scsp_sync_time_mode", ConfigValue(1));
+        SettingManager->SetDefault("core.saturn.cpu_sync_per_line", ConfigValue(1));
+        SettingManager->SetDefault("core.saturn.cartridge", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.region", ConfigValue(0));
+        SettingManager->SetDefault("core.saturn.video_format", ConfigValue(0));
         SettingManager->SetDefault("core.dolphin.dolphin_cpu_clock_rate", ConfigValue(std::string("1.0")));
         SettingManager->SetDefault("core.dolphin.dolphin_widescreen", ConfigValue(std::string("enabled")));
         SettingManager->SetDefault("core.dolphin.dolphin_enable_rumble", ConfigValue(std::string("enabled")));
@@ -784,8 +799,8 @@ namespace beiklive
         SettingManager->SetDefault("core.drastic.firmware_color", ConfigValue(0));
         SettingManager->SetDefault("core.drastic.firmware_birthday_month", ConfigValue(6));
         SettingManager->SetDefault("core.drastic.firmware_birthday_day", ConfigValue(6));
-        SettingManager->SetDefault("core.drastic.lsfg_flow_scale", ConfigValue(0.25f));
-        SettingManager->SetDefault("core.drastic.lsfg_performance", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.lsfg_flow_scale", ConfigValue(1.0f));
+        SettingManager->SetDefault("core.drastic.lsfg_performance", ConfigValue(0));
         SettingManager->SetDefault("core.drastic.lsfg_enabled", ConfigValue(0));
 
         SettingManager->SetDefault("core.genesis.region", ConfigValue(std::string("auto")));
