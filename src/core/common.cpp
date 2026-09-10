@@ -739,6 +739,55 @@ namespace beiklive
         SettingManager->SetDefault("core.melonds_randomize_mac", ConfigValue(0));
         SettingManager->SetDefault("core.melonds_firmware_language", ConfigValue(-1));
 
+        // DraStic external NDS core (GBAStationNDSStub.nro).  Key names match
+        // the host's import_launcher_core_config() mapping table exactly.
+        SettingManager->SetDefault("core.drastic.layout", ConfigValue(std::string("horizontal")));
+        SettingManager->SetDefault("core.drastic.rotation", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.screen_gap", ConfigValue(8));
+        SettingManager->SetDefault("core.drastic.integer_scale", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.video_filter", ConfigValue(std::string("nearest")));
+        SettingManager->SetDefault("core.drastic.volume", ConfigValue(100));
+        SettingManager->SetDefault("core.drastic.microphone_source", ConfigValue(std::string("noise")));
+        SettingManager->SetDefault("core.drastic.mic_enabled", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.mic_level", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.vibration", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.motion", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.stylus_mode", ConfigValue(std::string("stick")));
+        SettingManager->SetDefault("core.drastic.stylus_speed", ConfigValue(8));
+        SettingManager->SetDefault("core.drastic.frameskip", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.frameskip_type", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.frameskip_safe", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.fastforward_speed", ConfigValue(5));
+        SettingManager->SetDefault("core.drastic.audio_latency", ConfigValue(2));
+        SettingManager->SetDefault("core.drastic.cpu_threads", ConfigValue(3));
+        SettingManager->SetDefault("core.drastic.threaded_3d", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.hires_3d", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.sound_enabled", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.cheats_enabled", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.rtc_system_time", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.preload_roms", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.show_fps", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.autosave_interval", ConfigValue(300));
+        SettingManager->SetDefault("core.drastic.autofire_speed", ConfigValue(2));
+        SettingManager->SetDefault("core.drastic.slot2_type", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.backup_in_savestates", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.ignore_gamecard_limit", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.use_16bit_color", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.auto_trim", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.fix_main_engine_screen", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.disable_edge_marking", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.lua_enabled", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.blend", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.raw_save_format", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.firmware_nickname", ConfigValue(std::string("Switch")));
+        SettingManager->SetDefault("core.drastic.firmware_language", ConfigValue(-1));
+        SettingManager->SetDefault("core.drastic.firmware_color", ConfigValue(0));
+        SettingManager->SetDefault("core.drastic.firmware_birthday_month", ConfigValue(6));
+        SettingManager->SetDefault("core.drastic.firmware_birthday_day", ConfigValue(6));
+        SettingManager->SetDefault("core.drastic.lsfg_flow_scale", ConfigValue(0.25f));
+        SettingManager->SetDefault("core.drastic.lsfg_performance", ConfigValue(1));
+        SettingManager->SetDefault("core.drastic.lsfg_enabled", ConfigValue(0));
+
         SettingManager->SetDefault("core.genesis.region", ConfigValue(std::string("auto")));
         SettingManager->SetDefault("core.genesis.pad_buttons", ConfigValue(6));
         SettingManager->SetDefault("core.genesis.no_sprite_limit", ConfigValue(std::string("disabled")));

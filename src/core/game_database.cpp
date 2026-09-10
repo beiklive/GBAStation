@@ -120,6 +120,21 @@ namespace beiklive
                    std::equal(p.begin(), p.end(), value.begin());
         }
 
+        // Raw post-FX filter names written by the external DraStic NDS host.
+        // They are not melonDS shader presets, so they must be preserved
+        // verbatim instead of being normalized/filtered away.
+        bool isDraSticNdsShaderType(const std::string& type)
+        {
+            static const char* const kNames[] = {
+                "nearest", "linear", "quilez", "scanline", "scale2x",
+                "hq2x", "fxaa", "fxaa_hq", "smaa", "custom",
+            };
+            for (const char* name : kNames)
+                if (type == name)
+                    return true;
+            return startsWith(type, "drastic-");
+        }
+
         std::string canonicalNdsShaderStem(std::string value)
         {
             value = trimCopy(lowerAscii(std::move(value)));
@@ -171,6 +186,8 @@ namespace beiklive
 
         bool isUnsupportedNdsShaderType(const std::string& type)
         {
+            if (isDraSticNdsShaderType(type))
+                return false;
             const std::string key = ndsShaderMatchKey(type);
             if (!startsWith(key, "drastic-"))
                 return false;
@@ -222,6 +239,8 @@ namespace beiklive
 
         std::string normalizeNdsShaderType(const std::string& type)
         {
+            if (isDraSticNdsShaderType(type))
+                return type;
             const auto& types = ndsShaderTypes();
             if (std::find(types.begin(), types.end(), type) != types.end())
                 return type;
@@ -367,8 +386,10 @@ namespace beiklive
         {
             if (entry.NdsShaderType.empty())
                 entry.NdsShaderType = entry.shaderParaPath.empty() ? "RetroArch_dot" : entry.shaderParaPath;
+            const bool drasticShader = isDraSticNdsShaderType(entry.NdsShaderType);
             entry.NdsShaderType = normalizeNdsShaderType(entry.NdsShaderType);
-            entry.shaderParaPath = entry.NdsShaderType;
+            if (!drasticShader)
+                entry.shaderParaPath = entry.NdsShaderType;
             entry.shaderParaNames.clear();
             entry.shaderParaValues.clear();
         }

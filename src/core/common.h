@@ -185,6 +185,7 @@ namespace beiklive // 全局功能函数
             {"snes9x", "Snes9x", CoreType::Snes9x},
         };
         static const std::vector<CoreOption> ndsCores = {
+            {"drastic-external", "DraStic", CoreType::Mgba},
             {"melonds", "melonDS", CoreType::Mgba},
         };
         static const std::vector<CoreOption> threeDsCores = {

@@ -87,8 +87,11 @@ namespace beiklive::input_mapping
 
     // These are exclusive to the NDS host.  Unlike a physical microphone,
     // NDS cores accept a transient white-noise feed while the mapping is held.
+    // All three are only meaningful with the DraStic external core.
     inline constexpr HotkeyDefault kNdsSpecialHotkeys[] = {
-        {"hotkey.mic_input.pad", "模拟麦克风输入", "PAD_LT+PAD_Y", false},
+        {"hotkey.mic_input.pad", "模拟麦克风输入（仅 DraStic）", "PAD_LT+PAD_Y", false},
+        {"hotkey.mic_toggle.pad", "麦克风开关（仅 DraStic）", "none", false},
+        {"hotkey.mic_source.pad", "切换麦克风来源（仅 DraStic）", "none", false},
     };
 
     inline constexpr const char* kTurboAKey = "handle.a_turbo";

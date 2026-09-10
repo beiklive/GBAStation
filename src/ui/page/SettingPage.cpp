@@ -90,7 +90,11 @@ static std::string pointerHotkeyHint(const char* key)
     if (std::strcmp(key, "hotkey.swap_screens.pad") == 0)
         return L("交换 NDS 上屏与下屏的显示位置");
     if (std::strcmp(key, "hotkey.mic_input.pad") == 0)
-        return L("按住时向 NDS 模拟麦克风输入吹气白噪声");
+        return L("按住时向 NDS 模拟麦克风输入吹气白噪声（仅 DraStic 核心可用）");
+    if (std::strcmp(key, "hotkey.mic_toggle.pad") == 0)
+        return L("开关 NDS 麦克风输入（仅 DraStic 核心可用）");
+    if (std::strcmp(key, "hotkey.mic_source.pad") == 0)
+        return L("在模拟噪声与外接麦克风之间切换（仅 DraStic 核心可用）");
     return L("可绑定单键或双键组合");
 }
 
@@ -2160,7 +2164,11 @@ private:
             _openLibretroCore(coreId == "snes9x" ? L("Snes9x 核心设置") : L("Snes9x 2005 核心设置"),
                               coreId == "snes9x" ? CoreType::Snes9x : CoreType::Snes9x2005);
         }
-        else if (platform == (int)beiklive::enums::EmuPlatform::EmuNDS) _openMelonDsCore();
+        else if (platform == (int)beiklive::enums::EmuPlatform::EmuNDS)
+        {
+            if (coreId == "drastic-external") _openDraSticCore();
+            else _openMelonDsCore();
+        }
         else if (platform == (int)beiklive::enums::EmuPlatform::Emu3DS) _openThreeDsCore();
         else if (platform == (int)beiklive::enums::EmuPlatform::EmuGenesis) _openGenesisCore();
         else if (platform == (int)beiklive::enums::EmuPlatform::EmuArcade) _openFbneoCore();
@@ -2835,6 +2843,143 @@ private:
         file(L("DLDI SD 镜像"), "core.melonds_dldi_path", {"img","bin"});
         m_coreItems.push_back(_toggle("随机 MAC 地址", "每次启动生成随机无线地址", beiklive::material::WIFI, []() { return cfgGetBool("core.melonds_randomize_mac", false); }, [](bool v) { cfgSetBool("core.melonds_randomize_mac", v); }, "core.melonds_randomize_mac"));
         _finishCorePage(L("melonDS 核心设置"));
+    }
+
+    void _openDraSticCore()
+    {
+        m_coreItems.clear();
+        auto selStr = [this](const char* title, const char* hint, char32_t icon,
+                             const char* key, std::vector<std::string> values,
+                             std::vector<std::string> labels, const char* def) {
+            m_coreItems.push_back(_selector(L(title), L(hint), icon, std::move(labels),
+                [key, values, def]() { return findIndex(values, cfgGetStr(key, def)); },
+                [key, values](int i) {
+                    if (i >= 0 && i < static_cast<int>(values.size()))
+                        cfgSetStr(key, values[static_cast<size_t>(i)]);
+                }, key));
+        };
+        auto selInt = [this](const char* title, const char* hint, char32_t icon,
+                             const char* key, std::vector<int> values,
+                             std::vector<std::string> labels, int def) {
+            m_coreItems.push_back(_selector(L(title), L(hint), icon, std::move(labels),
+                [key, values, def]() {
+                    const int current = cfgGetInt(key, def);
+                    for (size_t i = 0; i < values.size(); ++i)
+                        if (values[i] == current) return static_cast<int>(i);
+                    return 0;
+                },
+                [key, values](int i) {
+                    if (i >= 0 && i < static_cast<int>(values.size()))
+                        cfgSetInt(key, values[static_cast<size_t>(i)]);
+                }, key));
+        };
+        auto tog = [this](const char* title, const char* hint, char32_t icon,
+                          const char* key, bool def) {
+            m_coreItems.push_back(_toggle(L(title), L(hint), icon,
+                [key, def]() { return cfgGetBool(key, def); },
+                [key](bool v) { cfgSetBool(key, v); }, key));
+        };
+        auto intLabels = [](const std::vector<int>& values) {
+            std::vector<std::string> labels;
+            for (int v : values) labels.push_back(std::to_string(v));
+            return labels;
+        };
+
+        m_coreItems.push_back(_section(L("画面与滤镜")));
+        selStr("屏幕布局", "NDS 上下屏排列方式", 0xE40A, "core.drastic.layout",
+               {"vertical", "horizontal", "top", "bottom", "priority_top", "priority_bottom", "custom"},
+               {L("纵向"), L("横向"), L("仅上屏"), L("仅下屏"), L("上屏优先"), L("下屏优先"), L("自定义")},
+               "horizontal");
+        selInt("画面方向", "屏幕旋转角度", 0xE8B5, "core.drastic.rotation",
+               {0, 1, 2, 3}, {"0°", "90°", "180°", "270°"}, 0);
+        selInt("屏幕间距", "上下屏之间的像素间距", 0xE8D5, "core.drastic.screen_gap",
+               {0, 4, 8, 12, 16, 24, 32, 48, 64}, intLabels({0, 4, 8, 12, 16, 24, 32, 48, 64}), 8);
+        tog("整数倍缩放", "按整数倍缩放画面", 0xE3F4, "core.drastic.integer_scale", false);
+        selStr("内置滤镜", "DraStic 后处理滤镜", 0xE40A, "core.drastic.video_filter",
+               {"nearest", "linear", "quilez", "scanline", "scale2x", "hq2x", "fxaa", "fxaa_hq", "smaa", "custom"},
+               {L("最近邻"), L("线性"), "Quilez", "Scanline", "Scale2x", "HQ2x", "FXAA", L("FXAA 高质量"), "SMAA", L("自定义")},
+               "nearest");
+        {
+            std::vector<int> volumes;
+            std::vector<std::string> volumeLabels;
+            for (int v = 0; v <= 100; v += 10) {
+                volumes.push_back(v);
+                volumeLabels.push_back(std::to_string(v) + "%");
+            }
+            selInt("音量", "模拟器输出音量", 0xE050, "core.drastic.volume",
+                   volumes, volumeLabels, 100);
+        }
+
+        m_coreItems.push_back(_section(L("音频与麦克风")));
+        tog("声音", "启用模拟器声音输出", 0xE050, "core.drastic.sound_enabled", true);
+        selInt("音频延迟", "较大的值更稳定但延迟更高", 0xE8B5, "core.drastic.audio_latency",
+               {0, 1, 2, 3, 4}, intLabels({0, 1, 2, 3, 4}), 2);
+        selStr("麦克风来源", "模拟噪声或外接耳麦/USB 麦克风", 0xE050, "core.drastic.microphone_source",
+               {"noise", "external"}, {L("模拟噪声"), L("外接")}, "noise");
+        tog("麦克风", "启用 NDS 麦克风输入", 0xE050, "core.drastic.mic_enabled", true);
+
+        m_coreItems.push_back(_section(L("输入")));
+        tog("震动", "模拟震动包", 0xE3F4, "core.drastic.vibration", true);
+        tog("体感控制", "陀螺仪与加速度计", 0xE3B0, "core.drastic.motion", true);
+        selStr("虚拟触笔", "触笔控制方式", 0xE8B5, "core.drastic.stylus_mode",
+               {"off", "stick", "motion"}, {L("关闭"), L("右摇杆"), L("体感控制")}, "stick");
+        selInt("触笔速度", "模拟触笔移动速度", 0xE8B5, "core.drastic.stylus_speed",
+               {2, 4, 6, 8, 10, 12, 16, 20}, intLabels({2, 4, 6, 8, 10, 12, 16, 20}), 8);
+
+        m_coreItems.push_back(_section(L("性能")));
+        selInt("跳帧数量", "0 为不跳帧", 0xE8D5, "core.drastic.frameskip",
+               {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, intLabels({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}), 0);
+        selInt("跳帧方式", "跳帧策略", 0xE8D5, "core.drastic.frameskip_type",
+               {0, 1, 2, 3}, {L("自动"), L("固定"), L("激进"), L("最大")}, 0);
+        tog("安全跳帧", "避免跳帧导致的画面异常", 0xE8D5, "core.drastic.frameskip_safe", false);
+        selInt("快进速度", "按住快进键时的速度", 0xE8EF, "core.drastic.fastforward_speed",
+               {0, 1, 2, 3, 4, 5}, {"50%", "150%", "200%", "300%", "400%", L("不限")}, 5);
+        selInt("CPU 线程", "CPU 模拟线程数", 0xE8EF, "core.drastic.cpu_threads",
+               {1, 2, 3, 4}, intLabels({1, 2, 3, 4}), 3);
+        tog("多线程 3D", "将 3D 渲染放到独立线程", 0xE8D5, "core.drastic.threaded_3d", true);
+        tog("高清 3D", "2 倍内部分辨率", 0xE8FF, "core.drastic.hires_3d", true);
+        selInt("连发速度", "自动连发速率", 0xE8EF, "core.drastic.autofire_speed",
+               {1, 2, 3, 4, 5}, intLabels({1, 2, 3, 4, 5}), 2);
+        selInt("自动存档间隔", "秒；0 为关闭", 0xE425, "core.drastic.autosave_interval",
+               {0, 60, 300, 600, 1200}, {L("关闭"), "60", "300", "600", "1200"}, 300);
+        tog("预加载 ROM", "进入游戏前预加载", 0xE8D5, "core.drastic.preload_roms", true);
+        tog("显示 FPS", "在画面角落显示帧率", 0xE8B5, "core.drastic.show_fps", false);
+
+        m_coreItems.push_back(_section(L("存储与金手指")));
+        tog("金手指", "启用 Action Replay 金手指", 0xE8EF, "core.drastic.cheats_enabled", true);
+        tog("存档备份到即时存档", "即时存档中包含电池存档", 0xE425, "core.drastic.backup_in_savestates", true);
+        tog("忽略卡带容量限制", "允许超出卡带容量的存档", 0xE425, "core.drastic.ignore_gamecard_limit", false);
+        tog("16 位色", "降低色彩精度以提升性能", 0xE40A, "core.drastic.use_16bit_color", false);
+        tog("自动裁剪", "裁剪 ROM 中的空白数据", 0xE8D5, "core.drastic.auto_trim", false);
+        tog("混合", "启用半透明混合", 0xE40A, "core.drastic.blend", false);
+        tog("原始存档格式", "使用通用 .sav 格式", 0xE425, "core.drastic.raw_save_format", true);
+        selInt("Slot-2 配件", "扩展槽设备类型", 0xE8EF, "core.drastic.slot2_type",
+               {0, 1, 2, 3, 4, 5},
+               {L("无"), L("GBA 卡带"), "SRAM", L("震动包"), L("体感包（官方）"), L("体感包（自制）")}, 1);
+        tog("禁用边缘标记", "关闭 3D 边缘标记", 0xE40A, "core.drastic.disable_edge_marking", false);
+        tog("修复主引擎画面", "修正主引擎画面问题", 0xE40A, "core.drastic.fix_main_engine_screen", false);
+        tog("Lua 脚本", "启用 Lua 脚本支持", 0xE8D5, "core.drastic.lua_enabled", true);
+
+        m_coreItems.push_back(_section(L("固件与 RTC")));
+        tog("RTC 跟随系统时间", "实时时钟使用系统时间", 0xE8B5, "core.drastic.rtc_system_time", true);
+        selInt("固件语言", "启动固件语言", 0xE8C4, "core.drastic.firmware_language",
+               {-1, 0, 1, 2, 3, 4, 5, 6},
+               {L("跟随固件"), L("日语"), L("英语"), L("法语"), L("德语"), L("意大利语"), L("西班牙语"), L("简体中文")}, -1);
+        selInt("固件颜色", "固件主题颜色", 0xE40A, "core.drastic.firmware_color",
+               {0, 1, 2, 3, 4, 5}, intLabels({0, 1, 2, 3, 4, 5}), 0);
+        selInt("生日月份", "固件设置的生日月份", 0xE8B5, "core.drastic.firmware_birthday_month",
+               {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, intLabels({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}), 6);
+        selInt("生日日期", "固件设置的生日日期", 0xE8B5, "core.drastic.firmware_birthday_day",
+               {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31},
+               intLabels({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}), 6);
+
+        m_coreItems.push_back(_section(L("帧生成（Lossless）")));
+        tog("启用帧生成", "需要 sdmc:/GBAStation/drastic/lsfg/Lossless.dll", 0xE8FF, "core.drastic.lsfg_enabled", false);
+        tog("性能模式", "帧生成性能优先", 0xE8EF, "core.drastic.lsfg_performance", true);
+        selStr("帧生成强度", "生成帧的插值强度", 0xE8FF, "core.drastic.lsfg_flow_scale",
+               {"0.25", "0.5", "0.75", "1.0"}, {"0.25", "0.5", "0.75", "1.0"}, "0.25");
+
+        _finishCorePage(L("DraStic 核心设置"));
     }
 
     void _openFbneoCore()
@@ -3615,6 +3760,10 @@ private:
                 }
                 invalidate();
             });
+        emulator.push_back(_selector(L("IISU 卡片行数"), L("设置 IISU 首页卡片行数，行数越多卡片越小"), 0xE8A1,
+            {L("三行"), L("四行")},
+            []() { return std::clamp(cfgGetInt("iisu.rows", 3) - 3, 0, 1); },
+            [](int i) { cfgSetInt("iisu.rows", i + 3); }));
         });
     }
 
