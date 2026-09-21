@@ -593,3 +593,65 @@ M2 范围：B2–B10（配置键补全 + GameData 读写）+ 需求四（统计�
 - [ ] **B3** 玩家按键映射：`saturn.handle.*` 替换 `main.cpp` 里硬编码的 `PAD_KEY(...)` 表（当前只做了热键）
 - [ ] **B3** `save.*`（autoLoadState0 / autoSaveOnExit）与 `fastforward.*` 键的消费（`display.showFps` 建议与 FPS 开关一起放 M5）
 - [ ] 统计口径微调：`playTime` 目前按"游戏运行且菜单关闭"的墙钟累计，需实机确认与挂起/唤醒的交互
+
+---
+
+## 16. M2 第二步执行记录（已提交 `dcdd335`）
+
+### 16.1 JSON 库换成与启动器同一份
+
+- vendor 启动器的 **nlohmann/json 3.12.0**（`GBAStation/src/core/json.hpp`）到核心
+  `yabause/src/gbastation/third_party/nlohmann/json.hpp`（逐字节相同），替换原 jsoncpp 用法。
+- 顺带解决两件事：输出风格与启动器 `dump(4)` **完全一致**（`"key": value`、4 空格缩进、
+  原始 UTF-8、键序一致），以及删掉了为 jsoncpp 写的 `\uXXXX` 反转义补丁。
+- jsoncpp 仍在仓库里被其它代码使用，未删除。
+
+### 16.2 玩家按键映射：`saturn.handle.*` 真正生效
+
+替换了 `main.cpp` 里硬编码的 `PAD_KEY(...)` 表。**每个 Saturn 按键可由多个配置键供给**
+（如 L 同时读 `saturn.handle.l` 与 `saturn.handle.l2`），值的形式全部支持：
+
+| 写法 | 语义 |
+|---|---|
+| `PAD_A` | 单键 |
+| `PAD_LT+PAD_RT` | **组合键**：要求同时按住，整组才算按下 |
+| `PAD_A\|PAD_B` | 多绑定：取第一个可解析项 |
+| `PAD_A+PAD_B\|PAD_LT` | 组合与多绑定混用 |
+| `none` / 空 | 真正不绑定（不是"用默认值"） |
+
+- 已核对启动器的写入格式：多绑定用 `|` 拼接、未绑定写 `none`（`SettingPage.cpp:4447-4460`），
+  与实现一致。
+- 解析逻辑抽到 **NX 无关的 `gbastation/PadMapping.h`**（`ResolvePadExpression` /
+  `ResolvePadCombo` / `IsPadMaskHeld`），因此能在宿主上跑回归测试。
+- 键缺失时使用与启动器一致的 Saturn 默认值，保证无 `config.cfg` 的独立启动也能玩。
+- 说明：Saturn 手柄没有 Select 键，`saturn.handle.select` 不消费。
+
+### 16.3 路径统一（E1/E3）
+
+| 类别 | 位置 |
+|---|---|
+| 共享（启动器） | `config/config.cfg`、`data/GameData_Saturn.json`、`bios/saturn/`、`roms/saturn/`、`saves/Saturn/`、`overlays/` |
+| 核心私有 | `log/saturn/`（yabause.log、crash.log、mesa.log、video-debug.log）、`cache/saturn/{shaders,pipelines}` |
+| 仅用于迁移读取 | `GBAStation/yabasanshiro/**`（旧配置/存档/即时档；`DataRoot()` 保留但注释明确为 legacy） |
+
+### 16.4 自动存读档
+
+新增两个启动器设置键的消费：`save.autoLoadState0`（1 基槽位，进游戏即读）、
+`save.autoSaveOnExit`（1 基槽位，退出前写，在核心反初始化之前）。
+
+### 16.5 验证
+
+| 项 | 结果 |
+|---|---|
+| 回归测试（含新增 14 项映射断言） | **ALL PASS，29/29** |
+| Switch 完整构建 | 成功，无新增 warning，`GBAStationYabaSanshiroStub.nro` 26,271,744 B |
+| 实机 | 未做 |
+
+### 16.6 M2 收尾状态
+
+已完成：B2、B3（`saturn.handle.*` / `saturn.hotkey.*` / `save.*`）、B5–B10、需求四统计、E1–E3。
+
+按里程碑表仍然留给后续的（**不是遗漏**）：
+- `fastforward.*`（倍速）→ **M5**，与快进功能一起做
+- `display.showFps` → M5，与 FPS 开关一起做
+- `UI.language`（多语言）→ UI 阶段，需要先有语言包与 UI 文本抽取
