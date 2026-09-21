@@ -123,16 +123,15 @@ namespace beiklive::input_mapping
                    std::string(entry.key) != "hotkey.pause.pad";
         }
 
-        // The Saturn core implements exactly four hotkeys: fast forward, the
-        // in-game menu and the quick save/load keys.  Rewind, screenshot, mute
-        // and pause would bind a key that the core never reads.
+        // The Saturn core implements two hotkeys: fast forward and the in-game
+        // menu.  Quick save/load, rewind, screenshot, mute and pause are not part
+        // of it -- save states are handled by the in-game menu's slot panels, so
+        // these rows would bind a key the core never reads.
         if (prefix == "saturn.")
         {
             const std::string key(entry.key);
             return key == "handle.fastforward" ||
-                   key == "hotkey.menu.pad" ||
-                   key == "hotkey.quicksave.pad" ||
-                   key == "hotkey.quickload.pad";
+                   key == "hotkey.menu.pad";
         }
 
         return true;

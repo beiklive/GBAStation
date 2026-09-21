@@ -931,8 +931,12 @@ namespace beiklive
         // installations retain any mappings the user already chose.
         SettingManager->SetDefault("saturn.handle.fastforward", ConfigValue(std::string("PAD_RSB")));
         SettingManager->SetDefault("saturn.hotkey.menu.pad", ConfigValue(std::string("PAD_LSB")));
-        SettingManager->SetDefault("saturn.hotkey.quicksave.pad", ConfigValue(std::string("PAD_LT+PAD_RT")));
-        SettingManager->SetDefault("saturn.hotkey.quickload.pad", ConfigValue(std::string("PAD_LB+PAD_RB")));
+        // No quick save/load hotkeys for Saturn: the core reads only
+        // saturn.handle.fastforward and saturn.hotkey.menu.pad, and save states are
+        // handled by the in-game menu's slot panels.  Clear anything an older
+        // build wrote for them.
+        SettingManager->Remove("saturn.hotkey.quicksave.pad");
+        SettingManager->Remove("saturn.hotkey.quickload.pad");
         // 3DS 独立运行时不支持倒带，清理旧版本可能写入的无效绑定。
         SettingManager->Remove("3ds.handle.rewind");
         // Saturn 核心只实现 快进/菜单/快速保存/快速读取 四个功能键，也没有
