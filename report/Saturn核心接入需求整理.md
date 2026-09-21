@@ -971,3 +971,73 @@ grep 'yinit' yabause.log     # 启动慢在哪一步
 grep '\[cfg\]' yabause.log   # 这次实际生效的核心设置
 cat handoff.log              # 是否走到了 loader 交接
 ```
+
+---
+
+## 21. 按键映射与核心设置逐项核对（含修复）
+
+### 21.1 启动器按键映射：Saturn 的"不存在的按键"
+
+核心实际消费的键 = `nx/main.cpp` 的 `kPadBindings`（a/b/c/x/y/z/l(+l2)/r(+r2)/up/down/left/right/start）
++ 四个热键（`saturn.handle.fastforward`、`saturn.hotkey.menu.pad`、`saturn.hotkey.quicksave.pad`、
+`saturn.hotkey.quickload.pad`）。启动器映射页原本还会显示：
+
+| 界面项 | 配置键 | 核心 | 处理 |
+|---|---|---|---|
+| 选择键 | `saturn.handle.select` | 核心注释明确不消费（Saturn 手柄没有该键） | 隐藏 |
+| 倒带 | `saturn.handle.rewind` | 无倒带（决策 N1） | 隐藏 |
+| 截图 / 静音 / 暂停 | `saturn.hotkey.{screenshot,mute,pause}.pad` | 均未实现 | 隐藏 |
+| A/B 连发 + 连发速度 | `saturn.handle.{a,b}_turbo`、`turbo.rate` | 未实现 | 隐藏 |
+| ZL键 / ZR键（`l2`/`r2`） | `saturn.handle.{l2,r2}` | 与 L/R **OR 合并**读取（有意支持"肩键或扳机"） | 保留 |
+
+新增 `input_mapping::showsGameButtonForPrefix()`，`showsHotkeyForPrefix()` 增加 `saturn.` 分支，
+`showsTurboBindingsForPrefix()` 排除 `saturn.`；两处映射 UI（nano 列表页与分页设置页）都接上。
+旧配置里这些键由 `common.cpp` 的迁移块清理（与 3DS 那段先例一致）。
+
+游戏按键默认值与核心 fallback 逐项一致：a=PAD_B→B、b=PAD_A→A、c=PAD_X→X、x=PAD_Y→Y、
+y=PAD_LB→L、z=PAD_RB→R、l=PAD_LT→ZL、r=PAD_RT→ZR、start=PAD_START→Plus。
+（L/R 两行默认同为 ZL/ZR，即 Switch 肩键默认未使用——与核心 fallback 相同。）
+
+### 21.2 核心设置：与核心 1:1 对照
+
+**原本就一致**：`region`（0/1/2/4/5/6/10/12/13 对齐 smpc.h）、`video_format`、`video_filter`、
+`sound_engine`、`scsp_sync_time_mode`、`frame_limit`(0/1/2)、`rotate_screen`、`extend_internal_memory`、
+`resolution_mode`(0..5 对齐 RESOLUTION_MODE)、`rbg_resolution`、`emulated_bios`。
+
+**本轮修复**：
+
+| 项 | 问题 | 处理 |
+|---|---|---|
+| `core.saturn.aspect_ratio` | 核心用 `CfgBool()` 读 → 16:9(2)/全屏(3) 都退化成 4:3 | 按 ASPECT_RATE_MODE 枚举读 int 0..3；菜单改 4 档选择 |
+| 优先级 | 每游戏画面模式先下发比例，`yabauseinit` 又用全局宽高比覆盖 | 有 `GameData.displayMode` 的游戏以画面模式为准；无画面模式（如核心内置列表页启动）才用全局值 |
+| `core.saturn.frame_skip` | 界面是自由文本，核心用 `CfgIsOn` 读 → 只有 1/true/on 为真 | 改为开关"自动跳帧" |
+| `scsp_sync_per_frame` | 自由文本 vs 核心自家列表 1/2/4/8 | 改为选择项 |
+| `cpu_sync_per_line` | 只有 2 档 vs 核心 `sync_shift` 支持 1/2/4/8 | 补成 4 档 |
+| `polygon_generation` | 只有 2 档 vs 枚举 4 档 | 补成 4 档 |
+| `rbg_compute_shader` | 开关**完全无效**（Vulkan 核心里该 setting 的处理器是注释掉的，只有 vidogl 用） | 删除该行 |
+| `cartridge` | 界面有 11=USB 设备，核心明确不支持 | 删掉该档 |
+| `rbg_resolution` 第 5 项标签 | "原生" vs 核心"跟随内部分辨率" | 标签对齐 |
+
+**仍缺**：启动器没有 Saturn 的 BIOS 文件选择（核心支持 `core.saturn.biosPath`，核心自家菜单有 BIOS 列表）。
+现只有"使用 HLE BIOS"开关。要补的话按"空值 = 使用模拟 BIOS"的语义做。
+
+### 21.3 核心内菜单：设置页分组标题
+
+按要求在核心内菜单（独立设置 / 全局设置）里给设置加了分组标题，与启动器同一分组顺序：
+
+```
+独立设置        ← noSync 开关
+画面            ← 启动器自有的每游戏字段（画面模式/整数倍/自定义/遮罩/遮罩路径）
+遮罩
+图形            ┐
+功能键          │ ← 核心字段，来自 BuildCoreSettings
+性能与兼容      ┘
+```
+
+- `SettingItem` 新增 `kHeader` 类型；标题行不参与 `ChangeSetting`，也不会写进设置文件
+  （否则会写出无键名的 `=i|` 行）；
+- `MoveSettingCursor()` / `FirstSelectableSetting()` 让光标跳过标题行（开机页设置与游戏内菜单共用），
+  进入设置页时落在第一项真实行；
+- 游戏内菜单只显示"可实时修改"的项，分组时**组内无可实时修改项的组（系统 / 音频）连同标题一起丢弃**，
+  不会留下孤立的标题；
+- 绘制上标题是强调色小字 + 分隔线，不画选中底色。
