@@ -1,5 +1,7 @@
 // Adapted from Sphaira's forwarder HBL stub (GPL-3.0-or-later).
 #include <switch.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 
 #define EXIT_DETECTION_STR "if this isn't replaced i will exit :)"
@@ -35,6 +37,54 @@ static u8 g_savedTls[0x100] = {0};
 u64 g_nroAddr = 0;
 Result g_lastRet = 0;
 
+// ---------------------------------------------------------------------------
+// Forwarder diagnostics.
+//
+// The desktop icon runs this stub *before* the core, so when a title crashes on
+// launch this file is the only record of how far it got -- the core's own log
+// never appears if the crash is here.  Raw fs calls on purpose: the stub stubs
+// out malloc (__libnx_alloc aborts), so stdio's fopen/fprintf cannot be used.
+// ---------------------------------------------------------------------------
+#define FW_LOG_PATH "/GBAStation/debug/forwarder.log"
+
+static void fw_log(const char *text) {
+    FsFileSystem fs;
+    if (R_FAILED(fsOpenSdCardFileSystem(&fs)))
+        return;
+
+    fsFsCreateDirectory(&fs, "/GBAStation");
+    fsFsCreateDirectory(&fs, "/GBAStation/debug");
+
+    FsFile file;
+    if (R_SUCCEEDED(fsFsOpenFile(&fs, FW_LOG_PATH, FsOpenMode_Write | FsOpenMode_Append, &file))) {
+        u64 size = 0;
+        if (R_SUCCEEDED(fsFileGetSize(&file, &size))) {
+            const size_t len = strlen(text);
+            fsFileWrite(&file, size, text, len, FsWriteOption_Flush);
+            fsFileWrite(&file, size + len, "\n", 1, FsWriteOption_Flush);
+        }
+        fsFileClose(&file);
+    }
+    fsFsClose(&fs);
+}
+
+static void fw_logf(const char *fmt, ...) {
+    char buffer[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+    fw_log(buffer);
+}
+
+static void NX_NORETURN fw_abort(Result rc, int line) {
+    fw_logf("FAIL line=%d rc=0x%08x -> diagAbort", line, (unsigned)rc);
+    (diagAbortWithResult)(rc);
+}
+
+// Every diagAbortWithResult() in this file reports its line number first.
+#define diagAbortWithResult(rc) fw_abort((rc), __LINE__)
+
 void NX_NORETURN nroEntrypointTrampoline(const ConfigEntry* entries, u64 handle, u64 entrypoint);
 
 static void fix_nro_path(char* path) {
@@ -48,6 +98,7 @@ static void fix_nro_path(char* path) {
 // Credit to behemoth
 // SOURCE: https://github.com/HookedBehemoth/nx-hbloader/commit/7f8000a41bc5e8a6ad96a097ef56634cfd2fabcb
 static void NX_NORETURN selfExit(void) {
+    fw_logf("selfExit: no next NRO armed, leaving to the HOME menu");
     Result rc = smInitialize();
     if (R_FAILED(rc))
         goto fail0;
@@ -124,7 +175,16 @@ static u64 calculateMaxHeapSize(void) {
 static void setupHbHeap(void) {
     void* addr = NULL;
     u64 size = calculateMaxHeapSize();
+    u64 mem_total = 0, mem_used = 0;
+    svcGetInfo(&mem_total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
+    svcGetInfo(&mem_used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0);
+    fw_logf("heap: total=%llu used=%llu requested=%llu",
+            (unsigned long long)mem_total, (unsigned long long)mem_used,
+            (unsigned long long)size);
+
     Result rc = svcSetHeapSize(&addr, size);
+    fw_logf("heap: svcSetHeapSize rc=0x%08x addr=%p size=%llu",
+            (unsigned)rc, addr, (unsigned long long)size);
 
     if (R_FAILED(rc) || addr==NULL)
         diagAbortWithResult(MAKERESULT(Module_HomebrewLoader, 9));
@@ -151,6 +211,7 @@ static void procHandleReceiveThread(void* arg) {
 
     g_procHandle = r.data.copy_handles[0];
     svcCloseHandle(session);
+    fw_logf("process handle ok: procHandle=%p", (void *)(uintptr_t)g_procHandle);
 }
 
 static void getOwnProcessHandle(void) {
@@ -195,6 +256,8 @@ static bool isKernel4x(void) {
 }
 
 static void getCodeMemoryCapability(void) {
+    fw_logf("kernel: kernel5x=%d kernel4x=%d mesosphere=%d", isKernel5xOrLater(),
+            isKernel4x(), detectMesosphere());
     if (detectMesosphere()) {
         // Mesosphère allows for same-process code memory usage.
         g_codeMemoryCapability = CodeMemorySameProcess;
@@ -221,6 +284,7 @@ static void getCodeMemoryCapability(void) {
         // This kernel is too old to support CodeMemory syscalls.
         g_codeMemoryCapability = CodeMemoryUnavailable;
     }
+    fw_logf("kernel: code memory capability=%d", (int)g_codeMemoryCapability);
 }
 
 void NX_NORETURN loadNro(void) {
@@ -230,9 +294,14 @@ void NX_NORETURN loadNro(void) {
 
     memcpy((u8*)armGetTls() + 0x100, g_savedTls, 0x100);
 
+    fw_logf("loadNro: entry nroSize=%llu lastRet=0x%08x nextNro=%s nextArgv=%s",
+            (unsigned long long)g_nroSize, (unsigned)g_lastRet, g_nextNroPath, g_nextArgv);
+
     // check's if the homebrew replaced nro_path.
     // if so, load new nro, otherwise, exit.
     if (!strcmp(g_nextArgv, EXIT_DETECTION_STR)) {
+        fw_logf("loadNro: next-load argv untouched (core exited without arming a "
+                "return) -> default=%s next=%s", g_defaultNroPath, g_nextNroPath);
         if (!strcmp(g_nextNroPath, g_defaultNroPath)) {
             selfExit();
         } else {
@@ -306,6 +375,8 @@ void NX_NORETURN loadNro(void) {
             diagAbortWithResult(rc);
         }
 
+        fw_logf("romfs: header dirTable=%u fileTable=%u", (unsigned)romfs_header.dirTableSize,
+                (unsigned)romfs_header.fileTableSize);
         const romfs_dir* dir = (const romfs_dir*)romfs_dirs;
         const romfs_file* next_argv_file = (const romfs_file*)(romfs_files + dir->childFile);
         const romfs_file* next_nro_file = (const romfs_file*)(romfs_files + next_argv_file->sibling);
@@ -322,6 +393,7 @@ void NX_NORETURN loadNro(void) {
 
         strcpy(g_defaultNroPath, g_nextNroPath);
         strcpy(g_defaultArgv, g_nextArgv);
+        fw_logf("romfs: defaultNro=%s defaultArgv=%s", g_defaultNroPath, g_defaultArgv);
     }
 
     {
@@ -329,6 +401,7 @@ void NX_NORETURN loadNro(void) {
         char fixedNextNroPath[FS_MAX_PATH];
         strcpy(fixedNextNroPath, g_nextNroPath);
         fix_nro_path(fixedNextNroPath);
+        fw_logf("target nro: %s (fs path %s)", g_nextNroPath, fixedNextNroPath);
 
         memcpy(g_argv, g_nextArgv, sizeof(g_argv));
         if (R_FAILED(rc = svcBreak(BreakReason_NotificationOnlyFlag | BreakReason_PreLoadDll, (uintptr_t)g_argv, sizeof(g_argv)))) {
@@ -347,15 +420,28 @@ void NX_NORETURN loadNro(void) {
         // don't fatal if we don't find the nro, exit to menu
         FsFile f;
         if (R_FAILED(rc = fsFsOpenFile(&fs, fixedNextNroPath, FsOpenMode_Read, &f))) {
+            fw_logf("open failed: %s rc=0x%08x", fixedNextNroPath, (unsigned)rc);
             diagAbortWithResult(rc);
         }
 
-        u64 bytes_read;
+        u64 bytes_read = 0;
         if (R_FAILED(rc = fsFileRead(&f, 0, start, g_heapSize, FsReadOption_None, &bytes_read)) ||
             header->magic != NROHEADER_MAGIC ||
             bytes_read < sizeof(*start) + sizeof(*header) + header->size) {
+            fw_logf("read/validate failed: rc=0x%08x bytes=%llu magic=%08x size=%llu "
+                    "needed=%llu heapSize=%llu",
+                    (unsigned)rc, (unsigned long long)bytes_read, (unsigned)header->magic,
+                    (unsigned long long)header->size,
+                    (unsigned long long)(sizeof(*start) + sizeof(*header) + header->size),
+                    (unsigned long long)g_heapSize);
             diagAbortWithResult(rc);
         }
+        fw_logf("nro read: bytes=%llu magic=%08x size=%llu text=%u/%u rod=%u/%u data=%u/%u bss=%u",
+                (unsigned long long)bytes_read, (unsigned)header->magic,
+                (unsigned long long)header->size, (unsigned)header->segments[0].file_off,
+                (unsigned)header->segments[0].size, (unsigned)header->segments[1].file_off,
+                (unsigned)header->segments[1].size, (unsigned)header->segments[2].file_off,
+                (unsigned)header->segments[2].size, (unsigned)header->bss_size);
 
         fsFileClose(&f);
         fsFsClose(&fs);
@@ -412,6 +498,12 @@ void NX_NORETURN loadNro(void) {
     const u64 nro_size = header->segments[2].file_off + rw_size;
     const u64 nro_heap_start = ((u64) g_heapAddr) + nro_size;
     const u64 nro_heap_size  = g_heapSize + (u64) g_heapAddr - (u64) nro_heap_start;
+    fw_logf("map: heapAddr=%p heapSize=%llu nroSize=%llu -> child heap start=%p size=%llu",
+            g_heapAddr, (unsigned long long)g_heapSize, (unsigned long long)nro_size,
+            (void *)(uintptr_t)nro_heap_start, (unsigned long long)nro_heap_size);
+    if (nro_size >= g_heapSize)
+        fw_logf("WARNING: nro_size %llu >= heap %llu -- the child heap would underflow",
+                (unsigned long long)nro_size, (unsigned long long)g_heapSize);
 
     #define M EntryFlag_IsMandatory
 
@@ -469,6 +561,11 @@ void NX_NORETURN loadNro(void) {
 
     svcBreak(BreakReason_NotificationOnlyFlag | BreakReason_PostLoadDll, g_nroAddr, nro_size);
 
+    fw_logf("jump: nroAddr=%p nroSize=%llu childHeap=%p/%llu appletType=%d",
+            (void *)(uintptr_t)g_nroAddr, (unsigned long long)nro_size,
+            (void *)(uintptr_t)entries[3].Value[0], (unsigned long long)entries[3].Value[1],
+            (int)AppletType_SystemApplication);
+
     // write exit detection
     strcpy(g_nextArgv, EXIT_DETECTION_STR);
     // jump to trampoline.s
@@ -476,6 +573,11 @@ void NX_NORETURN loadNro(void) {
 }
 
 int main(int argc, char **argv) {
+    fw_log("=== GBAStation forwarder stub start ===");
+    fw_logf("argv: argc=%d", argc);
+    for (int i = 0; i < argc; ++i)
+        fw_logf("argv[%d] = %s", i, (argv && argv[i]) ? argv[i] : "(null)");
+
     memcpy(g_savedTls, (const u8*)armGetTls() + 0x100, 0x100);
     setupHbHeap();
     getOwnProcessHandle();

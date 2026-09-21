@@ -231,16 +231,24 @@ InstallResult installGame(const beiklive::GameEntry& entry)
         nroPath = normalizeNroPath(GET_SETTING_KEY_STR(
             "dolphin.externalNro.path", "/GBAStation/core/GBAStationDolphinStub.nro"));
 
+    // The argv that is actually installed is the *first* one: ForwarderCore.cpp
+    // writes it to the forwarder NCA's /nextArgv, while legacyArgs is only used
+    // to compute the title id of the older "legacy" variant (to delete it).  The
+    // return target therefore has to be in args -- with it only in legacyArgs, a
+    // desktop launch reached the core without --return, so the core had nothing
+    // to chainload back to and the stub dropped the user on the HOME menu.
     std::string args = quoteArgument(entry.path);
     std::string legacyArgs;
     if (isNds || isThreeDs)
     {
+        // These two cores exit to the HOME menu from a desktop icon instead.
         legacyArgs = args + " --return " + quoteArgument(mainNro);
         args += " --exit-to-home";
     }
     else if (isArcade || isDreamcast || isPsp || isPs1 || isSaturn || isDolphin)
     {
-        legacyArgs = args + " --return " + quoteArgument(mainNro);
+        args += " --return " + quoteArgument(mainNro);
+        legacyArgs = args;
     }
 
     const Result rc = sphaira::installForwarder(
