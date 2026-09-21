@@ -1143,3 +1143,62 @@ Saturn 只保留两个功能键，其余一律不显示、核心也不读：
 [input] hotkey saturn.hotkey.menu.pad     = PAD_LSB[config.cfg] -> mask=0x00000400
 [input] hotkey saturn.handle.fastforward  = PAD_RSB[config.cfg] -> mask=0x00000800
 ```
+
+---
+
+## 23. 启动参数全链路审计（含桌面图标启动崩溃）
+
+### 23.1 四种启动模式的参数
+
+| 模式 | 入口 | 传给核心的 argv | 返回参数 |
+|---|---|---|---|
+| 应用内启动 | 启动器 `NroLauncher.cpp` | `<core.nro> "<rom>" [--gbastation-session <tok>] --return "<launcher>"` | 核心启动时即 `envSetNextLoad("<launcher>")` |
+| 桌面图标 | `ForwarderInstaller.cpp` → 转发器 stub | **修复后**：`<core.nro> "<rom>" --return "<launcher>"` | 同上；旧图标（无 `--return`）靠核心新增的默认值回落 |
+| 核心内置列表页 | 无 ROM 参数启动 | 无 | 无（L3 退出） |
+| 核心 → 启动器 | `GBAStation::ReturnToLauncher()` | `envSetNextLoad(return_nro, "\"return_nro\"")` | 先查目标存在，再记录 rc；已布防时异常也走 `__libnx_exit(0)` |
+
+### 23.2 桌面图标参数的两个 bug（已修）
+
+1. **`--return` 加在了不会生效的那一份参数上**。`installForwarder()` 写入转发器 NCA
+   `/nextArgv` 的是**第一个** `args`，而 `legacyArgs` 只参与"旧版标题 ID"的哈希计算
+   （用于删除旧版安装）。原代码把 `--return <启动器>` 只放进 `legacyArgs`，于是桌面
+   图标启动的核心 `argv` 里根本没有 `--return` → 核心没有可链回的目标，退出时转发器
+   stub 的哨兵逻辑判定"未布防"→ `selfExit()` → 掉到 HOME 菜单。
+   现在 arcade / dc / psp / ps1 / saturn / dolphin 都把 `--return <启动器>` 加进真正
+   安装的那份 args；NDS/3DS 保持 `--exit-to-home` 语义不变。
+2. **核心在缺少 `--return` 时不回落**。现在 `ReadLaunchInfo()` 会用
+   `saturn.externalNro.returnPath`（config.cfg，默认 `sdmc:/switch/GBAStation.nro`）
+   兜底，与 NDS 核心的默认行为一致——已安装的旧桌面图标不需要重装也能回到启动器。
+
+### 23.3 桌面启动"没有日志"：转发器 stub 现在自己写日志
+
+核心崩溃若发生在 `main()` 之前，核心的 `yabause.log` 根本不会出现，而桌面启动比
+应用内启动多了一层"转发器 stub"，所以问题可能出在 stub 里。stub
+（`src/core/forwarder/hbl/source/main.c`）现在全程写
+`sdmc:/GBAStation/debug/forwarder.log`：
+
+```
+=== GBAStation forwarder stub start ===
+argv: argc=1 / argv[0] = ...
+heap: total=... used=... requested=...        ← 堆失败会让 stub 直接 fatal
+heap: svcSetHeapSize rc=0x... addr=... size=...
+kernel: code memory capability=N
+romfs: defaultNro=... defaultArgv=...
+target nro: sdmc:/GBAStation/core/GBAStationYabaSanshiroStub.nro (fs path ...)
+nro read: bytes=... magic=4e524f30 size=... text=../.. rod=../.. data=../.. bss=...
+map: heapAddr=... heapSize=... nroSize=... -> child heap start=... size=...
+jump: nroAddr=... nroSize=... childHeap=.../... appletType=...
+FAIL line=N rc=0x... -> diagAbort      ← 每一处 diagAbortWithResult 都会留下行号
+```
+（stub 把 malloc 换成了 abort，所以日志用原始 fs 调用写，不能用 fopen。）
+
+核心侧也补了一行 loader 环境记录，用于对比两种启动方式：
+
+```
+[launch] loader: heap_override=0/1 addr=... size=... info=...
+```
+桌面转发器会给子进程一个 **heap override**（此时核心自己声明的
+`__nx_heap_size = 1 GiB` 会被 libnx 忽略，libnx `_InitHeap` 里 override 优先），
+hbmenu 启动则没有 override。若崩溃与这个差异有关，这一行能直接看出来。
+
+**注意：已安装的桌面图标仍带着旧 stub，必须重新安装一次才会产生 `forwarder.log`。**
