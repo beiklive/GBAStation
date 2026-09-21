@@ -1202,3 +1202,21 @@ FAIL line=N rc=0x... -> diagAbort      ← 每一处 diagAbortWithResult 都会�
 hbmenu 启动则没有 override。若崩溃与这个差异有关，这一行能直接看出来。
 
 **注意：已安装的桌面图标仍带着旧 stub，必须重新安装一次才会产生 `forwarder.log`。**
+
+### 23.4 又一个坑：启动器内嵌的转发器 stub 是旧的（已修）
+
+`ForwarderCore.cpp` 用 `#embed <exefs/main>` 把 HBL stub 编进启动器，而 CMake 里
+只有 `add_dependencies(${PROJECT_NAME} gbastation_forwarder_hbl_exefs)`——它只保证
+"先构建 stub"，**不会**在 stub 变化时重新编译 `ForwarderCore.o`。实测证据：
+
+```
+stub  source: src/core/forwarder/hbl/source/main.c        22:18:01
+stub  产物  : build_switch/forwarder_hbl/exefs/main        22:18:02
+嵌入对象    : .../GBAStation.dir/src/core/forwarder/ForwarderCore.o  19:28:23  ← 旧
+```
+
+也就是说：只重建启动器，NRO 里嵌的仍是**旧版 stub**，安装到桌面的图标自然也带旧版。
+已给该源文件加 `OBJECT_DEPENDS` 指向 `exefs/main` 与 `exefs/main.npdm`；重建后校验
+启动器 NRO 内嵌 NSO 与 build 目录里的 stub 逐字节一致（63,622 B）。
+
+**因此排查桌面启动问题时，顺序是：重建启动器 → 拷贝 NRO → 重新安装桌面图标 → 复现。**
