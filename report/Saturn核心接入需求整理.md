@@ -655,3 +655,65 @@ M2 范围：B2–B10（配置键补全 + GameData 读写）+ 需求四（统计�
 - `fastforward.*`（倍速）→ **M5**，与快进功能一起做
 - `display.showFps` → M5，与 FPS 开关一起做
 - `UI.language`（多语言）→ UI 阶段，需要先有语言包与 UI 文本抽取
+
+---
+
+## 17. M3 第一步执行记录（已提交 `2291b31`）
+
+### 17.1 七标签页菜单
+
+| Tab | 内容 |
+|---|---|
+| 返回游戏 | 信息页，按 A 关闭菜单继续游玩 |
+| 保存状态 | 10 个档位列表 + 缩略图预览，A 存、X 删 |
+| 读取状态 | 同一份档位列表，A 读（空档给出提示） |
+| 独立设置 | 设置列表（当前与"全局设置"同一份内容） |
+| 全局设置 | 设置列表（现有运行时生效项） |
+| 重置游戏 | 信息页，按 A 原地重开本游戏 |
+| 退出游戏 | 信息页，按 A 退出（`--return` 存在时链回启动器） |
+
+操作：左列 Up/Down 换标签，A/Right 进入内容，内容里 B 返回左列，左列 B 关闭菜单，
+菜单热键再按一次直接关闭。底部提示栏按上下文显示（档位页显示 "X 删除"）。
+
+绘制新增 `NvgUiDrawTabbedMenu()`（左列标签 + 右内容面板 + 缩略图 + 状态行 + 提示栏），
+沿用原有暗色主题与 Switch 图标字体。
+
+### 17.2 10 个存档档位 + 缩略图
+
+- 文件：`<savePath>/<stem>.ss1 … .ss10`（1 基，与菜单"档位 1..10"一致），缩略图同名的 `.png`。
+- 列表显示：档位号、**存档时间**（文件 mtime，`%y-%m-%d %H:%M`）、文件大小；空档显示"空"。
+- **缩略图 = 存档时画面**：菜单打开时抓一帧（`VIDCore->GetScreenshot`），
+  RGBA8 自底向上 → 垂直翻转、alpha 置不透明、按整数倍 box 缩放到 320 宽；
+  存档时写成 PNG，列表高亮该档位时显示。
+- 新增 `gbastation/Thumb.{h,cpp}`；PNG 写出复用同项目 melonDS stub 的
+  `stb_image_write.h`，PNG 读取由 nanovg 自带的 `stb_image` 完成（无新增解码器）。
+- 已知取舍：缩略图取的是"打开菜单那一帧"，因此画面不会包含菜单本身；菜单打开期间
+  游戏暂停，缩略图与存档时刻的画面一致。
+
+### 17.3 重置游戏
+
+- 不重启进程：`RunGameLoop` 返回值由 `bool` 改为 `enum GameLoopExit { Quit, Reset }`，
+  重置时 main 重新 `yabauseinit()` 同一 ROM 并继续会话。
+- 两个必须的副作用处理：**`playCount` 不重复计数**（`play_counted` 守卫）、
+  **重置不触发"退出自动存档"**（避免覆盖 `save.autoSaveOnExit` 的档位）。
+
+### 17.4 编号统一
+
+`save.autoLoadState0` / `save.autoSaveOnExit` 的槽位号、菜单档位号、文件名编号统一为
+**1 基**（`N` ↔ `.ssN`）；快速存读档热键固定使用 1 号档位。
+
+### 17.5 验证
+
+| 项 | 结果 |
+|---|---|
+| 回归测试 | **ALL PASS，35/35**（新增：box 缩放尺寸/均值/no-op 边界、PNG 签名、空图拒绝） |
+| Switch 完整构建 | 成功；仅有 1 条既有的 unused-function warning（`DrawBootFrame`，与本次无关） |
+| 实机 | 未做：菜单位图、档位存取、缩略图显示、重置游戏都需要上机验证 |
+
+### 17.6 M3 剩余
+
+- [ ] **画面模式 4 档**：全屏 / 原比例 / 整数倍 / 自定义，映射 GameData `displayMode` 0/1/2/3/4
+      + `integerAspectRatio` + `customScale/customOffsetX/Y`（需要改 VIDVulkan 的视口/缩放路径）
+- [ ] **遮罩 PNG**：读取 GameData `overlayPath`/`overlayEnabled`，叠在游戏画面上
+      （建议走 nanoVG 图像，与缩略图同一套路径）
+- [ ] 档位列表的视觉细化（缩略图占位、滚动、长按连续移动）
