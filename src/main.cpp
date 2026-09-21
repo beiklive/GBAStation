@@ -387,6 +387,10 @@ bool launchDirectGameActivity(const std::string& romPath)
 
 int main(int argc, char* argv[]) {
 #ifdef __SWITCH__
+	// First statement in the process: prove the launcher itself started.
+	// If a core chainloads back and this line is missing, the handoff died
+	// before reaching us; if it is present, the crash is inside the launcher.
+	beiklive::switch_platform::logLauncherEntry(argc, argv);
     appletInitializeGamePlayRecording();
 #endif
 

@@ -1,6 +1,7 @@
 #include "platform/switch/NroLauncher.hpp"
 
 #include <cstdio>
+#include <ctime>
 #include <mutex>
 #include <sstream>
 #include <cstdarg>
@@ -167,6 +168,22 @@ NroLaunchResult commitPendingNroLaunch()
 
     appendLaunchLog("commit ok nro=%s argv=%s", pending.nroPath.c_str(), pending.argv.c_str());
     return {true, "Next NRO configured: " + pending.nroPath};
+#endif
+}
+
+void logLauncherEntry(int argc, char** argv)
+{
+#ifdef __SWITCH__
+    // Epoch seconds: the core's yabause.log is timestamped too, so the two logs
+    // can be lined up when a chainload back from a core is being investigated.
+    std::ostringstream line;
+    line << "launcher entry t=" << static_cast<long long>(std::time(nullptr)) << " argc=" << argc;
+    for (int i = 0; i < argc; ++i)
+        line << " argv[" << i << "]=" << (argv && argv[i] ? argv[i] : "(null)");
+    appendLaunchLog("%s", line.str().c_str());
+#else
+    (void)argc;
+    (void)argv;
 #endif
 }
 
