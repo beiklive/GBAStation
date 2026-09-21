@@ -915,5 +915,34 @@ tail -30 yabause.log
 
 1. `sdmc:/GBAStation/log/saturn/yabause.log`（**完整**，特别是末尾 30 行）；
 2. `sdmc:/GBAStation/log/saturn/crash.log`（若存在）；
-3. 是否**每次**退出都崩、是否**只在链回启动器时**崩、本地列表页退出是否也崩；
+3. `sdmc:/GBAStation/debug/external_core_launch.log`（看有没有 `launcher entry`）；
+4. `sdmc:/GBAStation/log/GBAStation.log`（启动器侧，若已开 `debug.logFile`）；
+5. `sdmc:/GBAStation/log/saturn/mesa.log`（若启用缓存后启动异常）。
+
+### 20.5 追加实机结论：只有链回启动器时崩
+
+前提事实是**只有**"退出游戏 → 链回启动器"这条路崩，这把范围缩到"退出 / 交接"这一段，
+本轮（`70bb3a1` + 前端 `26193eb5`）据此做了四件事：
+
+| 改动 | 作用 |
+|---|---|
+| 交接探针：包住 loader 的 return function | 日志里出现 `handoff: loader return function entered rc=0` 才说明进程**活着**走到了交接；在这行之前断掉，就是崩在我们自己的收尾里 |
+| 提前布防：`main` 解析完 argv 立即 `ReturnToLauncher()` | `envSetNextLoad()` 只写 loader 的 next-load 缓冲，提前调用无副作用；代价是**运行期/收尾期崩溃也能回到启动器**，而不是掉到 HOME Menu 的错误框。函数幂等，退出路径再调只记 `already armed` |
+| 异常处理器改走 loader | dump 完 `crash.log` 后若已布防则 `__libnx_exit(0)`，让 loader 的 return function 执行；libnx 默认是 `svcExitProcess()`，**会跳过**它 |
+| 启动器进程入口标记 | 前端 `main` 第一条语句往 `external_core_launch.log` 追加 `launcher entry t=<epoch> argc=N argv[...]`，用来区分"core 没回来"和"启动器自己崩" |
+
+参考实现：同工作区的 `GBAStation_DrasticDS/source/error.c`（`fatal_error_set_exit_to_loader`）
+与 `source/main.c`（`configure_return_to_launcher` 在 `main` 开头就布防，注释明写
+"Scheduling it last (after the whole teardown) lost the return whenever a teardown step hung"），
+即这套"提前布防 + 崩溃也走 loader"的做法在本项目里已有验证过的先例。
+
+判读表（下次崩溃时对号入座）：
+
+| 现象 | 结论 |
+|---|---|
+| `yabause.log` 停在 `main: end of renderer/window scope` 之前 | 崩在我们的收尾（看 `~Renderer:` / `~Window:` 最后一条） |
+| 有 `atexit:` 但没有 `handoff:` | 崩在静态析构或 `__libnx_exit` 之前的路径 |
+| 有 `handoff:` 且启动器 `launcher entry` 出现 | 交接成功，崩在启动器内部（看前端日志） |
+| 有 `handoff:` 但没有 `launcher entry` | 崩在 loader 交接/加载下一个 NRO（不在我们代码里） |
+| 有 `CRASH:` 行 | 异常现场以 `crash.log` 为准；若 `chainload_armed=1` 应能回到启动器 |
 4. `sdmc:/GBAStation/log/saturn/mesa.log`（若启用缓存后启动异常）。
