@@ -1041,3 +1041,63 @@ y=PAD_LB→L、z=PAD_RB→R、l=PAD_LT→ZL、r=PAD_RT→ZR、start=PAD_START→
 - 游戏内菜单只显示"可实时修改"的项，分组时**组内无可实时修改项的组（系统 / 音频）连同标题一起丢弃**，
   不会留下孤立的标题；
 - 绘制上标题是强调色小字 + 分隔线，不画选中底色。
+
+---
+
+## 22. Saturn 按键：同名一一对应 + 核心侧可核对日志
+
+### 22.1 映射方案（启动器默认值 = 核心内置 fallback）
+
+| Saturn | Switch | 配置键 | 启动器默认 | 核心 fallback |
+|---|---|---|---|---|
+| A | A | `saturn.handle.a` | `PAD_A` | `HidNpadButton_A` |
+| B | B | `saturn.handle.b` | `PAD_B` | `HidNpadButton_B` |
+| C | **ZR** | `saturn.handle.c` | `PAD_RT` | `HidNpadButton_ZR` |
+| X | X | `saturn.handle.x` | `PAD_X` | `HidNpadButton_X` |
+| Y | Y | `saturn.handle.y` | `PAD_Y` | `HidNpadButton_Y` |
+| Z | **ZL** | `saturn.handle.z` | `PAD_LT` | `HidNpadButton_ZL` |
+| L | L | `saturn.handle.l` | `PAD_LB` | `HidNpadButton_L` |
+| R | R | `saturn.handle.r` | `PAD_RB` | `HidNpadButton_R` |
+| ↑↓←→ | 同方向 | `saturn.handle.{up,down,left,right}` | `PAD_UP…` | 同 |
+| Start | + | `saturn.handle.start` | `PAD_START` | `HidNpadButton_Plus` |
+
+- **C / Z**：Switch 上没有同名字按键，占用剩余的两个扳机（C→ZR、Z→ZL）。
+  想换顺序在映射页改一次即可。
+- **L / R 改为 Switch 肩键 L/R**（原先把 ZL/ZR 当肩键）。
+- `saturn.handle.l2/r2` 与 `saturn.handle.select` 不再显示、也不再被核心读取
+  （一一对应后 ZL/ZR 归 Z/C，留着会互相抢键；Saturn 手柄没有 Select）。
+- 旧值迁移：仍是旧默认值（A=PAD_B、B=PAD_A、C=PAD_X、X=PAD_Y、Y=PAD_LB、
+  Z=PAD_RB、L=PAD_LT、R=PAD_RT）的绑定会被清掉以套用新方案；
+  **用户手动改过的值不会动**。
+
+### 22.2 核心是否真的按配置执行：看日志
+
+启动器把映射写进 `config.cfg`（或独立设置文件），核心每次启动逐条打印整条链路：
+
+```
+[input] saturn button  0 <- saturn.handle.a=PAD_A[config.cfg] -> mask=0x00000001 (from settings)
+[input] saturn button  6 <- saturn.handle.l=(unset) -> mask=0x00000040 (built-in default)
+[input] hotkey saturn.hotkey.menu.pad     = PAD_LSB[config.cfg] -> mask=0x00000400
+```
+
+字段含义：`saturn button N` 是 Saturn 的按键编号；`<-` 左边是查询的键、命中的
+原始值、值的来源（`独立设置` / `config.cfg` / `默认`，来自新的
+`GBAStation::ConfigValueSource()`）；`->` 右边是解析出的 Switch 按键掩码；
+末尾标明本次是"读到了设置"还是"用内置默认"。
+
+```sh
+grep '\[input\]' yabause.log     # 每个按键的 配置值 -> 掩码
+grep '\[cfg\]'   yabause.log     # 核心设置项及其来源
+```
+
+配套改动：核心 `kPadBindings` 的 fallback 同步改成上表；`saturn.handle.l/r` 不再
+接受 `l2/r2` 作为备选键（`key_count` 2→1）；`[cfg]` 日志也改用
+`ConfigValueSource()` 标注来源。
+
+### 22.3 已知副作用（待确认是否调整）
+
+启动器给 Saturn 的默认功能键里，`saturn.hotkey.quicksave.pad = PAD_LT+PAD_RT`、
+`quickload = PAD_LB+PAD_RB`。一一对应后 ZL/ZR 是 Saturn 的 Z/C，所以**按住
+ZL+ZR 触发快速保存的同时，游戏里也会收到 Z 和 C 两个按键**（原先顶多压到 L/R）。
+要避免这个副作用，可以把这两个默认值改成 `none`（与通用热键表一致）或换成不含
+ZL/ZR 的组合。
