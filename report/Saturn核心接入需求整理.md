@@ -549,3 +549,47 @@
 因此 `Settings.cpp` 与 `nx/main.cpp` 的 `git diff` 是**混合 diff**；本轮改动前的快照留在 `/tmp/saturn_m1_before/`（临时，重启会清），可直接用于区分。前端 4 个文件在改动前是干净的，`git diff` 即本轮改动。
 
 **建议：先把核心仓库里既有的未提交改动提交或 stash，再单独 review 本轮改动。**
+
+---
+
+## 15. M2 执行记录（进行中）
+
+M2 范围：B2–B10（配置键补全 + GameData 读写）+ 需求四（统计）+ E1–E3（路径统一）。
+**已完成第一步**；第二步（E1 `DataRoot` 迁移 / B3 玩家按键映射与 `save.*`/`fastforward.*` 键）待做。
+
+### 15.1 第一步：GameData_Saturn.json 读写 + savePath + 统计（已提交 `6858e54`）
+
+| 项 | 实现 |
+|---|---|
+| 新模块 | `yabause/src/gbastation/GameDb.{h,cpp}`：定位记录、原子写、路径解析、统计 |
+| JSON 库 | **复用仓库既有 jsoncpp**（`src/json/`，早已编入 `yabause` 库），未引入新依赖 |
+| 定位记录 | 按 `path` 归一化匹配：`\`→`/`、去 `sdmc:` 前缀、折叠前导 `//` |
+| 原子写 | 写 `.tmp` → 保留一代 `.bak` → `rename`；FAT 上 rename 失败则回退为拷贝 |
+| 字段所有权 | **只写** `savePath` / `playCount` / `playTime` / `lastPlayed`；其余字段与其它条目原样保留；**不新增键**（启动器按固定结构反序列化，新增键会在其下次保存时被丢弃） |
+| 无记录 | 不创建记录、不写统计，游戏照常运行（对应你确认的第 2 条决定） |
+| savePath | 优先用启动器值；为空则用 `sdmc:/GBAStation/saves/Saturn/<stem>/` 并**回写数据库**，使启动器页面显示同一目录 |
+| 统计 | 进入游戏 `playCount + 1`；退出时 `playTime += 本次秒数`、`lastPlayed = 退出时刻`（`%y-%m-%d %H-%M-%S`，与启动器一致）；游戏内每 60 秒落一次盘；菜单暂停不计时，>5 秒的间隔（挂起/卡顿）丢弃 |
+| 存档路径统一 | 备份 RAM → `<savePath>/<stem>.ram`（旧 `saturn/backup/<name>-<hash>.ram` **一次性迁移**）；即时档 → `<savePath>/<stem>.ss<N>`，**读档回退旧路径**，老档不丢 |
+| 回归测试 | `yabause/src/gbastation/tests/run_gamedb_tests.sh`：15 项宿主断言（字段保留 / 路径归一化 / 时间戳格式 / UTF-8 往返 / 无记录不建库），**全部通过** |
+
+### 15.2 测试抓到的真实缺陷
+
+1. **jsoncpp 1.8 的 `commentStyle` 只接受 `"All"`/`"None"`**（大小写敏感）。我最初写 `"none"`，`Json::writeString` 会**抛异常**；在设备上就是游戏内写统计时直接终止核心。已修正，并给读写两侧都加了 `try/catch`。
+2. 由测试确认的行为差异（非缺陷，已记录）：
+   - jsoncpp 输出 `"key" : value` 且**按字母序排列键**，与启动器 nlohmann 的 `"key": value` + 插入序不同。JSON 合法、启动器可正常解析；启动器下次保存时会按自己的风格重写。
+   - 中文标题以 **原始 UTF-8** 写入（已把 jsoncpp 的 `\uXXXX` 还原），避免数据库文件不可读。
+
+### 15.3 验证
+
+| 项 | 结果 |
+|---|---|
+| 宿主回归测试 | **ALL PASS（0 failure）** |
+| Switch 完整构建 | **成功**，`GBAStationYabaSanshiroStub.nro` 26,210,304 B |
+| 实测（设备） | 未做：需要验 `playCount` 只 +1、`playTime` 增长、`lastPlayed` 为退出时刻、`savePath` 被回写、其它字段未丢 |
+
+### 15.4 M2 剩余（第二步）
+
+- [ ] **E1** `DataRoot` 迁移：用户可见数据（配置/存档/即时档/截图）走共享目录，核心私有只留 `log/`、`cache/`；旧数据迁移或文档说明
+- [ ] **B3** 玩家按键映射：`saturn.handle.*` 替换 `main.cpp` 里硬编码的 `PAD_KEY(...)` 表（当前只做了热键）
+- [ ] **B3** `save.*`（autoLoadState0 / autoSaveOnExit）与 `fastforward.*` 键的消费（`display.showFps` 建议与 FPS 开关一起放 M5）
+- [ ] 统计口径微调：`playTime` 目前按"游戏运行且菜单关闭"的墙钟累计，需实机确认与挂起/唤醒的交互
