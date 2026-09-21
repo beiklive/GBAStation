@@ -253,9 +253,16 @@ target_link_libraries(${PROJECT_NAME} PRIVATE genesis_core)
 if (PLATFORM_SWITCH)
     add_subdirectory(src/core/forwarder/hbl forwarder_hbl)
     add_dependencies(${PROJECT_NAME} gbastation_forwarder_hbl_exefs)
+    # ForwarderCore.cpp pulls the HBL stub in with #embed, which the compiler
+    # resolves at compile time.  Without an explicit dependency the object file is
+    # NOT rebuilt when the stub changes, and the launcher silently keeps shipping
+    # (and installing) an old stub -- exactly what happened when the stub gained
+    # its forwarder.log instrumentation.
     set_source_files_properties(
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core/forwarder/ForwarderCore.cpp
-        PROPERTIES COMPILE_OPTIONS "-std=gnu++2c;--embed-dir=${GBASTATION_FORWARDER_EMBED_DIR}"
+        PROPERTIES
+        COMPILE_OPTIONS "-std=gnu++2c;--embed-dir=${GBASTATION_FORWARDER_EMBED_DIR}"
+        OBJECT_DEPENDS "${GBASTATION_FORWARDER_EMBED_DIR}/exefs/main;${GBASTATION_FORWARDER_EMBED_DIR}/exefs/main.npdm"
     )
     target_compile_definitions(${PROJECT_NAME} PRIVATE MG_ARCH=MG_ARCH_UNIX)
 endif()
