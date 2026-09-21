@@ -123,12 +123,37 @@ namespace beiklive::input_mapping
                    std::string(entry.key) != "hotkey.pause.pad";
         }
 
+        // The Saturn core implements exactly four hotkeys: fast forward, the
+        // in-game menu and the quick save/load keys.  Rewind, screenshot, mute
+        // and pause would bind a key that the core never reads.
+        if (prefix == "saturn.")
+        {
+            const std::string key(entry.key);
+            return key == "handle.fastforward" ||
+                   key == "hotkey.menu.pad" ||
+                   key == "hotkey.quicksave.pad" ||
+                   key == "hotkey.quickload.pad";
+        }
+
+        return true;
+    }
+
+    // The Saturn control pad has no Select button: the core's pad table has no
+    // entry for "saturn.handle.select", so the row would bind nothing.
+    inline bool showsGameButtonForPrefix(const std::string& prefix,
+                                         const GameButtonDefault& entry)
+    {
+        if (prefix == "saturn." && std::string(entry.suffix) == "select")
+            return false;
         return true;
     }
 
     inline bool showsTurboBindingsForPrefix(const std::string& prefix)
     {
-        return prefix != "arcade." && prefix != "dc." && prefix != "psp.";
+        // The Saturn core has no auto-fire; only the platforms whose cores read
+        // <prefix>.handle.a_turbo / b_turbo may show these rows.
+        return prefix != "arcade." && prefix != "dc." && prefix != "psp." &&
+               prefix != "saturn.";
     }
 
     inline bool usesLegacyGbFamilyFallback(const std::string& prefix)

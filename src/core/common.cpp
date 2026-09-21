@@ -935,6 +935,16 @@ namespace beiklive
         SettingManager->SetDefault("saturn.hotkey.quickload.pad", ConfigValue(std::string("PAD_LB+PAD_RB")));
         // 3DS 独立运行时不支持倒带，清理旧版本可能写入的无效绑定。
         SettingManager->Remove("3ds.handle.rewind");
+        // Saturn 核心只实现 快进/菜单/快速保存/快速读取 四个功能键，也没有
+        // Select 键和连发；清掉旧版本可能写进去的无效绑定，避免按键映射页
+        // 显示一个核心根本不读的键。
+        SettingManager->Remove("saturn.handle.rewind");
+        SettingManager->Remove("saturn.handle.select");
+        SettingManager->Remove("saturn.hotkey.screenshot.pad");
+        SettingManager->Remove("saturn.hotkey.mute.pad");
+        SettingManager->Remove("saturn.hotkey.pause.pad");
+        SettingManager->Remove("saturn.handle.a_turbo");
+        SettingManager->Remove("saturn.handle.b_turbo");
         SettingManager->Remove("core.azahar.swap_screens");
         // Keep clearing the legacy 3DS mapping, which has no matching action.
         SettingManager->Remove("3ds.hotkey.mic_input.pad");

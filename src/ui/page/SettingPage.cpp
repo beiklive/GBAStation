@@ -3494,10 +3494,12 @@ private:
         intSelector(
             L("卡带"), L("部分游戏需要扩展内存或 ROM 卡带"), 0xE8FF,
             "core.saturn.cartridge", 0,
-            {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+            // USB Dev (11) is left out on purpose: the core has no path for its
+            // image and degrades the type to "无" (cs0.c in yabause).
+            {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
             {L("无"), L("Pro Action Replay"), L("4M 备份内存"), L("8M 备份内存"),
              L("16M 备份内存"), L("32M 备份内存"), L("8M 扩展内存"), L("32M 扩展内存"),
-             L("NetLink"), L("ROM 卡带"), L("日本调制解调器"), L("USB 设备")});
+             L("NetLink"), L("ROM 卡带"), L("日本调制解调器")});
         intSelector(
             L("主机区域"), L("自动检测失败时可手动指定主机区域"), 0xE8FF,
             "core.saturn.region", 0,
@@ -3521,19 +3523,18 @@ private:
             L("RBG 分辨率"), L("调整 RBG 图层的内部分辨率"), 0xE8FF,
             "core.saturn.rbg_resolution", 0,
             {0, 1, 2, 3, 4},
-            {L("原始输出"), "2x", L("720p"), L("1080p"), L("原生")});
+            {L("原始输出"), "2x", L("720p"), L("1080p"), L("跟随内部分辨率")});
         m_coreItems.push_back(_selector(
             L("视频滤镜"), L("FXAA / 扫描线 / 双线性过滤"), 0xE8FF,
             {L("无"), "FXAA", L("扫描线"), L("双线性")},
             []() { return std::clamp(cfgGetInt("core.saturn.video_filter", 0), 0, 3); },
             [](int value) { cfgSetInt("core.saturn.video_filter", std::clamp(value, 0, 3)); },
             "core.saturn.video_filter"));
-        m_coreItems.push_back(_selector(
-            L("多边形生成"), L("三角形透视校正或 GPU 细分，兼容性可能不同"), 0xE8FF,
-            {L("透视校正"), L("GPU 细分")},
-            []() { return cfgGetInt("core.saturn.polygon_generation", 0) == 2 ? 1 : 0; },
-            [](int value) { cfgSetInt("core.saturn.polygon_generation", value == 1 ? 2 : 0); },
-            "core.saturn.polygon_generation"));
+        intSelector(
+            L("多边形生成"), L("透视校正兼容性最好，GPU 计算光栅最快"), 0xE8FF,
+            "core.saturn.polygon_generation", 0,
+            {0, 1, 2, 3},
+            {L("透视校正"), L("CPU 细分"), L("GPU 细分"), L("GPU 计算光栅")});
         m_coreItems.push_back(_selector(
             L("宽高比"), L("调整画面缩放比例"), 0xE8FF,
             {L("原始"), "4:3", "16:9", L("全屏")},
@@ -3546,13 +3547,10 @@ private:
             [](bool value) { cfgSetBool("core.saturn.rotate_screen", value); },
             "core.saturn.rotate_screen"));
         m_coreItems.push_back(_toggle(
-            L("RBG 计算着色器"), L("使用计算着色器处理 RBG 图层，部分设备可能不支持"), 0xE8FF,
-            []() { return cfgGetBool("core.saturn.rbg_compute_shader", false); },
-            [](bool value) { cfgSetBool("core.saturn.rbg_compute_shader", value); },
-            "core.saturn.rbg_compute_shader"));
-        m_coreItems.push_back(_textValue(
-            L("跳帧"), L("输入 0 表示不跳帧，也可输入更高等级"), 0xE8E5,
-            "core.saturn.frame_skip", "0", 8));
+            L("自动跳帧"), L("帧率不足时自动跳帧"), 0xE8E5,
+            []() { return cfgGetBool("core.saturn.frame_skip", false); },
+            [](bool value) { cfgSetBool("core.saturn.frame_skip", value); },
+            "core.saturn.frame_skip"));
         intSelector(
             L("帧率限制"), L("正常 / 2 倍 / 无限制"), 0xE8E5,
             "core.saturn.frame_limit", 0,
@@ -3570,16 +3568,18 @@ private:
             "core.saturn.scsp_sync_time_mode", 1,
             {0, 1},
             {L("CPU 时间"), L("实时")});
-        m_coreItems.push_back(_textValue(
-            L("SCSP 每帧同步次数"), L("1-255，数值越大音频越平滑但越耗性能"), 0xE8D5,
-            "core.saturn.scsp_sync_per_frame", "1", 3));
+        intSelector(
+            L("SCSP 每帧同步次数"), L("数值越大音频越平滑但越耗性能"), 0xE8D5,
+            "core.saturn.scsp_sync_per_frame", 1,
+            {1, 2, 4, 8},
+            {"1", "2", "4", "8"});
 
         m_coreItems.push_back(_section(L("性能与兼容")));
         intSelector(
-            L("CPU 同步"), L("速度优先或精确度优先"), 0xE8E5,
+            L("CPU 同步/行"), L("每行同步点数量，越多越精确也越慢"), 0xE8E5,
             "core.saturn.cpu_sync_per_line", 1,
-            {1, 2},
-            {L("速度"), L("精确")});
+            {1, 2, 4, 8},
+            {L("速度 (1)"), L("平衡 (2)"), L("精确 (4)"), L("最精确 (8)")});
         m_coreItems.push_back(_toggle(
             L("扩展内部内存"), L("启用 4MB 扩展内存，部分游戏需要"), 0xE8E5,
             []() { return cfgGetBool("core.saturn.extend_internal_memory", false); },
@@ -4166,6 +4166,7 @@ private:
         for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
         {
             if ((entry.platformMask & mask) == 0) continue;
+            if (!beiklive::input_mapping::showsGameButtonForPrefix(prefix, entry)) continue;
             _addBinding(beiklive::input_mapping::gameButtonLabelForPrefix(prefix, entry),
                         L("游戏内对应按键"),
                         beiklive::input_mapping::makeHandleKey(prefix, entry.suffix),
@@ -6077,6 +6078,8 @@ void registerKeyBindActions(beiklive::DetailCell* cell, const std::string& cfgKe
         for (const auto& entry : beiklive::input_mapping::kGameButtonDefaults)
         {
             if ((entry.platformMask & platformMask) == 0)
+                continue;
+            if (!beiklive::input_mapping::showsGameButtonForPrefix(prefix, entry))
                 continue;
             std::string cfgKey = beiklive::input_mapping::makeHandleKey(prefix, entry.suffix);
             auto* cell = new beiklive::DetailCell();
