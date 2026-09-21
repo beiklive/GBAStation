@@ -1094,10 +1094,17 @@ grep '\[cfg\]'   yabause.log     # 核心设置项及其来源
 接受 `l2/r2` 作为备选键（`key_count` 2→1）；`[cfg]` 日志也改用
 `ConfigValueSource()` 标注来源。
 
-### 22.3 已知副作用（待确认是否调整）
+### 22.3 功能键最终形态（即时存/读档已去掉）
 
-启动器给 Saturn 的默认功能键里，`saturn.hotkey.quicksave.pad = PAD_LT+PAD_RT`、
-`quickload = PAD_LB+PAD_RB`。一一对应后 ZL/ZR 是 Saturn 的 Z/C，所以**按住
-ZL+ZR 触发快速保存的同时，游戏里也会收到 Z 和 C 两个按键**（原先顶多压到 L/R）。
-要避免这个副作用，可以把这两个默认值改成 `none`（与通用热键表一致）或换成不含
-ZL/ZR 的组合。
+Saturn 只保留两个功能键，其余一律不显示、核心也不读：
+
+| 功能键 | 配置键 | 说明 |
+|---|---|---|
+| 快进 | `saturn.handle.fastforward` | 触发方式/倍率/静音 在核心设置里 |
+| 打开菜单 | `saturn.hotkey.menu.pad` | 默认 `PAD_LSB`（左摇杆按下） |
+
+已去掉：快速保存、快速读取（核心侧连带删除了即时存/读档处理与 `kQuickSlotFile`，
+存档读档只走游戏内菜单的 保存状态 / 读取状态 档位面板）、倒带、截图、静音、暂停。
+启动器侧 `common.cpp` 会清掉旧配置里残留的这些键。
+
+功能键的默认值不承担兼容责任：用户随时可以在 Saturn 按键映射页自行改绑。
