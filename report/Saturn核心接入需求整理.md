@@ -828,6 +828,7 @@ M2 范围：B2–B10（配置键补全 + GameData 读写）+ 需求四（统计�
 | `[overlay]` | 遮罩路径、图像句柄、是否启用 |
 | `[auto]` | 自动读档 / 退出自动存档（槽位、路径、结果） |
 | `[stats]` | playCount、playTime 定期与退出结算 |
+| `[boot]` | 启动分段耗时（覆盖层呈现、config 读取、cart 解析、YabauseInit、显示设置、OSD）、Mesa 着色器缓存开关与目录（见 §20） |
 | `[applet]` | appletMainLoop 结束（窗口关闭/系统请求） |
 
 ### 19.3 排查用法
@@ -841,4 +842,78 @@ grep -E '\[menu\]|\[setting\]|\[slots\]' yabause.log
 grep '\[stats\]' yabause.log
 # 是否成功链回启动器
 grep '\[launch\]' yabause.log
+# 启动慢在哪一段 / 退出崩在哪一步（见 §20）
+grep '\[boot\]' yabause.log
+tail -30 yabause.log
 ```
+
+---
+
+## 20. 实机反馈处理：启动慢与退出崩溃（本轮）
+
+两条来自实机日志的问题，代码侧已加可观测性与防护，**根因待下一份日志确认**。
+
+### 20.1 为什么每次启动都像在"编译着色器"
+
+| 事实 | 依据 |
+|---|---|
+| 覆盖层文案此前写作"正在编译着色器…"，**与实测不符** | 日志里 `bootpage: nanovg ready` 与 `VIDVulkan::init enter` 相隔约 10 s，而 `VIDVulkan::init` 本身在同一秒内返回；10 s 花的不是视频核心的着色器编译阶段 |
+| 驱动侧着色器缓存此前被整体关闭 | `MESA_SHADER_CACHE_DISABLE=1`（随最初的 Switch 移植提交引入，无说明）。NVK 需把 SPIR-V 翻成 GM20B 机器码，关掉磁盘缓存后**每次启动都重做** |
+| 核心自己的 glslang 缓存是有效的 | `<CacheDir>/shaders/<glsl hash>.spv`，命中后跳过 glslang；不覆盖驱动那一半 |
+| 每次启动都是新进程 | 链式启动（chainload）没有常驻进程，内存里的管线缓存一律不带过来 |
+
+本轮改动（`ae30ea2`）：
+
+1. 文案改为"正在启动游戏…"，不再误导排查方向；
+2. `MESA_SHADER_CACHE_DIR` 指向 `sdmc:/GBAStation/cache/saturn/mesa`（目录由 `EnsureSaturnDirectories()` 创建），即**默认重新启用驱动磁盘缓存**；若某固件/驱动组合不接受，在 `config.cfg` 加 `core.saturn.mesa_shader_cache=0` 退回旧行为；
+3. 开关状态写入日志：`[boot] mesa shader cache: on dir=... / off`。
+
+### 20.2 启动耗时分段（新增埋点，`fddd2cd`）
+
+`yabauseinit()` 内按阶段打印本段与累计毫秒；`main` 里打印覆盖层呈现耗时：
+
+```
+[boot] overlay shown after NNN ms        # 含覆盖层首帧渲染 + present
+[boot]   phase config.cfg read           +NNN ms (total NNN ms)
+[boot]   phase config + cart resolved    +NNN ms (total NNN ms)
+[boot]   phase YabauseInit               +NNN ms (total NNN ms)
+[boot]   phase display settings push     +NNN ms (total NNN ms)
+[boot]   phase OSD init                  +NNN ms (total NNN ms)
+[boot] yabauseinit took NNN ms
+```
+
+判读：`overlay shown after` 很大 → 卡在首个 nanovg 帧的驱动管线编译（启用 20.1 的缓存后应显著下降）；该值很小而 `phase YabauseInit` 很大 → 卡在核心初始化内部，再按段细化。
+
+### 20.3 为什么退出游戏会崩溃
+
+旧日志最后一行是 `=== clean exit ===`，**不能**说明崩溃点：当时紧跟着 `YabLogShutdown()` 就把文件关了，之后任何阶段（`YabauseDeInit` → 单例销毁 → Renderer/Window 析构 → 静态析构 → loader 退出）崩溃都写不进来。
+
+已提交的埋点（`fddd2cd`）把这条链全部打开：
+
+| 日志行 | 位置 |
+|---|---|
+| `main: end of renderer/window scope; destructors next` | 循环结束、`Renderer`/`Window` 析构之前 |
+| `VIDVulkan::deInit enter` → `deInit: shader manager freed` → `deinit: scene deinit done` → `deleting singleton (delete this)` → `singleton deleted` | `VIDVulkan::deInit()` |
+| `~Renderer: enter / window destroyed / device destroyed / instance destroyed / done` | `Renderer::~Renderer()` |
+| `~Window: enter / queue idle / … / OS window / done`（每步一条） | `Window::~Window()` |
+| `atexit: main returned; static destructors next` | `main` 返回后、静态析构之前 |
+
+判读规则：
+
+- 最后一行是 `main: end of renderer/window scope…` → 崩在 `Renderer/Window` 析构（再看 `~Window:` 停在哪一步）；
+- 最后一行是 `delete this` / `singleton deleted` 之间 → 崩在单例析构；
+- 出现 `atexit:` 之后没有别的 → 崩在静态析构或 loader 退出；
+- 崩溃寄存器现场在 `crash.log`。
+
+同时做了三处防护性修复（`59523c1`，均不改变正常路径行为）：
+
+1. `VIDVulkanDeInit()` 改走 `VIDVulkan::destroyInstance()`：单例已销毁时不再经 `getInstance()` **复活**一个从未初始化的实例（其 `deInit()` 会解引用已释放的 `pipleLineFactory`）；
+2. `VulkanScene::deInit()` 对 `_command_pool` / `_render_complete_semaphore` 加空句柄判断——销毁 `VK_NULL_HANDLE` 在 loaderless NVK 里是非法调用；
+3. `VulkanScene::present()` 在 `_renderer == nullptr` 时直接返回。
+
+### 20.4 下一份日志需要采集
+
+1. `sdmc:/GBAStation/log/saturn/yabause.log`（**完整**，特别是末尾 30 行）；
+2. `sdmc:/GBAStation/log/saturn/crash.log`（若存在）；
+3. 是否**每次**退出都崩、是否**只在链回启动器时**崩、本地列表页退出是否也崩；
+4. `sdmc:/GBAStation/log/saturn/mesa.log`（若启用缓存后启动异常）。
