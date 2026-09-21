@@ -793,3 +793,52 @@ M2 范围：B2–B10（配置键补全 + GameData 读写）+ 需求四（统计�
 3. **遮罩**：每帧多一个 nanoVG pass（仅在启用时挂载），需确认对帧率的影响。
 4. **缩略图**：`VIDCore->GetScreenshot` 在菜单打开瞬间调用，若与 Vulkan 命令缓冲提交冲突可能拿不到帧（此时只是没有缩略图，不崩）。
 5. **重置游戏**：`yabauseinit()` 在同一进程内二次初始化，需确认无资源泄漏（连续重置多次观察）。
+
+---
+
+## 19. 日志系统（完善后）
+
+### 19.1 位置与开关
+
+| 项 | 值 |
+|---|---|
+| 日志文件 | `sdmc:/GBAStation/log/saturn/yabause.log` |
+| 崩溃日志 | `sdmc:/GBAStation/log/saturn/crash.log`（异常处理器写 PC/LR/SP/寄存器） |
+| 其它 | `mesa.log`、`video-debug.log` 同目录 |
+| 开关 | **默认开启**；`YAB_LOG=0`（或 `off`/`no`）关闭 |
+| 体积控制 | 超过 2 MB 启动时转存为 `yabause.log.old` |
+| 格式 | `[YYYY-MM-DD HH:MM:SS] <内容>`，逐行 flush；每次启动写一条 session 分隔行 |
+| 同时输出 | 文件 + stdout（接了 nxlink 时终端也能看到） |
+
+### 19.2 事件标签（便于 grep）
+
+| 标签 | 记录内容 |
+|---|---|
+| `[argv]` | **完整命令行**（argc 与每一项） |
+| `[launch]` | 解析出的 rom / return_nro / session_token / 启动方式（启动器链式 or 内置列表页）；返回启动器前的 return_nro 与 `envHasNextLoad()`；exiting core |
+| `[paths]` | DataRoot、LogDir、CacheDir、config.cfg、GameData_Saturn.json、roms 目录 |
+| `[game]` | rom / bios（或用模拟 BIOS）/ 电池存档路径 / savePath / **是否启用独立设置及其文件** / 当前使用哪套设置 / 启动成功 / yabauseinit 失败 / 重置 / 会话结束原因 |
+| `[browser]` | 内置列表页：根目录与条目数、进入设置、切换目录、选中游戏、退出 |
+| `[menu]` | 菜单开/关、标签切换、进入内容页（条目数与当前存储）、重置游戏、退出游戏 |
+| `[slots]` | 存/读/删档位（槽位号、路径、成功与否、是否写缩略图） |
+| `[setting]` | 设置改动（键、旧值→新值、写入独立还是全局、是否保存成功、是否即时生效）；`noSync` 单独记录 |
+| `[input]` | 启动时解析出的每个 Saturn 按键掩码（来自配置 / 默认值） |
+| `[hotkey]` | 快捷存/读档（槽位、路径、返回值） |
+| `[fastforward]` | 快进开/关（倍率、按住/切换、是否静音） |
+| `[overlay]` | 遮罩路径、图像句柄、是否启用 |
+| `[auto]` | 自动读档 / 退出自动存档（槽位、路径、结果） |
+| `[stats]` | playCount、playTime 定期与退出结算 |
+| `[applet]` | appletMainLoop 结束（窗口关闭/系统请求） |
+
+### 19.3 排查用法
+
+```sh
+# 这次启动收到了什么参数
+grep '\[argv\]' yabause.log
+# 菜单里改了什么
+grep -E '\[menu\]|\[setting\]|\[slots\]' yabause.log
+# 统计是否正确（playCount 只 +1、playTime 增长）
+grep '\[stats\]' yabause.log
+# 是否成功链回启动器
+grep '\[launch\]' yabause.log
+```
