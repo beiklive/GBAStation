@@ -3588,7 +3588,8 @@ private:
 
         m_coreItems.push_back(_section(L("按键")));
         m_coreItems.push_back(_action(
-            L("Saturn 按键映射"), L("Switch A/B/X/Y/L/R/ZL/ZR 对应 Saturn 六键手柄"), 0xE30F,
+            L("Saturn 按键映射"),
+            L("同名一一对应：Saturn A = A、L = L 等；C/Z 用 ZR/ZL"), 0xE30F,
             []() { return std::string(L("进入配置  >")); },
             [this]() { _openMappingPage(L("Saturn 按键映射"), "saturn.", false); }));
         _finishCorePage(L("YabaSanshiro 核心设置"));

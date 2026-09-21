@@ -138,13 +138,21 @@ namespace beiklive::input_mapping
         return true;
     }
 
-    // The Saturn control pad has no Select button: the core's pad table has no
-    // entry for "saturn.handle.select", so the row would bind nothing.
+    // Rows that must not appear for a platform's core:
+    //   saturn select -- the Saturn pad has no Select button and the core's pad
+    //                    table has no entry for it, so the row would bind nothing;
+    //   saturn l2/r2  -- with the one-to-one mapping ZL/ZR now carry Saturn Z/C,
+    //                    and the core's L/R bindings read saturn.handle.l/r only,
+    //                    so these two rows would fight over the same buttons.
     inline bool showsGameButtonForPrefix(const std::string& prefix,
                                          const GameButtonDefault& entry)
     {
-        if (prefix == "saturn." && std::string(entry.suffix) == "select")
-            return false;
+        if (prefix == "saturn.")
+        {
+            const std::string suffix(entry.suffix);
+            if (suffix == "select" || suffix == "l2" || suffix == "r2")
+                return false;
+        }
         return true;
     }
 
@@ -324,14 +332,18 @@ namespace beiklive::input_mapping
     {
         if (prefix == "saturn.")
         {
-            if (suffix == "a") return "PAD_B";
-            if (suffix == "b") return "PAD_A";
-            if (suffix == "c") return "PAD_X";
-            if (suffix == "x") return "PAD_Y";
-            if (suffix == "y") return "PAD_LB";
-            if (suffix == "z") return "PAD_RB";
-            if (suffix == "l") return "PAD_LT";
-            if (suffix == "r") return "PAD_RT";
+            // One-to-one with the Switch pad: the same-named button drives the
+            // same-named Saturn button (A = PAD_A, L = PAD_LB, ...).  C and Z have
+            // no same-named Switch button, so they take the two spare triggers.
+            if (suffix == "a") return "PAD_A";
+            if (suffix == "b") return "PAD_B";
+            if (suffix == "c") return "PAD_RT";  // ZR
+            if (suffix == "x") return "PAD_X";
+            if (suffix == "y") return "PAD_Y";
+            if (suffix == "z") return "PAD_LT";  // ZL
+            if (suffix == "l") return "PAD_LB";
+            if (suffix == "r") return "PAD_RB";
+            if (suffix == "start") return "PAD_START";
         }
         if (requiresExplicitRightStickMapping(prefix) && isRightStickMapping(suffix))
             return "none";

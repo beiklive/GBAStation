@@ -945,6 +945,39 @@ namespace beiklive
         SettingManager->Remove("saturn.hotkey.pause.pad");
         SettingManager->Remove("saturn.handle.a_turbo");
         SettingManager->Remove("saturn.handle.b_turbo");
+        // ZL/ZR no longer alias Saturn L/R (they carry Saturn Z/C now), and the
+        // L2/R2 keys are not read any more.
+        SettingManager->Remove("saturn.handle.l2");
+        SettingManager->Remove("saturn.handle.r2");
+        // The Saturn mapping is one-to-one with the Switch pad now (A = PAD_A,
+        // L = PAD_LB, ...).  Drop bindings that are still the previous defaults so
+        // the new scheme applies, but keep anything the user changed by hand.
+        {
+            struct LegacySaturnBinding
+            {
+                const char* key;
+                const char* oldDefault;
+            };
+            static const LegacySaturnBinding kLegacy[] = {
+                {"saturn.handle.a", "PAD_B"},
+                {"saturn.handle.b", "PAD_A"},
+                {"saturn.handle.c", "PAD_X"},
+                {"saturn.handle.x", "PAD_Y"},
+                {"saturn.handle.y", "PAD_LB"},
+                {"saturn.handle.z", "PAD_RB"},
+                {"saturn.handle.l", "PAD_LT"},
+                {"saturn.handle.r", "PAD_RT"},
+            };
+            for (const LegacySaturnBinding& legacy : kLegacy)
+            {
+                auto current = SettingManager->Get(legacy.key);
+                if (!current.has_value())
+                    continue;
+                auto text = current->AsString();
+                if (text.has_value() && *text == legacy.oldDefault)
+                    SettingManager->Remove(legacy.key);
+            }
+        }
         SettingManager->Remove("core.azahar.swap_screens");
         // Keep clearing the legacy 3DS mapping, which has no matching action.
         SettingManager->Remove("3ds.hotkey.mic_input.pad");
