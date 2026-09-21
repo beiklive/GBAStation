@@ -946,3 +946,28 @@ tail -30 yabause.log
 | 有 `handoff:` 但没有 `launcher entry` | 崩在 loader 交接/加载下一个 NRO（不在我们代码里） |
 | 有 `CRASH:` 行 | 异常现场以 `crash.log` 为准；若 `chainload_armed=1` 应能回到启动器 |
 4. `sdmc:/GBAStation/log/saturn/mesa.log`（若启用缓存后启动异常）。
+
+### 20.6 实机日志（20:35）新增结论
+
+该次日志确认了两件事：
+
+1. **启动慢与着色器编译无关**：`[boot] overlay shown after 69 ms`、`VIDVulkan::init` 自身 <1 s，
+   而 `phase YabauseInit +10704 ms` —— 10.7 秒全在 `YabauseInit()` 内、且在视频核心起来**之前**。
+   为此在 `yabause.c` 里给 `YabauseInit` 的每一步加了 `  yinit <step> +N ms` 计时
+   （`YabThreadInit` / `DebugCleanupOldFiles` / `SH2Init` / `T2MemoryInit` / backup /
+   `CartInit` / `MappedMemoryInit` / `VideoInit` / `PerInit` / `Cs2Init(CD/ISO)` / `ScuInit` /
+   `M68KInit` / `ScspInit` / `Vdp1Init` / `Vdp2Init` / `SmpcInit`），下次启动即可指名道姓。
+2. **退出日志停在 `atexit: main returned`**，且交接探针一行都没有。可能是在静态析构里卡死/崩溃，
+   也可能是探针写的是已被 newlib 关闭的流。处理：探针额外写独立文件
+   `sdmc:/GBAStation/log/saturn/handoff.log`；并且**已布防时直接 `__libnx_exit(0)`**，
+   跳过 C++ 静态析构（正是旧日志再也没走过去的那一段）。
+
+另按要求新增 `[cfg]` 生效项日志：只列核心真正消费的固定键表
+（`core.saturn.*` / `save.*` / `fastforward.*` / `saturn.handle.fastforward` / `scan.path.saturn`），
+值来自独立设置文件时标注 `[独立设置]`，未设置的键合并成一行——**不 dump 整个 config.cfg**。
+
+```sh
+grep 'yinit' yabause.log     # 启动慢在哪一步
+grep '\[cfg\]' yabause.log   # 这次实际生效的核心设置
+cat handoff.log              # 是否走到了 loader 交接
+```
