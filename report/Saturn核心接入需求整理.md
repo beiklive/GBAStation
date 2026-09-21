@@ -1108,3 +1108,38 @@ Saturn 只保留两个功能键，其余一律不显示、核心也不读：
 启动器侧 `common.cpp` 会清掉旧配置里残留的这些键。
 
 功能键的默认值不承担兼容责任：用户随时可以在 Saturn 按键映射页自行改绑。
+
+### 22.4 实机反馈：按左摇杆变成了退出游戏（已修）
+
+两层原因叠加：
+
+1. **游戏循环里有一行硬编码**：`if (kDown & HidNpadButton_StickL) { quit_requested = true; break; }`
+   ——这是移植时留下的"左摇杆退出"快捷方式，而启动器给"打开菜单"的默认键正是
+   `PAD_LSB`（同一个物理按键）。按下去先开菜单，同一帧又被这行踢出游戏。
+2. **核心内部默认键和启动器页面显示的不一致**：核心的菜单键 fallback 是 `ZL+ZR`、
+   快进未绑定；页面上显示的却是 `PAD_LSB` 开菜单、`PAD_RSB` 快进。当 config.cfg
+   里还没有这两个键时（映射页仍会显示默认值），按左摇杆只会命中那行硬编码退出。
+
+修复（核心 `af9fffe`）：
+
+- **删掉游戏内硬编码的左摇杆退出**：离开游戏只走菜单里的"退出游戏"标签页，
+  或者按 HOME 让 `appletMainLoop()` 结束；
+- 菜单键 fallback 改为 `HidNpadButton_StickL`、快进 fallback 改为
+  `HidNpadButton_StickR`，与 `common.cpp` 里启动器写入的默认值一致——页面不再
+  "说谎"；
+- 快进键也补上 `[input]` 日志行（键 → 原始值 → 来源 → 掩码）；
+- 核心内置列表页底部的 `MENU/Esc 退出` 是桌面端遗留文案，实际按键是左摇杆按下，
+  改为 L3 图标 + "退出"。
+
+**游戏内已无任何硬编码按键**：手柄按键、快进、打开菜单全部来自配置。剩下使用固定
+按键的只有**核心自带的列表页**（只在没有 ROM 参数时出现，启动器流程不会走到），
+它的按键与底部提示一一对应（↑↓ 选择 / A·+ 启动 / B 返回 / Y 仅游戏 / X 排序 /
+− 设置 / L3 退出）。
+
+核对日志（启动一次即可）：
+
+```
+[input] saturn button  0 <- saturn.handle.a=PAD_A[config.cfg] -> mask=0x00000001 (from settings)
+[input] hotkey saturn.hotkey.menu.pad     = PAD_LSB[config.cfg] -> mask=0x00000400
+[input] hotkey saturn.handle.fastforward  = PAD_RSB[config.cfg] -> mask=0x00000800
+```
