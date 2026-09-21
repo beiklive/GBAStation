@@ -549,6 +549,7 @@ namespace beiklive
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
         doClear();
         dbDir_ = dir;
+        unreadablePlatforms_.clear();
         std::size_t migratedThreeDsTitleIds = 0;
 
         const int platforms[] = {
@@ -575,11 +576,30 @@ namespace beiklive
             {
                 std::ifstream file(filePath);
                 if (!file.is_open())
+                {
+                    // 主文件缺失本身是正常的（全新安装）。但如果还留着上一次
+                    // 写入事务的残留，说明那次写入被打断了：此时内存视图是空的，
+                    // 磁盘上却可能仍有可用数据，绝不能当成“空库”。
+                    std::error_code probeEc;
+                    if (fs::exists(filePath + ".tmp", probeEc) ||
+                        fs::exists(filePath + ".bak", probeEc))
+                    {
+                        unreadablePlatforms_.insert(platform);
+                        brls::Logger::error(
+                            "GameDatabase: {} 缺失但存在 .tmp/.bak 残留，保留磁盘文件不做覆盖",
+                            filePath);
+                    }
                     continue;
+                }
                 nlohmann::json j;
                 file >> j;
                 if (!j.is_array())
+                {
+                    unreadablePlatforms_.insert(platform);
+                    brls::Logger::error(
+                        "GameDatabase: {} 顶层不是 JSON 数组，保留磁盘文件不做覆盖", filePath);
                     continue;
+                }
                 for (const auto &item : j)
                 {
                     GameEntry entry = item.get<GameEntry>();
@@ -601,11 +621,17 @@ namespace beiklive
             }
             catch (const std::exception &e)
             {
-                brls::Logger::warning("GameDatabase: 加载平台文件 {} 失败: {}", filePath, e.what());
+                unreadablePlatforms_.insert(platform);
+                brls::Logger::error(
+                    "GameDatabase: 加载平台文件 {} 失败（保留磁盘文件不做覆盖）: {}",
+                    filePath, e.what());
             }
             catch (...)
             {
-                brls::Logger::warning("GameDatabase: 加载平台文件 {} 时发生未知异常", filePath);
+                unreadablePlatforms_.insert(platform);
+                brls::Logger::error(
+                    "GameDatabase: 加载平台文件 {} 时发生未知异常（保留磁盘文件不做覆盖）",
+                    filePath);
             }
         }
 
@@ -637,7 +663,7 @@ namespace beiklive
                     migratedThreeDsTitleIds);
             }
         }
-        return true;
+        return unreadablePlatforms_.empty();
     }
 
     bool GameDatabase::saveToDir(const std::string &dir) const
@@ -681,6 +707,33 @@ namespace beiklive
         for (auto &[platform, j] : platformData)
         {
             std::string filePath = dir + beiklive::path::SPLIT_CHAR + getPlatformFileName(platform);
+
+            // 启动时读不出来的平台：内存视图是空的，磁盘上却可能是完好的。
+            // 跳过写入，保留原文件（以及 .tmp/.bak）等待恢复。
+            if (unreadablePlatforms_.count(platform) != 0)
+            {
+                brls::Logger::error(
+                    "GameDatabase: 跳过写入 {}（启动时无法读取，保留磁盘文件以免清空数据）",
+                    filePath);
+                allOk = false;
+                continue;
+            }
+
+            // 最后一道保险：绝不用空数组覆盖已有的非空文件。
+            if (j.empty())
+            {
+                std::error_code sizeEc;
+                const auto previousSize = fs::file_size(filePath, sizeEc);
+                if (!sizeEc && previousSize > 8)
+                {
+                    brls::Logger::error(
+                        "GameDatabase: 拒绝用空数组覆盖非空文件 {}（磁盘 {} 字节）",
+                        filePath, previousSize);
+                    allOk = false;
+                    continue;
+                }
+            }
+
             try
             {
                 if (!writeJsonFileSafely(filePath, j))
@@ -839,8 +892,9 @@ namespace beiklive
             return false;
         bool ok = saveToDir(dbDir_);
         if (ok)
-        dirty_ = false;
-        return true;
+            dirty_ = false;
+        // 原实现无论成败都返回 true，调用方永远看不到写入失败。
+        return ok;
     }
 
     std::vector<GameEntry> GameDatabase::getRecentPlayed(int count) const {

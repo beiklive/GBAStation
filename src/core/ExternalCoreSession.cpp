@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "constexpr.h"
+#include "enums.h"
 #include "Tools.hpp"
 
 #include <nlohmann/json.hpp>
@@ -58,6 +59,14 @@ namespace beiklive
             fs::remove(temp, ec);
             return !ec;
         }
+    }
+
+    bool platformReportsOwnStats(int platform)
+    {
+        // Saturn counts its own playCount/playTime/lastPlayed in
+        // GameData_Saturn.json.  Add further self-reporting cores here so the
+        // launcher stops opening a session for them.
+        return platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn);
     }
 
     std::string makeExternalCoreSessionToken(const std::string& romPath)

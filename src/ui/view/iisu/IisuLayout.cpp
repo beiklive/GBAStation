@@ -1,6 +1,7 @@
 ﻿#include "IisuLayout.hpp"
 
 #include "core/Translation.hpp"
+#include "core/common.h"
 #include "ui/utils/GradientFocus.hpp"
 #include "ui/utils/MaterialIcons.hpp"
 #include "WidgetFactory.hpp"
@@ -1370,6 +1371,13 @@ namespace beiklive
         const float bodyY = y + barMargin + topBarH;
         const float bodyW = w - 24.f;
         const float bodyH = h - 2.f * barMargin - topBarH - bottomBarH;
+        // 行数切换时自动缩小卡片，确保整个网格落在主体区域内。
+        auto& gridCfg = _layout().grid().config();
+        gridCfg.rows = std::clamp(GET_SETTING_KEY_INT("iisu.rows", 3), 3, 4);
+        const float rowGap = gridCfg.gap * static_cast<float>(gridCfg.rows - 1);
+        const float maxCell = std::max(48.f, (bodyH - rowGap) / gridCfg.rows);
+        gridCfg.cellHeight = std::min(gridCfg.cellHeight, maxCell);
+        gridCfg.cellWidth = gridCfg.cellHeight;
         _layout().setArea(bodyX, bodyY, bodyW, bodyH);
         GridDebugRenderer::draw(vg, _layout().grid(), _layout().items());
         // 焦点切到底部功能区或浮层打开时隐藏主界面焦点框

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <optional>
 #include <mutex>
 
@@ -120,6 +121,14 @@ namespace beiklive
         std::vector<GameEntry> data_;
         std::unordered_map<int, size_t> crc32Index_;
         std::unordered_map<std::string, size_t> pathIndex_;
+
+        /// 平台文件在本进程启动时存在但无法安全读取（解析失败、不是数组，
+        /// 或主文件缺失但留有 .tmp/.bak 事务残留）的平台集合。
+        ///
+        /// 这些平台的内存视图是“空”的，但磁盘上的文件可能仍然是完好的。
+        /// saveToDir() 必须跳过它们：否则一次瞬时读取失败就会被写成空数组，
+        /// 造成不可逆的 GameData_<平台>.json 数据清空。
+        std::unordered_set<int> unreadablePlatforms_;
 
 
         // 自动保存相关

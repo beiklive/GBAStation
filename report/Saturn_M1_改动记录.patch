@@ -1,0 +1,556 @@
+# Saturn M1 改动记录（仅本次改动，供审查）
+# 基准：yabasanshiro 工作区在本轮改动前的状态（已含他人未提交改动）
+# 三个核心文件为本轮改动前快照 vs 现状；前端四个文件在改动前是干净的，因此 git diff 即本轮改动。
+
+## ===== 核心：yabasanshiro/yabause/src =====
+
+### --- a/yabause/src/gbastation/GBAStationPlatform.cpp
+--- /tmp/saturn_m1_before/GBAStationPlatform.cpp	2026-09-21 10:31:24
++++ yabasanshiro/yabause/src/gbastation/GBAStationPlatform.cpp	2026-09-21 10:35:10
+@@ -81,16 +81,27 @@
+   }
+ }
+ 
++// Path of the config file that was actually loaded.  Settings must be written
++// back to that same file: the in-game menu used to persist into the core-private
++// copy while the launcher kept its own, so neither side saw the other's changes.
++std::string g_loaded_config_path;
++
+ std::map<std::string, std::string> LoadConfigValues()
+ {
+   std::map<std::string, std::string> loaded;
+   std::vector<std::string> config_paths;
++#if defined(NX)
++  // The launcher owns sdmc:/GBAStation/config/config.cfg; read it first so the
++  // launcher's settings page and this core always agree.  The core-private copy
++  // is kept as a fallback for standalone launches, and the device-less form is
++  // accepted too (other GBAStation cores try it as well).
++  config_paths.push_back("sdmc:/GBAStation/config/config.cfg");
++  config_paths.push_back("/GBAStation/config/config.cfg");
+   config_paths.push_back(GBAStation::DataRoot() + "/config/config.cfg");
+-#if !defined(NX)
++#else
++  config_paths.push_back(GBAStation::DataRoot() + "/config/config.cfg");
+   // Allow a portable config next to the data root override too.
+   config_paths.push_back("./GBAStation/config/config.cfg");
+-#else
+-  config_paths.push_back("/GBAStation/config/config.cfg");
+ #endif
+   for (const std::string& path : config_paths)
+   {
+@@ -110,6 +121,7 @@
+       loaded[Trim(std::string_view(line).substr(0, equal))] =
+           DecodeConfigValue(std::string_view(line).substr(equal + 1));
+     }
++    g_loaded_config_path = path;
+     break;
+   }
+   return loaded;
+@@ -230,11 +242,11 @@
+ #if defined(NX)
+ namespace
+ {
+-uint64_t ParsePadName(std::string name, uint64_t fallback)
++uint64_t ParsePadCombo(const std::string& combo)
+ {
+-  std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+-    return static_cast<char>(std::toupper(c));
+-  });
++  if (combo.empty())
++    return 0;
++
+   static const std::map<std::string, uint64_t> names = {
+       {"PAD_A", HidNpadButton_A}, {"PAD_B", HidNpadButton_B},
+       {"PAD_X", HidNpadButton_X}, {"PAD_Y", HidNpadButton_Y},
+@@ -244,21 +256,51 @@
+       {"PAD_UP", HidNpadButton_Up}, {"PAD_DOWN", HidNpadButton_Down},
+       {"PAD_LEFT", HidNpadButton_Left}, {"PAD_RIGHT", HidNpadButton_Right},
+       {"PAD_LSB", HidNpadButton_StickL}, {"PAD_RSB", HidNpadButton_StickR}};
++
++  // "PAD_A+PAD_B" means both buttons at once.  An unknown token (including the
++  // launcher's "none" sentinel) yields 0 so the caller can try the next
++  // alternative.
+   uint64_t result = 0;
+   size_t start = 0;
+-  while (start <= name.size())
++  while (start <= combo.size())
+   {
+-    const size_t plus = name.find('+', start);
+-    const std::string token = name.substr(start, plus == std::string::npos ? std::string::npos : plus - start);
++    const size_t plus = combo.find('+', start);
++    const std::string token =
++        combo.substr(start, plus == std::string::npos ? std::string::npos : plus - start);
+     const auto it = names.find(token);
+     if (it == names.end())
+-      return fallback;
++      return 0;
+     result |= it->second;
+     if (plus == std::string::npos)
+       break;
+     start = plus + 1;
+   }
+-  return result == 0 ? fallback : result;
++  return result;
++}
++
++// A mapping may list several alternatives separated by '|' (the launcher writes
++// them that way).  The first alternative that parses wins; when none does the
++// caller's fallback is used.
++uint64_t ParsePadName(std::string name, uint64_t fallback)
++{
++  std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
++    return static_cast<char>(std::toupper(c));
++  });
++
++  size_t start = 0;
++  while (start <= name.size())
++  {
++    const size_t bar = name.find('|', start);
++    const std::string combo =
++        name.substr(start, bar == std::string::npos ? std::string::npos : bar - start);
++    const uint64_t parsed = ParsePadCombo(Trim(combo));
++    if (parsed != 0)
++      return parsed;
++    if (bar == std::string::npos)
++      break;
++    start = bar + 1;
++  }
++  return fallback;
+ }
+ }  // namespace
+ #endif  // NX
+@@ -337,9 +379,30 @@
+   if (launch.return_nro.empty() || !envHasNextLoad())
+     return;
+ 
+-  const std::string args = launch.return_nro +
+-      (launch.session_token.empty() ? " --resume" : " --external-return " + launch.session_token);
+-  envSetNextLoad(launch.return_nro.c_str(), args.c_str());
++  // Only chainload when the target really exists: handing the loader a missing
++  // NRO leaves the console on a black screen with no way back.
++  {
++    std::ifstream probe(launch.return_nro, std::ios::binary);
++    if (!probe.good())
++    {
++      printf("return-to-launcher skipped: %s not found\n", launch.return_nro.c_str());
++      return;
++    }
++  }
++
++  // The launcher only needs the NRO path.  There is no session token any more:
++  // cores that report their own play stats never get a launcher session.
++  std::string args = "\"";
++  for (const char character : launch.return_nro)
++  {
++    if (character == '"' || character == '\\')
++      args.push_back('\\');
++    args.push_back(character);
++  }
++  args.push_back('"');
++
++  const Result rc = envSetNextLoad(launch.return_nro.c_str(), args.c_str());
++  printf("return-to-launcher %s rc=0x%x\n", launch.return_nro.c_str(), rc);
+ #else
+   (void)launch;
+ #endif
+@@ -358,9 +421,11 @@
+   MakeDirectories(root + "/saturn/cache/pipelines");
+ #if defined(NX)
+   MakeDirectories("sdmc:/GBAStation");
++  MakeDirectories("sdmc:/GBAStation/config");
+   MakeDirectories("sdmc:/GBAStation/bios");
+   MakeDirectories("sdmc:/GBAStation/bios/saturn");
+   MakeDirectories("sdmc:/GBAStation/roms");
++  MakeDirectories("sdmc:/GBAStation/overlays");
+ #endif
+   MakeDirectories(root + "/bios/saturn");
+   MakeDirectories(root + "/roms");
+@@ -370,6 +435,12 @@
+ std::string DefaultRomsDir()
+ {
+ #if defined(NX)
++  // Follow the launcher's per-platform scan directory when it is set, so the
++  // built-in browser opens the same folder the launcher imports ROMs from.
++  // Falls back to the shared roms directory when the setting is empty.
++  const std::string configured = ReadConfigValue("scan.path.saturn", "");
++  if (!configured.empty())
++    return configured;
+   return "sdmc:/GBAStation/roms/saturn";
+ #else
+   return DataRoot() + "/roms/saturn";
+@@ -428,13 +499,32 @@
+ 
+ std::string ConfigPath()
+ {
+-  return DataRoot() + "/config/config.cfg";
++#if defined(NX)
++  // Write back to the file we loaded (the launcher's config.cfg when present);
++  // fall back to the launcher location so a first save creates it there.
++  if (!g_loaded_config_path.empty())
++    return g_loaded_config_path;
++  return "sdmc:/GBAStation/config/config.cfg";
++#else
++  return g_loaded_config_path.empty() ? DataRoot() + "/config/config.cfg"
++                                      : g_loaded_config_path;
++#endif
+ }
+ 
+ #if defined(NX)
+ uint64_t ReadButtonMapping(const char* key, uint64_t fallback)
+ {
+-  return ParsePadName(ReadConfigValue(key).c_str(), fallback);
++  const std::string raw = ReadConfigValue(key, "");
++  // Absent key: keep the caller's default.  Explicit "none": really unbound.
++  if (raw.empty())
++    return fallback;
++  std::string upper = raw;
++  std::transform(upper.begin(), upper.end(), upper.begin(), [](unsigned char c) {
++    return static_cast<char>(std::toupper(c));
++  });
++  if (upper == "NONE")
++    return 0;
++  return ParsePadName(raw, fallback);
+ }
+ 
+ bool IsButtonMappingPressed(const char* key, uint64_t held, uint64_t fallback)
+
+### --- a/yabause/src/gbastation/Settings.cpp
+--- /tmp/saturn_m1_before/Settings.cpp	2026-09-21 10:31:24
++++ yabasanshiro/yabause/src/gbastation/Settings.cpp	2026-09-21 10:32:30
+@@ -19,6 +19,52 @@
+ {
+   const auto it = cfg.find(key);
+   return it == cfg.end() || it->second.empty() ? std::string(fallback) : it->second;
++}
++
++// The launcher persists scalars as "key=<type>|<value>" and silently DROPS any
++// line without a recognised type tag (ConfigManager::DeserializeValue).  The
++// in-game settings menu writes back into that same file, so every value it
++// touches has to keep a tag: reuse the one the key already had, and infer one
++// for keys the launcher has not written yet.
++const char* InferConfigTag(const std::string& value)
++{
++  if (value.empty())
++    return "s";
++  char* end = nullptr;
++  (void)std::strtol(value.c_str(), &end, 10);
++  if (end != nullptr && *end == '\0')
++    return "i";
++  end = nullptr;
++  (void)std::strtod(value.c_str(), &end);
++  if (end != nullptr && *end == '\0')
++    return "f";
++  return "s";
++}
++
++std::string EncodeConfigValue(const char* tag, const std::string& value)
++{
++  std::string out = std::string(tag) + "|";
++  if (std::strcmp(tag, "s") != 0)
++  {
++    out += value;
++    return out;
++  }
++  // Same escaping the launcher applies to string payloads.
++  for (const char c : value)
++  {
++    if (c == '\\' || c == ',' || c == '|')
++      out.push_back('\\');
++    out.push_back(c);
++  }
++  return out;
++}
++
++std::string ConfigTagOf(const std::string& raw_value)
++{
++  if (raw_value.size() >= 2 && raw_value[1] == '|' &&
++      (raw_value[0] == 'i' || raw_value[0] == 'f' || raw_value[0] == 's'))
++    return raw_value.substr(0, 1);
++  return {};
+ }
+ 
+ void AddBool(std::vector<SettingItem>& out, const std::map<std::string, std::string>& cfg,
+@@ -243,8 +289,10 @@
+     }
+   }
+ 
+-  // Preserve unknown keys that are already in the file.
++  // Preserve unknown keys that are already in the file, and remember the value
++  // type tag of every key so the launcher can still parse the result.
+   std::map<std::string, std::string> values;
++  std::map<std::string, std::string> tags;
+   {
+     std::ifstream in(path);
+     std::string line;
+@@ -262,17 +310,41 @@
+       while (!value.empty() && (value.back() == ' ' || value.back() == '\t' || value.back() == '\r'))
+         value.pop_back();
+       if (!key.empty())
++      {
++        const std::string tag = ConfigTagOf(value);
++        if (!tag.empty())
++          tags[key] = tag;
+         values[key] = value;
++      }
+     }
+   }
++  std::map<std::string, bool> updated;
+   for (const SettingItem& item : items)
++  {
+     values[item.key] = item.value;
++    updated[item.key] = true;
++  }
+ 
+   std::ofstream out(path, std::ios::trunc);
+   if (!out)
+     return false;
+   for (const auto& entry : values)
+-    out << entry.first << "=" << entry.second << "\n";
++  {
++    if (updated.count(entry.first) != 0)
++    {
++      const auto tag = tags.find(entry.first);
++      out << entry.first << "="
++          << EncodeConfigValue(tag == tags.end() ? InferConfigTag(entry.second)
++                                                 : tag->second.c_str(),
++                               entry.second)
++          << "\n";
++    }
++    else
++    {
++      // Untouched key: keep the raw line, including its original type tag.
++      out << entry.first << "=" << entry.second << "\n";
++    }
++  }
+   return out.good();
+ }
+ }
+
+### --- a/yabause/src/nx/main.cpp
+--- /tmp/saturn_m1_before/main.cpp	2026-09-21 10:31:24
++++ yabasanshiro/yabause/src/nx/main.cpp	2026-09-21 10:33:01
+@@ -812,6 +812,17 @@
+   padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+   padInitializeDefault(&pad);
+ 
++  // Hotkeys come from the launcher's config.cfg (saturn.hotkey.*) so the
++  // launcher's mapping page drives this menu.  The fallbacks keep the previous
++  // behaviour for standalone launches that have no config.cfg: ZL+ZR opens the
++  // menu and the quick save/load keys stay unbound.
++  const uint64_t menu_key = GBAStation::ReadButtonMapping(
++      "saturn.hotkey.menu.pad", HidNpadButton_ZL | HidNpadButton_ZR);
++  const uint64_t quicksave_key =
++      GBAStation::ReadButtonMapping("saturn.hotkey.quicksave.pad", 0);
++  const uint64_t quickload_key =
++      GBAStation::ReadButtonMapping("saturn.hotkey.quickload.pad", 0);
++
+   // In-game menu state: 0 = playing, 1 = menu, 2 = settings.
+   VideoTrace video_trace;
+   int menu_state = 0;
+@@ -837,8 +848,8 @@
+     const u64 held = padGetButtons(&pad);
+     const u64 kDown = padGetButtonsDown(&pad);
+ 
+-    // ZL+ZR toggles the menu (edge triggered).
+-    const bool combo = (held & HidNpadButton_ZL) && (held & HidNpadButton_ZR);
++    // Menu hotkey is configurable (ZL+ZR by default), edge triggered.
++    const bool combo = menu_key != 0 && (held & menu_key) == menu_key;
+     if (combo && !prev_combo) {
+       menu_state = (menu_state == 0) ? 1 : 0;
+       if (menu_state == 1) {
+@@ -956,6 +967,27 @@
+     }
+ 
+     window->setPrePresentHook(nullptr);
++
++    // Quick save/load hotkeys.  Both are unbound by default, so nothing happens
++    // until the launcher assigns one on the Saturn mapping page.
++    {
++      const bool want_save = quicksave_key != 0 && (kDown & quicksave_key) == quicksave_key;
++      const bool want_load = quickload_key != 0 && (kDown & quickload_key) == quickload_key;
++      if (want_save || want_load) {
++        // Same audio handling as the menu path: mute the SCSP and drain its
++        // queue so the state snapshot is not taken mid-audio.
++        ScspMuteAudio(SCSP_MUTE_SYSTEM);
++        SNDSDLFlushAudio();
++        const std::string state_path = GBAStation::StatePathForRom(rom, kQuickSlot);
++        const int rc = want_save ? YabSaveState(state_path.c_str())
++                                 : YabLoadState(state_path.c_str());
++        ScspUnMuteAudio(SCSP_MUTE_SYSTEM);
++        game_menu_status = (rc == 0) ? (want_save ? "已存档到即时档位" : "已读取即时档位")
++                                     : (want_save ? "存档失败" : "读档失败:没有找到存档");
++        printf("hotkey %s: %s\n", want_save ? "quicksave" : "quickload",
++               game_menu_status.c_str());
++      }
++    }
+ 
+     // Left-stick press also returns to the boot page.
+     if (kDown & HidNpadButton_StickL) {
+@@ -1032,6 +1064,13 @@
+   SetCurrentThreadCore(2);
+   YabLogWrite("main thread pinned to core 2");
+ 
++  // External-core launch protocol from the launcher.  A ROM argument means
++  // "start this game directly"; --return asks us to hand control back on exit.
++  // With neither, the built-in browser is shown.
++  const GBAStation::LaunchInfo launch = GBAStation::ReadLaunchInfo(argc, argv);
++  YabLogWrite("launch rom=%s return=%s token=%s", launch.rom_path.c_str(),
++              launch.return_nro.c_str(), launch.session_token.c_str());
++
+   // SwitchVK's NVK is used loaderless: these knobs are required for the ICD
+   // to come up and enumerate the GM20B device (see winsys/smoke).
+   setenv("NVK_I_WANT_A_BROKEN_VULKAN_DRIVER", "1", 1);
+@@ -1055,9 +1094,14 @@
+     YabLogWrite("device=%p gpu=%p", (void*)g_vk_device, (void*)g_vk_gpu);
+ 
+     bool keep_running = true;
++    // A ROM on the command line means the launcher (or a home-screen forwarder)
++    // already picked the game: skip the browser, and on exit do not come back to
++    // it.  Without a ROM the browser is the entry point, as before.
++    const bool launched_with_argument = !launch.rom_path.empty();
++    std::string pending_rom = launch.rom_path;
+     while (keep_running && appletMainLoop()) {
+-      std::string rom;
+-      if (!RunBootPage(window, rom)) {
++      std::string rom = pending_rom;
++      if (rom.empty() && !RunBootPage(window, rom)) {
+         // Left-stick press on the boot page quits the application.
+         break;
+       }
+@@ -1099,6 +1143,16 @@
+       // Returns true when the user picked "exit game" (back to the browser).
+       keep_running = RunGameLoop(window, rom);
+       YabauseDeInit();
++
++      if (launched_with_argument) {
++        // Direct launch: hand control back to the launcher when it asked for it
++        // (--return), otherwise just exit to the system menu.  Never fall back to
++        // the browser here -- the user did not pick this game from it.
++        GBAStation::ReturnToLauncher(launch);
++        break;
++      }
++      // Browser flow: go back and let the user pick another game.
++      pending_rom.clear();
+     }
+     YabLogWrite("=== clean exit ===");
+     YabLogShutdown();
+
+## ===== 前端：GBAStation =====
+diff --git a/src/core/ExternalCoreSession.cpp b/src/core/ExternalCoreSession.cpp
+index 17a245be..1794b904 100644
+--- a/src/core/ExternalCoreSession.cpp
++++ b/src/core/ExternalCoreSession.cpp
+@@ -2,6 +2,7 @@
+ 
+ #include "common.h"
+ #include "constexpr.h"
++#include "enums.h"
+ #include "Tools.hpp"
+ 
+ #include <nlohmann/json.hpp>
+@@ -60,6 +61,14 @@ namespace beiklive
+         }
+     }
+ 
++    bool platformReportsOwnStats(int platform)
++    {
++        // Saturn counts its own playCount/playTime/lastPlayed in
++        // GameData_Saturn.json.  Add further self-reporting cores here so the
++        // launcher stops opening a session for them.
++        return platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuSaturn);
++    }
++
+     std::string makeExternalCoreSessionToken(const std::string& romPath)
+     {
+         const auto now = unixSecondsNow();
+diff --git a/src/core/ExternalCoreSession.hpp b/src/core/ExternalCoreSession.hpp
+index 0f445669..6f458a52 100644
+--- a/src/core/ExternalCoreSession.hpp
++++ b/src/core/ExternalCoreSession.hpp
+@@ -4,6 +4,16 @@
+ 
+ namespace beiklive
+ {
++    /// Whether the launcher should track this platform's play stats itself.
++    ///
++    /// The launcher normally opens a session before chainloading an external
++    /// core: it bumps playCount/lastPlayed up front and later adds playTime when
++    /// the core returns with "--external-return <token>".  Saturn
++    /// (YabaSanshiro) maintains those fields from inside the core instead, so
++    /// starting a session for it would double count playCount and leave a stale
++    /// external_core_session.json behind.
++    bool platformReportsOwnStats(int platform);
++
+     std::string makeExternalCoreSessionToken(const std::string& romPath);
+     bool beginExternalCoreSession(const std::string& romPath, int platform,
+                                   const std::string& token);
+diff --git a/src/main.cpp b/src/main.cpp
+index fbf1aa66..a15d7cac 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -257,13 +257,19 @@ bool launchDirectGameActivity(const std::string& romPath)
+ 
+ 		const std::string nroPath = GET_SETTING_KEY_STR(pathKey, defaultPath);
+ 		const std::string returnPath = GET_SETTING_KEY_STR(returnKey, "sdmc:/switch/GBAStation.nro");
+-		const std::string sessionToken = beiklive::makeExternalCoreSessionToken(romPath);
++		// Cores that maintain playCount/playTime themselves (Saturn) must not get
++		// a launcher session: it would double count playCount and leave a stale
++		// external_core_session.json behind.
++		const bool trackSession = !beiklive::platformReportsOwnStats(platform);
++		const std::string sessionToken =
++			trackSession ? beiklive::makeExternalCoreSessionToken(romPath) : std::string();
+ 
+ 		beiklive::switch_platform::NroLaunchRequest request;
+ 		request.nroPath = nroPath;
+ 		request.romPath = romPath;
+ 		request.returnNroPath = returnPath;
+-		request.extraArgs = {"--gbastation-session", sessionToken};
++		if (trackSession)
++			request.extraArgs = {"--gbastation-session", sessionToken};
+ 		auto result = beiklive::switch_platform::launchNroOnExit(request);
+ 		if (!result.success)
+ 		{
+@@ -272,7 +278,7 @@ bool launchDirectGameActivity(const std::string& romPath)
+ 			return false;
+ 		}
+ 
+-		if (!beiklive::beginExternalCoreSession(romPath, platform, sessionToken))
++		if (trackSession && !beiklive::beginExternalCoreSession(romPath, platform, sessionToken))
+ 			brls::Logger::error("Direct {} external session tracking could not start for {}", label, romPath);
+ 
+ 		brls::Logger::info("Direct {} NRO launch configured: {}", label, result.message);
+diff --git a/src/ui/page/StartPage.cpp b/src/ui/page/StartPage.cpp
+index f1b6df6f..b2fae658 100644
+--- a/src/ui/page/StartPage.cpp
++++ b/src/ui/page/StartPage.cpp
+@@ -1323,13 +1323,19 @@ beiklive::enums::FileType platformToFileType(int platform)
+ 
+             const std::string nroPath = GET_SETTING_KEY_STR(pathKey, defaultPath);
+             const std::string returnPath = GET_SETTING_KEY_STR(returnKey, "sdmc:/switch/GBAStation.nro");
+-			const std::string sessionToken = beiklive::makeExternalCoreSessionToken(romPath);
++			// Cores that maintain playCount/playTime themselves (Saturn) must not
++			// get a launcher session: it would double count playCount and leave a
++			// stale external_core_session.json behind.
++			const bool trackSession = !beiklive::platformReportsOwnStats(platform);
++			const std::string sessionToken =
++				trackSession ? beiklive::makeExternalCoreSessionToken(romPath) : std::string();
+ 
+ 			beiklive::switch_platform::NroLaunchRequest request;
+ 			request.nroPath = nroPath;
+ 			request.romPath = romPath;
+ 			request.returnNroPath = returnPath;
+-			request.extraArgs = {"--gbastation-session", sessionToken};
++			if (trackSession)
++				request.extraArgs = {"--gbastation-session", sessionToken};
+ 			auto result = beiklive::switch_platform::launchNroOnExit(request);
+             if (!result.success)
+             {
+@@ -1338,7 +1344,7 @@ beiklive::enums::FileType platformToFileType(int platform)
+                 return false;
+             }
+ 
+-			if (!beiklive::beginExternalCoreSession(romPath, platform, sessionToken))
++			if (trackSession && !beiklive::beginExternalCoreSession(romPath, platform, sessionToken))
+ 				brls::Logger::error("{} external session tracking could not start for {}", label, romPath);
+ 
+             brls::Logger::info("{} external NRO configured for {}: {}", label, title, result.message);

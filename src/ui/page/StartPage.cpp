@@ -1323,13 +1323,19 @@ beiklive::enums::FileType platformToFileType(int platform)
 
             const std::string nroPath = GET_SETTING_KEY_STR(pathKey, defaultPath);
             const std::string returnPath = GET_SETTING_KEY_STR(returnKey, "sdmc:/switch/GBAStation.nro");
-			const std::string sessionToken = beiklive::makeExternalCoreSessionToken(romPath);
+			// Cores that maintain playCount/playTime themselves (Saturn) must not
+			// get a launcher session: it would double count playCount and leave a
+			// stale external_core_session.json behind.
+			const bool trackSession = !beiklive::platformReportsOwnStats(platform);
+			const std::string sessionToken =
+				trackSession ? beiklive::makeExternalCoreSessionToken(romPath) : std::string();
 
 			beiklive::switch_platform::NroLaunchRequest request;
 			request.nroPath = nroPath;
 			request.romPath = romPath;
 			request.returnNroPath = returnPath;
-			request.extraArgs = {"--gbastation-session", sessionToken};
+			if (trackSession)
+				request.extraArgs = {"--gbastation-session", sessionToken};
 			auto result = beiklive::switch_platform::launchNroOnExit(request);
             if (!result.success)
             {
@@ -1338,7 +1344,7 @@ beiklive::enums::FileType platformToFileType(int platform)
                 return false;
             }
 
-			if (!beiklive::beginExternalCoreSession(romPath, platform, sessionToken))
+			if (trackSession && !beiklive::beginExternalCoreSession(romPath, platform, sessionToken))
 				brls::Logger::error("{} external session tracking could not start for {}", label, romPath);
 
             brls::Logger::info("{} external NRO configured for {}: {}", label, title, result.message);

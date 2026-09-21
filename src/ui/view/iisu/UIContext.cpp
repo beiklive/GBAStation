@@ -7,6 +7,7 @@
 
 #include "ImageWidget.hpp"
 #include "WidgetFactory.hpp"
+#include "core/common.h"
 
 namespace beiklive
 {
@@ -23,9 +24,9 @@ namespace beiklive
 
         // 浮层面板网格：3 行 N 列，向右延伸，支持横向滚动
         auto& cfg = m_panelLayout.grid().config();
-        cfg.rows = 3;
-        cfg.cellWidth = 160.f;
-        cfg.cellHeight = 160.f;
+        cfg.rows = std::clamp(GET_SETTING_KEY_INT("iisu.rows", 3), 3, 4);
+        cfg.cellWidth = cfg.rows == 4 ? 120.f : 160.f;
+        cfg.cellHeight = cfg.rows == 4 ? 120.f : 160.f;
         cfg.gap = 14.f;
         m_panelLayout.grid().setScrollable(true);
     }
@@ -179,10 +180,12 @@ namespace beiklive
             m_panelLayout.addItem(descriptorToItem(desc));
             injectServices(m_panelLayout.items().back());
         }
-        // 列数按条目数计算（3 行，向右延伸）
+        // 浮层也跟随主布局行数，保持三行/四行切换一致。
         auto& cfg = m_panelLayout.grid().config();
+        cfg.rows = std::clamp(GET_SETTING_KEY_INT("iisu.rows", 3), 3, 4);
+        cfg.cellWidth = cfg.cellHeight = cfg.rows == 4 ? 120.f : 160.f;
         cfg.columns = std::max(1, static_cast<int>(
-            std::ceil(static_cast<double>(items.size()) / 3.0)));
+            std::ceil(static_cast<double>(items.size()) / cfg.rows)));
         m_panelLayout.grid().setScrollX(0.f);
         m_panelLayout.resetFocusToFirst();
     }
