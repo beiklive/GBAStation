@@ -29,7 +29,7 @@
             "value": {
                 "highest_thread_priority": 59,
                 "lowest_thread_priority": 28,
-                "highest_cpu_id": 3,
+                "highest_cpu_id": 2,
                 "lowest_cpu_id": 0
             }
         },
