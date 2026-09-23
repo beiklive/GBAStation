@@ -11,7 +11,13 @@ set_target_properties(gbastation_forwarder_hbl PROPERTIES
 )
 
 target_link_options(gbastation_forwarder_hbl PRIVATE -Wl,-wrap,exit)
-target_compile_definitions(gbastation_forwarder_hbl PRIVATE VERSION="GBAStation")
+# loader info 里带的版本号（上位 CMakeLists 定义 VERSION_*；单独配置本目录时退化为 0.0.0）
+if (NOT DEFINED VERSION_MAJOR)
+    set(VERSION_MAJOR 0)
+    set(VERSION_MINOR 0)
+    set(VERSION_ALTER 0)
+endif()
+target_compile_definitions(gbastation_forwarder_hbl PRIVATE VERSION="${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}")
 
 find_program(NX_ELF2NSO_EXE NAMES elf2nso HINTS "${DEVKITPRO}/tools/bin" REQUIRED)
 find_program(NX_NPDMTOOL_EXE NAMES npdmtool HINTS "${DEVKITPRO}/tools/bin" REQUIRED)

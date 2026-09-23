@@ -15,7 +15,9 @@ static char g_nextNroPath[FS_MAX_PATH] = {0};
 static char g_defaultArgv[2048] = {0};
 static char g_defaultNroPath[FS_MAX_PATH] = {0};
 
-static const char g_noticeText[] = { "sphaira " VERSION };
+// loader info（被拉起程序里 envGetLoaderInfo() 看到的内容），用于识别
+// "由 GBAStation 转发器启动"，必须是 GBAStation 自己的标识。
+static const char g_noticeText[] = { "GBAStation " VERSION };
 
 static u64 g_nroSize = 0;
 static NroHeader g_nroHeader = {0};
