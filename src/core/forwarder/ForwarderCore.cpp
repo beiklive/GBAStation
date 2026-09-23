@@ -1,6 +1,7 @@
 #ifdef __SWITCH__
 // NCA/ROMFS construction adapted from Sphaira's owo.cpp (GPL-3.0-or-later).
 #include "core/forwarder/ForwarderFormats.hpp"
+#include "core/forwarder/ForwarderTypes.hpp"
 
 #include <switch.h>
 #include <cstring>
@@ -44,6 +45,28 @@ ScopeExit<Callback> makeScopeExit(Callback callback)
 
 constexpr Result kResultBadArgs = MAKERESULT(Module_Libnx, 100);
 
+// 开机 logo 与启动动画（可选，由用户放到 SD 卡；缺省时不写入 logo romfs）
+constexpr const char* FORWARDER_LOGO_PATH = "sdmc:/GBAStation/logo/NintendoLogo.png";
+constexpr const char* FORWARDER_GIF_PATH = "sdmc:/GBAStation/logo/StartupMovie.gif";
+
+void readFileIfExists(const char* path, std::vector<u8>& out)
+{
+    out.clear();
+    FILE* fp = std::fopen(path, "rb");
+    if (!fp)
+        return;
+
+    std::fseek(fp, 0, SEEK_END);
+    const long size = std::ftell(fp);
+    if (size > 0) {
+        std::fseek(fp, 0, SEEK_SET);
+        out.resize(static_cast<size_t>(size));
+        if (std::fread(out.data(), 1, out.size(), fp) != out.size())
+            out.clear();
+    }
+    std::fclose(fp);
+}
+
 struct ForwarderKeys
 {
     u8 header_key[0x20]{};
@@ -55,12 +78,13 @@ struct OwoConfig
     std::string args;
     std::string name;
     std::string author;
-    std::string legacy_args;
     NacpStruct nacp{};
     std::vector<u8> icon;
     std::vector<u8> logo;
     std::vector<u8> gif;
     std::vector<u8> program_nca;
+    ForwarderAddressSpace address_space{ForwarderAddressSpace::Bit36};
+    ForwarderCoreMode core_mode{ForwarderCoreMode::Three};
 };
 
 constexpr u8 HEADER_KEK_SRC[0x10] = {
@@ -231,6 +255,8 @@ struct NpdmPatch {
     char title_name[0x10]{"Application"};
     char product_code[0x10]{};
     u64 tid;
+    ForwarderAddressSpace address_space{ForwarderAddressSpace::Bit36};
+    ForwarderCoreMode core_mode{ForwarderCoreMode::Three};
 };
 
 struct NcapPatch {
@@ -517,8 +543,23 @@ auto npdm_patch_kc(std::vector<u8>& npdm, u32 off, u32 size, u32 bitmask, u32 va
     return false;
 }
 
+constexpr auto npdm_kernel_flags(ForwarderCoreMode mode) -> u32 {
+    const u32 lowest_priority = mode == ForwarderCoreMode::Four ? 63 : 59;
+    const u32 highest_priority = 28;
+    const u32 lowest_cpu = 0;
+    const u32 highest_cpu = mode == ForwarderCoreMode::Four ? 3 : 2;
+    const u32 descriptor = (((highest_cpu << 8) | lowest_cpu) << 6 | highest_priority) << 6 | lowest_priority;
+    return descriptor << 4;
+}
+
+static_assert((npdm_kernel_flags(ForwarderCoreMode::Three) | 0x7) == 0x020073B7);
+static_assert((npdm_kernel_flags(ForwarderCoreMode::Four) | 0x7) == 0x030073F7);
+
 // todo: manually build npdm
-void patch_npdm(std::vector<u8>& npdm, const NpdmPatch& patch) {
+bool patch_npdm(std::vector<u8>& npdm, const NpdmPatch& patch) {
+    constexpr u8 ADDRESS_SPACE_SHIFT = 1;
+    constexpr u8 ADDRESS_SPACE_MASK = 0x7 << ADDRESS_SPACE_SHIFT;
+
     npdm::Meta meta{};
     npdm::Aci0 aci0{};
     npdm::Acid acid{};
@@ -529,9 +570,15 @@ void patch_npdm(std::vector<u8>& npdm, const NpdmPatch& patch) {
     // apply patch
     std::memcpy(meta.title_name, &patch.title_name, sizeof(meta.title_name));
     std::memcpy(meta.product_code, &patch.product_code, sizeof(patch.product_code));
+    meta.flags = (meta.flags & ~ADDRESS_SPACE_MASK) | (static_cast<u8>(patch.address_space) << ADDRESS_SPACE_SHIFT);
     aci0.program_id = patch.tid;
     acid.program_id_min = patch.tid;
     acid.program_id_max = patch.tid;
+
+    // 内核能力位：CPU 核心数（3 核 / 4 核）
+    const auto kernel_flags = npdm_kernel_flags(patch.core_mode);
+    const auto aci0_core_patched = npdm_patch_kc(npdm, meta.aci0_offset + aci0.kac_offset, aci0.kac_size, 3, kernel_flags);
+    const auto acid_core_patched = npdm_patch_kc(npdm, meta.acid_offset + acid.kac_offset, acid.kac_size, 3, kernel_flags);
 
     // patch debug flags based on ams version
     // SEE: https://github.com/ITotalJustice/sphaira/issues/67
@@ -550,6 +597,7 @@ void patch_npdm(std::vector<u8>& npdm, const NpdmPatch& patch) {
     std::memcpy(npdm.data(), &meta, sizeof(meta));
     std::memcpy(npdm.data() + meta.aci0_offset, &aci0, sizeof(aci0));
     std::memcpy(npdm.data() + meta.acid_offset, &acid, sizeof(acid));
+    return aci0_core_patched && acid_core_patched;
 }
 
 void patch_nacp(NacpStruct& nacp, const NcapPatch& patch) {
@@ -957,13 +1005,6 @@ auto install_forwarder_internal(OwoConfig& config, NcmStorageId storage_id) -> R
     sha256CalculateHash(hash_data, hash_path.data(), hash_path.length());
     const u64 old_tid = 0x0100000000000000 | (hash_data[0] & 0x00FFFFFFFFFFF000);
     const u64 tid = 0x0500000000000000 | (hash_data[0] & 0x00FFFFFFFFFFF000);
-    u64 legacy_tid = 0;
-    if (!config.legacy_args.empty()) {
-        const std::string legacy_argv = config.nro_path + ' ' + config.legacy_args;
-        const std::string legacy_hash_path = config.nro_path + legacy_argv;
-        sha256CalculateHash(hash_data, legacy_hash_path.data(), legacy_hash_path.length());
-        legacy_tid = 0x0500000000000000 | (hash_data[0] & 0x00FFFFFFFFFFF000);
-    }
 
     std::vector<NcaEntry> nca_entries;
 
@@ -987,7 +1028,9 @@ auto install_forwarder_internal(OwoConfig& config, NcmStorageId storage_id) -> R
 
         NpdmPatch npdm_patch;
         npdm_patch.tid = tid;
-        patch_npdm(exefs[1].data, npdm_patch);
+        npdm_patch.address_space = config.address_space;
+        npdm_patch.core_mode = config.core_mode;
+        R_UNLESS(patch_npdm(exefs[1].data, npdm_patch), kResultBadArgs);
 
         nca_entries.emplace_back(
             create_program_nca(tid, keys, exefs, romfs, logo)
@@ -1068,9 +1111,6 @@ auto install_forwarder_internal(OwoConfig& config, NcmStorageId storage_id) -> R
         if (R_FAILED(rc) && rc != 0x410) { // not found
         }
 
-        if (legacy_tid && legacy_tid != tid)
-            nsDeleteApplicationCompletely(legacy_tid);
-
         // remove previous ncas.
         nsDeleteApplicationEntity(tid);
 
@@ -1089,15 +1129,23 @@ auto install_forwarder_internal(OwoConfig& config, NcmStorageId storage_id) -> R
 
 Result installForwarder(const std::string& nroPath, const std::string& args,
                         const std::string& name, const std::string& author,
-                        const std::vector<u8>& icon, const std::string& legacyArgs)
+                        const std::vector<u8>& icon,
+                        ForwarderAddressSpace addressSpace,
+                        ForwarderCoreMode coreMode)
 {
     OwoConfig config{};
     config.nro_path = nroPath;
     config.args = args;
     config.name = name;
     config.author = author;
-    config.legacy_args = legacyArgs;
     config.icon = icon;
+    config.address_space = addressSpace;
+    config.core_mode = coreMode;
+
+    // 可选的开机 logo / 启动动画：文件不存在则跳过（与 Sphaira 行为一致）。
+    readFileIfExists(FORWARDER_LOGO_PATH, config.logo);
+    readFileIfExists(FORWARDER_GIF_PATH, config.gif);
+
     std::snprintf(config.nacp.display_version, sizeof(config.nacp.display_version), "%s", APP_VERSION);
     return install_forwarder_internal(config, NcmStorageId_SdCard);
 }

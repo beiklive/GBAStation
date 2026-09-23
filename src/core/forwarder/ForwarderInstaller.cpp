@@ -1,4 +1,5 @@
 #include "core/forwarder/ForwarderInstaller.hpp"
+#include "core/forwarder/ForwarderTypes.hpp"
 
 #include "core/common.h"
 
@@ -22,7 +23,8 @@ namespace sphaira
     Result installForwarder(const std::string& nroPath, const std::string& args,
                             const std::string& name, const std::string& author,
                             const std::vector<u8>& icon,
-                            const std::string& legacyArgs);
+                            ForwarderAddressSpace addressSpace = ForwarderAddressSpace::Bit36,
+                            ForwarderCoreMode coreMode = ForwarderCoreMode::Three);
 }
 #endif
 
@@ -232,14 +234,11 @@ InstallResult installGame(const beiklive::GameEntry& entry)
             "dolphin.externalNro.path", "/GBAStation/core/GBAStationDolphinStub.nro"));
 
     // 统一约定：桌面转发器只传 ROM + --exit-to-home，所有平台都从桌面图标退出回 HOME。
-    // 不再传 --return，返回目标不再固化进转发器 argv。
-    // legacyArgs 保持历史取值：它只用于计算旧版 title id 以删除历史安装。
-    const std::string quotedRom = quoteArgument(entry.path);
-    std::string args = quotedRom + " --exit-to-home";
-    std::string legacyArgs = quotedRom + " --return " + quoteArgument(mainNro);
+    // NPDM 参数保持默认（36-bit / 3 核），后续新核心接入时再按约定调整。
+    const std::string args = quoteArgument(entry.path) + " --exit-to-home";
 
     const Result rc = sphaira::installForwarder(
-        nroPath, args, entry.title, "GBAStation", icon, legacyArgs);
+        nroPath, args, entry.title, "GBAStation", icon);
     if (R_FAILED(rc))
     {
         char buffer[96]{};
