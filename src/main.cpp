@@ -11,7 +11,6 @@
 #include "core/ThreeDsTitlePaths.hpp"
 #include "core/Tools.hpp"
 #include "core/rom/PspMeta.hpp"
-#include "core/ExternalCoreSession.hpp"
 #include "ui/utils/BKAudioPlayer.hpp"
 #include "ui/page/StartPage.hpp"
 #include "ui/widget/VideoBackgroundView.hpp"
@@ -92,6 +91,8 @@ std::optional<std::string> parseDirectLaunchRom(int argc, char* argv[])
 				++i;
 			continue;
 		}
+		// 前端已不再发送会话 token；此分支保留是为了兼容旧外置核心回传的
+		// argv，避免其 token 值被当成 ROM 路径误判。
 		if (arg == "--external-return")
 		{
 			if (i + 1 < argc)
@@ -257,19 +258,10 @@ bool launchDirectGameActivity(const std::string& romPath)
 
 		const std::string nroPath = GET_SETTING_KEY_STR(pathKey, defaultPath);
 		const std::string returnPath = GET_SETTING_KEY_STR(returnKey, "sdmc:/switch/GBAStation.nro");
-		// Cores that maintain playCount/playTime themselves (Saturn) must not get
-		// a launcher session: it would double count playCount and leave a stale
-		// external_core_session.json behind.
-		const bool trackSession = !beiklive::platformReportsOwnStats(platform);
-		const std::string sessionToken =
-			trackSession ? beiklive::makeExternalCoreSessionToken(romPath) : std::string();
-
 		beiklive::switch_platform::NroLaunchRequest request;
 		request.nroPath = nroPath;
 		request.romPath = romPath;
 		request.returnNroPath = returnPath;
-		if (trackSession)
-			request.extraArgs = {"--gbastation-session", sessionToken};
 		auto result = beiklive::switch_platform::launchNroOnExit(request);
 		if (!result.success)
 		{
@@ -277,9 +269,6 @@ bool launchDirectGameActivity(const std::string& romPath)
 			brls::Application::notify(std::string(label) + L("独立NRO启动失败：") + result.message);
 			return false;
 		}
-
-		if (trackSession && !beiklive::beginExternalCoreSession(romPath, platform, sessionToken))
-			brls::Logger::error("Direct {} external session tracking could not start for {}", label, romPath);
 
 		brls::Logger::info("Direct {} NRO launch configured: {}", label, result.message);
 		beiklive::VideoBackgroundView::setSharedAudioSuspended(true);
@@ -396,14 +385,6 @@ int main(int argc, char* argv[]) {
 
 
 	beiklive::ConfigureInit();
-
-	const std::string externalReturnToken = beiklive::externalCoreReturnToken(argc, argv);
-	if (!externalReturnToken.empty())
-	{
-		const bool updated = beiklive::finishExternalCoreSession(externalReturnToken);
-		brls::Logger::info("External core session stats {} for token {}",
-			updated ? "updated" : "not updated", externalReturnToken);
-	}
 
 	// ── 从配置文件读取调试设置 ──────────────────────────────────
 	{
