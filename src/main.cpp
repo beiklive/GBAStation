@@ -533,6 +533,10 @@ int main(int argc, char* argv[]) {
 	audioPlayer = nullptr;
 
 #ifdef __SWITCH__
+	// 本次运行期间写入的文件（更新/下载的 NRO、Web 上传的 ROM、config.cfg 等）
+	// 即将交给 loader 与外置核心这些别的进程读取，退出前统一提交 FAT 写缓存。
+	beiklive::tools::commitSdCard();
+
 	auto launchResult = beiklive::switch_platform::commitPendingNroLaunch();
 	if (!launchResult.success)
 		brls::Logger::error("Pending NRO launch commit failed: {}", launchResult.message);

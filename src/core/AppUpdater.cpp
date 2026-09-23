@@ -513,6 +513,11 @@ bool AppUpdater::finishInstall() {
     brls::Logger::info("AppUpdater: 更新文件替换完成 -> main='{}', NDS Stub={}, 3DS Stub={}",
                        nroPath, updateNdsStub ? "updated" : "kept",
                        update3dsStub ? "updated" : "kept");
+
+    // 替换后的 NRO 会在本次运行内被拉起（loader 在启动器退出后才打开它），
+    // 不提交 FAT 写缓存的话读取方会看到旧目录状态：新文件“不存在”、被替换的文件长度不变。
+    if (!beiklive::tools::commitSdCard())
+        brls::Logger::warning("AppUpdater: 提交 SD 卡写缓存失败，重启前可能无法拉起新核心");
     return true;
 #else
     return false;

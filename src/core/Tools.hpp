@@ -142,4 +142,16 @@ std::string formatPlayTime(int totalSeconds);
 /// 将版本号字符串（如 "v3.2.1"）转为整数（如 3002001），每段占三位十进制，用于版本比较
 int versionCode(const std::string& version);
 
+// ── 文件系统工具 ──────────────────────────────────────────────────────────────
+
+/// 提交 sdmc: 的 FAT 写缓存（等价于 fsdevCommitDevice("sdmc")）。
+///
+/// libnx 不会在设备卸载时自动提交，而 GBAStation 的常态是“本进程写文件、另一个进程读”：
+///   - 链式启动外置核心：目标 NRO / ROM 由 loader 在启动器退出后打开；
+///   - 外置核心读取 sdmc:/GBAStation/config/config.cfg；
+/// 写入完成后不提交，读取方会看到旧的目录状态（新文件“不存在”、被替换的文件长度不更新），
+/// 表现为拉起失败或核心侧崩溃。因此凡是“写完之后要给别的进程读”的路径都必须提交。
+/// 非 Switch 平台直接返回 true。
+bool commitSdCard();
+
 } // namespace beiklive::tools

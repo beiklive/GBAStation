@@ -2376,6 +2376,11 @@ static void startResourceDownload(const OnlineResourceItem& item,
             return;
         }
 
+        // 刚装入 sdmc: 的 NRO / 资源随后可能被拉起（由另一个进程读取），
+        // 必须先提交 FAT 写缓存。
+        if (!beiklive::tools::commitSdCard())
+            brls::Logger::warning("资源安装后提交 SD 卡写缓存失败: {}", item.path);
+
         brls::sync([progressDialog]() {
             progressDialog->setProgress(L("正在保存版本信息..."), L("即将完成"), 1.f);
         });

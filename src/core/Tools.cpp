@@ -768,4 +768,17 @@ std::string readGbaGameID(const std::string& path)
 }
 
 
+bool commitSdCard()
+{
+#ifdef __SWITCH__
+    FsFileSystem* fs = fsdevGetDeviceFileSystem("sdmc:");
+    if (!fs)
+        return false;
+    return R_SUCCEEDED(fsFsCommit(fs));
+#else
+    return true;
+#endif
+}
+
+
 } // namespace beiklive::tools
