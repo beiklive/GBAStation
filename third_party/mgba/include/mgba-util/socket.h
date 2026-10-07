@@ -129,6 +129,16 @@ static inline bool SocketWouldBlock() {
 #endif
 }
 
+static inline bool SocketConnectionPending() {
+#ifdef _WIN32
+	int error = SocketError();
+	return error == WSAEWOULDBLOCK || error == WSAEINPROGRESS || error == WSAEALREADY;
+#else
+	int error = SocketError();
+	return error == EINPROGRESS || error == EALREADY || error == EWOULDBLOCK || error == EAGAIN;
+#endif
+}
+
 static inline ssize_t SocketSend(Socket socket, const void* buffer, size_t size) {
 #ifdef _WIN32
 	return send(socket, (const char*) buffer, size, 0);
@@ -296,6 +306,72 @@ static inline Socket SocketConnectTCP(int port, const struct Address* destinatio
 		return INVALID_SOCKET;
 	}
 	return sock;
+}
+
+static inline int SocketSetBlocking(Socket socket, bool blocking);
+
+static inline Socket SocketConnectTCPNonBlocking(int port, const struct Address* destinationAddress, bool* connected) {
+	bool useIPv6 = destinationAddress && destinationAddress->version == IPV6;
+	Socket sock = SocketCreate(useIPv6, IPPROTO_TCP);
+	if (connected) {
+		*connected = false;
+	}
+	if (SOCKET_FAILED(sock) || !SocketSetBlocking(sock, false)) {
+		if (!SOCKET_FAILED(sock)) {
+			SocketCloseQuiet(sock);
+		}
+		return INVALID_SOCKET;
+	}
+
+	int err = -1;
+	if (!destinationAddress || destinationAddress->version == IPV4) {
+		struct sockaddr_in connectInfo;
+		memset(&connectInfo, 0, sizeof(connectInfo));
+		connectInfo.sin_family = AF_INET;
+		connectInfo.sin_port = htons(port);
+		if (destinationAddress) {
+			connectInfo.sin_addr.s_addr = htonl(destinationAddress->ipv4);
+		}
+#ifdef GEKKO
+		err = net_connect(sock, (struct sockaddr*) &connectInfo, sizeof(connectInfo));
+#else
+		err = connect(sock, (const struct sockaddr*) &connectInfo, sizeof(connectInfo));
+#endif
+#ifdef HAS_IPV6
+	} else {
+		struct sockaddr_in6 connectInfo;
+		memset(&connectInfo, 0, sizeof(connectInfo));
+		connectInfo.sin6_family = AF_INET6;
+		connectInfo.sin6_port = htons(port);
+		memcpy(connectInfo.sin6_addr.s6_addr, destinationAddress->ipv6, sizeof(connectInfo.sin6_addr.s6_addr));
+		err = connect(sock, (const struct sockaddr*) &connectInfo, sizeof(connectInfo));
+#endif
+	}
+
+	if (!err) {
+		if (connected) {
+			*connected = true;
+		}
+		return sock;
+	}
+	if (SocketConnectionPending()) {
+		return sock;
+	}
+	SocketCloseQuiet(sock);
+	return INVALID_SOCKET;
+}
+
+static inline int SocketGetConnectionError(Socket socket) {
+	int error = 0;
+#ifdef _WIN32
+	int size = sizeof(error);
+#else
+	socklen_t size = sizeof(error);
+#endif
+	if (getsockopt(socket, SOL_SOCKET, SO_ERROR, (char*) &error, &size) < 0) {
+		return SocketError();
+	}
+	return error;
 }
 
 static inline Socket SocketListen(Socket socket, int queueLength) {

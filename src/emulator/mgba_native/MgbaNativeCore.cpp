@@ -1,4 +1,5 @@
 #include "MgbaNativeCore.hpp"
+#include <mgba/core/log.h>
 
 #include "core/Tools.hpp"
 #include "emulator/mgba_native/MgbaCheatSystem.hpp"
@@ -13,6 +14,7 @@
 #include <mgba/gb/interface.h>
 #include <mgba/internal/gba/audio.h>
 #include <mgba/internal/gba/cheats.h>
+#include <mgba/internal/gba/gba.h>
 #include <mgba/internal/gb/cheats.h>
 #include <mgba/internal/gb/overrides.h>
 #include <mgba/internal/sm83/sm83.h>
@@ -25,6 +27,8 @@
 #include <ctime>
 #include <cstdlib>
 #include <utility>
+#include <chrono>
+#include <filesystem>
 
 #ifdef __SWITCH__
 #include <switch.h>
@@ -35,7 +39,6 @@ namespace beiklive::mgba_native
 namespace
 {
 constexpr unsigned kMgbaAudioBuffers = 0x400;
-
 uint32_t makeRGBA8888(uint8_t r, uint8_t g, uint8_t b)
 {
     return static_cast<uint32_t>(r) |
@@ -331,6 +334,11 @@ MgbaNativeCore::~MgbaNativeCore()
 
 bool MgbaNativeCore::SetupGame(beiklive::GameEntry gameEntry)
 {
+    // Avoid serial/DMA debug logging on every emulated transfer.
+    static mLogger logger{[](mLogger*,int,mLogLevel level,const char* format,va_list args){
+        if(level & (mLOG_FATAL|mLOG_ERROR|mLOG_WARN)){vfprintf(stderr,format,args);fputc('\n',stderr);}
+    },nullptr};
+    mLogSetDefaultLogger(&logger);
     Cleanup();
     m_gameEntry = std::move(gameEntry);
     m_loggedFirstAudio = false;
@@ -377,6 +385,19 @@ void MgbaNativeCore::RunFrame()
         return;
 
     updateKeys();
+    if (m_dual) {
+        if (m_dual->advance(static_cast<uint16_t>(m_keyMask))) {
+            const auto& pixels=m_dual->pixels();
+            {std::lock_guard<std::mutex> lock(m_videoMutex);
+             m_videoFrame.width=240;m_videoFrame.height=160;m_videoFrame.pixels.resize(pixels.size());
+             for(size_t i=0;i<pixels.size();++i)m_videoFrame.pixels[i]=nativeColorToRgba(pixels[i]);}
+        }
+        auto audio=m_dual->takeAudio();
+        {std::lock_guard<std::mutex> lock(m_audioMutex);
+         if(m_audioBuffer.size()+audio.size()>kAudioBufferCapacity)m_audioBuffer.clear();
+         m_audioBuffer.insert(m_audioBuffer.end(),audio.begin(),audio.end());}
+        return;
+    }
     m_core->runFrame(m_core);
     captureVideoFrame();
     if (!m_audioStreamEnabled)
@@ -385,6 +406,7 @@ void MgbaNativeCore::RunFrame()
 
 void MgbaNativeCore::Reset()
 {
+    if (m_dual) return;
     m_audioLowPassLeftPrev = 0;
     m_audioLowPassRightPrev = 0;
     if (m_core)
@@ -398,9 +420,74 @@ void MgbaNativeCore::Reset()
     }
 }
 
+namespace {
+std::string dualResourceDirectory() {
+#ifdef __SWITCH__
+    return GET_SETTING_KEY_STR("core.mgba_netlink_resource_dir","sdmc:/GBAStation/netlink/session");
+#else
+    return GET_SETTING_KEY_STR("core.mgba_netlink_resource_dir","GBAStation/netlink/session");
+#endif
+}
+}
+bool MgbaNativeCore::StartNetlinkHost(int port)
+{
+    return StartNetlinkJoin("",port);
+}
+bool MgbaNativeCore::StartNetlinkJoin(const std::string& host,int port)
+{
+    m_netlinkError.clear();m_netlinkNotice.clear();
+    if (!m_ready || !m_core || m_core->platform(m_core)!=mPLATFORM_GBA) {
+        m_netlinkError="请先打开 GBA 游戏"; return false;
+    }
+    if(m_dual){m_netlinkError="请先断开当前联机";return false;}
+    try {
+        auto directory=dualResourceDirectory()+"/automatic-"+std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+        netlink::ProductSession::preparePlayer(m_core,directory);
+        auto session=std::make_unique<netlink::ProductSession>(host.empty()?0:1,host,port,directory,m_gameEntry.path);
+        m_fastForwarding=false;
+        {std::lock_guard<std::mutex> lock(m_audioMutex);m_audioBuffer.clear();}
+        m_dual=std::move(session);return true;
+    }catch(const std::exception& e){m_netlinkError=e.what();return false;}
+}
+void MgbaNativeCore::DisconnectNetlink()
+{
+    bool restored=!m_dual || m_dual->restorePlayer(m_core);
+    bool exported=!m_dual || m_dual->exportSave();
+    m_netlinkError=restored && exported ? "" : "恢复单机或导出确认存档失败，请保留联机目录";
+    m_netlinkNotice=restored ? "已结束联机，已恢复单机" : "恢复单机失败";
+    m_dual.reset();
+    {std::lock_guard<std::mutex> lock(m_audioMutex);m_audioBuffer.clear();}
+    captureVideoFrame();
+}
+void MgbaNativeCore::PollNetlink(){
+    if(!m_dual)return;m_dual->poll();
+    if(m_dual->state()==netlink::ProductSession::Disconnected){DisconnectNetlink();if(m_netlinkError.empty())m_netlinkNotice="对端已离线，已恢复单机";}
+}
+std::string MgbaNativeCore::GetNetlinkNotice() const {
+    if(m_dual && m_dual->state()==netlink::ProductSession::Listening)return m_dual->listeningStatus();
+    return m_netlinkNotice;
+}
+GBASIONetlinkConnectionState MgbaNativeCore::GetNetlinkState() const
+{
+    if(!m_dual)return GBA_NETLINK_DISCONNECTED;
+    switch(m_dual->state()){
+    case netlink::ProductSession::Listening:return GBA_NETLINK_LISTENING;
+    case netlink::ProductSession::Connecting:return GBA_NETLINK_CONNECTING;
+    case netlink::ProductSession::Ready:return GBA_NETLINK_READY;
+    case netlink::ProductSession::Error:return GBA_NETLINK_ERROR;
+    case netlink::ProductSession::Disconnected:return GBA_NETLINK_DISCONNECTED;
+    }
+    return GBA_NETLINK_ERROR;
+}
+std::string MgbaNativeCore::GetNetlinkError() const
+{
+    if(!m_netlinkError.empty())return m_netlinkError;
+    return m_dual?m_dual->error():std::string{};
+}
+
 bool MgbaNativeCore::Serialize(std::vector<uint8_t>& outBuf) const
 {
-    if (!m_ready || !m_core)
+    if (m_dual || !m_ready || !m_core)
         return false;
 
     VFile* vf = VFileMemChunk(nullptr, 0);
@@ -430,7 +517,7 @@ bool MgbaNativeCore::Serialize(std::vector<uint8_t>& outBuf) const
 
 bool MgbaNativeCore::Unserialize(const std::vector<uint8_t>& buf)
 {
-    if (!m_ready || !m_core || buf.empty())
+    if (m_dual || !m_ready || !m_core || buf.empty())
         return false;
 
     VFile* vf = VFileFromConstMemory(buf.data(), buf.size());
@@ -557,6 +644,7 @@ void MgbaNativeCore::SetCheatPath(const std::string& path)
 
 const void* MgbaNativeCore::getSramData() const
 {
+    if(m_dual)return nullptr;
     m_sramSnapshot.clear();
     if (!m_core || !m_core->savedataClone)
         return nullptr;
@@ -580,6 +668,7 @@ size_t MgbaNativeCore::getSramSize() const
 
 bool MgbaNativeCore::saveSram()
 {
+    if(m_dual)return m_dual->exportSave();
     if (!m_core || !m_core->savedataClone)
         return true;
 
@@ -1617,6 +1706,8 @@ void MgbaNativeCore::updateKeys()
 
 void MgbaNativeCore::releaseCore()
 {
+    DisconnectNetlink();
+
     {
         std::lock_guard<std::mutex> lock(m_audioMutex);
         m_audioBuffer.clear();

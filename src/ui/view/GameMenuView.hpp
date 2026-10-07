@@ -56,6 +56,7 @@ namespace beiklive
 
             /// 向画面设置页追加由具体游戏视图拥有的平台专属控件。
             void addCoreDisplaySettingView(brls::View* view);
+            void addCoreNetlinkSettingView(brls::View* view);
             void requestConfigSave();
 
             /// 画面设置回调
@@ -136,6 +137,7 @@ namespace beiklive
 
             /// 画面设置面板
             brls::View* _createDisplayPanel();
+            brls::View* _createNetlinkPanel();
             void _openShaderSettings();
             void _openOverlaySettings();
             void _openCustomScaleSettings();
@@ -163,6 +165,7 @@ namespace beiklive
 
             brls::DetailCell* shaderPathcell = nullptr;
             brls::Box* m_coreDisplaySettingsBox = nullptr;
+            brls::Box* m_coreNetlinkSettingsBox = nullptr;
             brls::Box* m_ShaderParamBox = nullptr; ///< 着色器参数面板
             brls::Box* m_ShaderSidePanel = nullptr;  ///< 当前打开的侧边栏 overlay
             brls::Box* m_OverlaySidePanel = nullptr;  ///< 当前打开的侧边栏 overlay

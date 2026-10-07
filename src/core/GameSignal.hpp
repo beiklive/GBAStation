@@ -315,6 +315,67 @@ public:
         return m_pendingConfigUpdate.exchange(false, std::memory_order_acq_rel);
     }
 
+    // ---- mGBA Network Link --------------------------------------------
+
+    enum class NetlinkAction { None, Host, Join, Disconnect };
+    enum class NetlinkState { Disconnected, Listening, Connecting, Handshake, Ready, Error, WaitingForResume };
+
+    struct NetlinkReq {
+        NetlinkAction action = NetlinkAction::None;
+        std::string host;
+        int port = 0;
+        bool pending = false;
+    };
+
+    struct NetlinkStatus {
+        NetlinkState state = NetlinkState::Disconnected;
+        std::string error;
+    };
+
+    void requestNetlinkHost(int port) {
+        std::lock_guard<std::mutex> lock(m_netlinkMutex);
+        m_pendingNetlink = {NetlinkAction::Host, {}, port, true};
+    }
+
+    void requestNetlinkJoin(std::string host, int port) {
+        std::lock_guard<std::mutex> lock(m_netlinkMutex);
+        m_pendingNetlink = {NetlinkAction::Join, std::move(host), port, true};
+    }
+
+    void requestNetlinkDisconnect() {
+        std::lock_guard<std::mutex> lock(m_netlinkMutex);
+        m_pendingNetlink = {NetlinkAction::Disconnect, {}, 0, true};
+    }
+
+    NetlinkReq consumeNetlinkRequest(bool allowStart = true) {
+        std::lock_guard<std::mutex> lock(m_netlinkMutex);
+        if (!m_pendingNetlink.pending)
+            return {};
+        // Keep Host/Join queued while the game is paused. Disconnect also
+        // cancels a queued start and must remain available inside the menu.
+        if (!allowStart && (m_pendingNetlink.action == NetlinkAction::Host ||
+                            m_pendingNetlink.action == NetlinkAction::Join))
+            return {};
+        NetlinkReq req = std::move(m_pendingNetlink);
+        m_pendingNetlink = {};
+        return req;
+    }
+
+    void publishNetlinkStatus(NetlinkState state, std::string error = {}) {
+        std::lock_guard<std::mutex> lock(m_netlinkMutex);
+        m_netlinkStatus.state = state;
+        m_netlinkStatus.error = std::move(error);
+    }
+
+    NetlinkStatus getNetlinkStatus() const {
+        std::lock_guard<std::mutex> lock(m_netlinkMutex);
+        if (m_pendingNetlink.pending &&
+            (m_pendingNetlink.action == NetlinkAction::Host ||
+             m_pendingNetlink.action == NetlinkAction::Join))
+            return {NetlinkState::WaitingForResume, {}};
+        return m_netlinkStatus;
+    }
+
     // ---- 全部重置 -------------------------------------------------------
 
     /// 重置所有信号到初始状态（一般在游戏启动前调用）。
@@ -345,6 +406,11 @@ public:
         m_pendingAutoSave.store(-1, std::memory_order_relaxed);
         m_autoSaveDone.store(false, std::memory_order_relaxed);
         m_pendingConfigUpdate.store(false, std::memory_order_relaxed);
+        {
+            std::lock_guard<std::mutex> lock(m_netlinkMutex);
+            m_pendingNetlink = {};
+            m_netlinkStatus = {};
+        }
         for (auto& mask : m_gameButtonMasks)
             mask.store(0, std::memory_order_relaxed);
     }
@@ -372,6 +438,9 @@ private:
     std::atomic<int>  m_pendingAutoSave{-1};            ///< 待自动存档槽位（-1=无）
     std::atomic<bool> m_autoSaveDone{false};             ///< 退出自动存档是否已处理完毕
     std::atomic<bool> m_pendingConfigUpdate{false};    ///< 待刷新核心配置
+    mutable std::mutex m_netlinkMutex;
+    NetlinkReq m_pendingNetlink;
+    NetlinkStatus m_netlinkStatus;
     std::atomic<uint32_t> m_gameButtonMasks[kMaxPlayers]{};  ///< 游戏按键位掩码（bit i = RETRO_DEVICE_ID_JOYPAD_* i）
 };
 

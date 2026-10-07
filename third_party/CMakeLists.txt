@@ -94,6 +94,7 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(ffmpeg_minimal DEPENDS ${FFMPEG_STATIC_LIBRARIES})
+file(MAKE_DIRECTORY ${FFMPEG_BUILD_DIR})
 
 function(add_ffmpeg_static_library TARGET_NAME LIBRARY_PATH)
     add_library(${TARGET_NAME} STATIC IMPORTED GLOBAL)

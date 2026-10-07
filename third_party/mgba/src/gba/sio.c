@@ -77,6 +77,7 @@ void GBASIOInit(struct GBASIO* sio) {
 	sio->drivers.multiplayer = 0;
 	sio->drivers.joybus = 0;
 	sio->activeDriver = 0;
+	sio->rcntDriver = 0;
 
 	sio->gbp.p = sio->p;
 	GBASIOPlayerInit(&sio->gbp);
@@ -96,6 +97,9 @@ void GBASIODeinit(struct GBASIO* sio) {
 	}
 	if (sio->drivers.normal && sio->drivers.normal->deinit) {
 		sio->drivers.normal->deinit(sio->drivers.normal);
+	}
+	if (sio->rcntDriver && sio->rcntDriver->deinit) {
+		sio->rcntDriver->deinit(sio->rcntDriver);
 	}
 }
 
@@ -163,12 +167,37 @@ void GBASIOSetDriver(struct GBASIO* sio, struct GBASIODriver* driver, enum GBASI
 	*driverLoc = driver;
 }
 
+void GBASIOSetRCNTDriver(struct GBASIO* sio, struct GBASIODriver* driver) {
+	if (sio->rcntDriver) {
+		if (sio->rcntDriver->unload) {
+			sio->rcntDriver->unload(sio->rcntDriver);
+		}
+		if (sio->rcntDriver->deinit) {
+			sio->rcntDriver->deinit(sio->rcntDriver);
+		}
+	}
+	if (driver) {
+		driver->p = sio;
+		if (driver->init && !driver->init(driver)) {
+			if (driver->deinit) {
+				driver->deinit(driver);
+			}
+			mLOG(GBA_SIO, ERROR, "Could not initialize RCNT observer");
+			return;
+		}
+	}
+	sio->rcntDriver = driver;
+}
+
 void GBASIOWriteRCNT(struct GBASIO* sio, uint16_t value) {
 	sio->rcnt &= 0xF;
 	sio->rcnt |= value & ~0xF;
 	_switchMode(sio);
 	if (sio->activeDriver && sio->activeDriver->writeRegister) {
 		sio->activeDriver->writeRegister(sio->activeDriver, REG_RCNT, value);
+	}
+	if (sio->rcntDriver && sio->rcntDriver != sio->activeDriver && sio->rcntDriver->writeRegister) {
+		sio->rcntDriver->writeRegister(sio->rcntDriver, REG_RCNT, value);
 	}
 }
 

@@ -67,6 +67,9 @@ struct GBASIO {
 	enum GBASIOMode mode;
 	struct GBASIODriverSet drivers;
 	struct GBASIODriver* activeDriver;
+	/* Optional observer for every CPU RCNT write, including writes that
+	 * enter or leave GPIO mode after the active SIO driver changes. */
+	struct GBASIODriver* rcntDriver;
 
 	uint16_t rcnt;
 	uint16_t siocnt;
@@ -80,6 +83,7 @@ void GBASIOReset(struct GBASIO* sio);
 
 void GBASIOSetDriverSet(struct GBASIO* sio, struct GBASIODriverSet* drivers);
 void GBASIOSetDriver(struct GBASIO* sio, struct GBASIODriver* driver, enum GBASIOMode mode);
+void GBASIOSetRCNTDriver(struct GBASIO* sio, struct GBASIODriver* driver);
 
 void GBASIOWriteRCNT(struct GBASIO* sio, uint16_t value);
 void GBASIOWriteSIOCNT(struct GBASIO* sio, uint16_t value);

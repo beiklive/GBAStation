@@ -440,6 +440,25 @@ namespace beiklive
             m_coreDisplaySettingsBox->addView(view);
     }
 
+    void GameMenuView::addCoreNetlinkSettingView(brls::View* view)
+    {
+        if (m_coreNetlinkSettingsBox && view)
+            m_coreNetlinkSettingsBox->addView(view);
+    }
+
+    brls::View* GameMenuView::_createNetlinkPanel()
+    {
+        auto* scroll = beiklive::ui::makeScrollTab();
+        // ScrollingFrame detaches its content, so it cannot derive a width
+        // from the cells when TabFrame aligns panels to FLEX_START.
+        scroll->setWidthPercentage(100.f);
+        auto* box = beiklive::ui::makeContentBox();
+        m_coreNetlinkSettingsBox = new brls::Box(brls::Axis::COLUMN);
+        box->addView(m_coreNetlinkSettingsBox);
+        scroll->setContentView(box);
+        return scroll;
+    }
+
     void GameMenuView::_initLayout()
     {
         this->setFocusable(false);
@@ -516,6 +535,16 @@ namespace beiklive
             BK_RES("img/ui/menu/display.png"),
             nullptr, nullptr, nullptr,
             displayPanel);
+
+        if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuGBA))
+        {
+            auto* netlinkPanel = _createNetlinkPanel();
+            m_panel->addTab(
+                L("GBA 联机"),
+                BK_RES("img/ui/menu/cheat.png"),
+                nullptr, nullptr, nullptr,
+                netlinkPanel);
+        }
 
         if (m_gameEntry.platform == static_cast<int>(beiklive::enums::EmuPlatform::EmuNES))
         {
