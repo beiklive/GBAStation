@@ -46,6 +46,11 @@ set(FFMPEG_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/FFmpeg)
 # Keep a self-contained source copy under each CMake build directory so
 # Windows and Switch never share architecture-specific static archives.
 set(FFMPEG_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/ffmpeg-background-audio)
+# The configured copy is produced at build time, but its generated headers are
+# listed in the imported targets' INTERFACE_INCLUDE_DIRECTORIES. CMake rejects
+# non-existent include directories during generation, so create the directory
+# up front; the build step fills it in later.
+file(MAKE_DIRECTORY ${FFMPEG_BUILD_DIR})
 set(FFMPEG_BUILD_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/configure_ffmpeg_minimal.sh)
 # The configured copy is regenerated whenever the vendored source changes.
 # Without this dependency CMake can retain archives from a prior platform or
